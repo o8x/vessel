@@ -12,27 +12,14 @@
 
 ### 3.2 主界面显示 / 隐藏（点击托盘）
 
-主界面模式由 `settings.floatMode` 决定（设置 → 应用 → 悬浮模式；**默认关 = 窗口模式**）。两种模式共用同一份渲染页面 `index.html`（`<html data-window-mode="window|float">` 切换外观）。
+主界面是固定的独立标准窗口，渲染页面为 `index.html`。
 
-**窗口模式（默认，`floatMode = false`）**
-
-1. 点击托盘图标 → 若窗口未创建则创建；每次显示依次 `win.show()` → `win.focus()` → `app.focus({ steal: true })` → `win.moveTop()`，确保在当前桌面直接浮出。
+1. 点击托盘图标 → 若窗口未创建则创建；每次显示依次 `win.show()` → `win.focus()` → `win.moveTop()`，确保在当前桌面直接浮出。
 2. **只记忆位置，不记桌面 / 屏幕**：`setBounds(mainWindowBoundsForOpen())` 读取 `main-window.json` 的 `{ x, y }` 并夹回**当前鼠标所在屏幕**的工作区；无记录时在当前屏幕工作区居中。显示前先 `setVisibleOnAllWorkspaces(true)` 让窗口能在当前 Space 浮出，`show()` / `focus()` 后约 60ms 再 `false` 绑定到**当前桌面**；不再调用 `app.focus({ steal: true })`（它会激活应用并可能切回旧 Space）。
 3. 窗口是**独立的标准窗口**（`titleBarStyle: hiddenInset` + 系统红绿灯），**普通窗口层级、不常驻置顶**（`alwaysOnTop: false`）。
 4. **桌面归属**：窗口打开后固定在其所在桌面，切换桌面时不跟随（保持留在旧桌面）；把它关闭（隐藏）后从另一个桌面点托盘，会先临时加入所有桌面再绑定当前桌面，因此在**新桌面打开**，不会被拉回旧桌面。
 5. 关闭按钮（系统红绿灯）= **隐藏**（应用常驻托盘）；`Escape` 亦隐藏。拖动后（防抖 400ms）与关闭前把 `{ x, y }` 写入 `main-window.json`。
 6. 尺寸：**固定 640 × 480、不可缩放**（`package.json` 的 `vessel.mainWindow`）；窗口可拖动，位置跨显示保留（只记录坐标，不记录屏幕 / 桌面）。
-
-**悬浮模式（`floatMode = true`）**
-
-1. 点击托盘图标 → 记录托盘 `getBounds()`。
-2. 计算 `x = 托盘中心 - 面板宽/2`，`y = 托盘底部 + gapBelowTray`（`package.json` 的 `vessel.window.gapBelowTray`，当前 **2px**，使面板紧贴菜单栏），并按所在显示器工作区夹取。
-3. 显示并聚焦主面板。
-4. 再次点击、或面板失焦（点击别处）时隐藏；`Escape` 亦隐藏。
-5. 打开设置窗口会使主面板失焦并隐藏（与设置互斥）；若面板与设置窗口同时打开，面板失焦（含焦点转到设置窗口）同样自动隐藏。
-6. **固定悬浮**（底部栏图钉，对应 `settings.pinWindow`）：开启后失焦不再隐藏、保持置顶，并允许通过底部左侧「应用图标 + 名称」拖动窗口，位置在多次显示间保留；再次点击取消时会立即隐藏，且下次显示重新回到托盘下方默认位置（未固定时窗口不可移动，始终吸附托盘）。
-
-> 切换「悬浮模式」开关时，主窗口的创建项不同（无边框浮层 ↔ 标准窗口），主进程会**销毁并按新模式重建**主窗口（`window-manager.rebuildMainWindowForMode`，此时窗口通常隐藏）。
 
 ### 3.3 打开设置
 
@@ -62,7 +49,7 @@
 1. 设置窗口任一控件变更 → `settings:set`（增量 patch）。
 2. 主进程合并写入 `settings.json`，必要时应用登录项，并广播 `settings:changed`。
 3. 主面板与设置窗口同步应用主题 / 强调色 / 语言；主题为“跟随系统”时监听 `nativeTheme` 的 `updated` 事件（广播 `theme:changed`）。
-4. 副作用：`pinWindow` → `applyPin`；`vibrancy` → `applyVibrancy`（销毁并按新配置重建主面板，使原生 `vibrancy` 与 `roundedCorners` 同时生效），主面板同时更新 `<html data-vibrancy="on|off">`；`theme` → `nativeTheme.themeSource`（使原生材质与应用主题一致）；`terminalWindowWidth` / `terminalWindowHeight` → 已打开的终端窗口立即 `setSize`；`terminalAlwaysOnTop` → 终端窗口层级；`mainWindowHotkey` / `terminalHotkey` → `hotkey-service` 重新注册全局快捷键（先注销旧值，注册失败只记日志、不改设置，见 §3.9-8）。
+4. 副作用：`vibrancy` → `applyVibrancy`（销毁并按新配置重建主面板，使原生 `vibrancy` 与 `roundedCorners` 同时生效），主面板同时更新 `<html data-vibrancy="on|off">`；`theme` → `nativeTheme.themeSource`（使原生材质与应用主题一致）；`terminalWindowWidth` / `terminalWindowHeight` → 已打开的终端窗口立即 `setSize`；`terminalAlwaysOnTop` → 终端窗口层级；`mainWindowHotkey` / `terminalHotkey` → `hotkey-service` 重新注册全局快捷键（先注销旧值，注册失败只记日志、不改设置，见 §3.9-8）。
 
 ---
 
@@ -95,8 +82,8 @@
    - **头栏（`#term-header`，默认 22px）**：左侧自绘小红绿灯（**尺寸随头栏字号缩放**：`--traffic-size = 字号 × 0.75`、`--traffic-glyph-size = 字号 × 0.5`，12px 字号 = 9px 圆点 / 6px 符号；**左右 padding 均为 10px**：左边距 10px = 第一个圆点到窗口左边缘的距离、右侧图标区距右边缘 10px；悬浮符号 `×` / `−` / `⤢`，颜色取 `--traffic-*`；悬浮任意一个时三个都显示符号，窗口失焦时整体变灰并隐藏符号 —— 与系统观感一致），点击分别调 `window:control` 的 `close` / `minimize` / `zoom`（只作用于发起窗口）；**不显示任何标题文字**（当前 SSH 信息仅用于内部逻辑，不在头栏显示，见下条），右侧图标区（**SSH 主机下拉** + **文件** `folder`、**在 iTerm 中打开并关闭此窗口**、**行号** `eye`/`eye-off`、**窗口分裂** `split`（点击**新开一扇终端窗口**，与主面板底部栏的终端按钮行为一致）；**已去掉置顶（图钉）按钮**，置顶只由设置里的 `terminalAlwaysOnTop` 决定）。头部不挂 `data-tip` 悬浮提示，为拖拽区（红绿灯与图标区为 `no-drag`）。
    - **头栏随终端字号缩放（字号夹在 10–20px，高度夹在 16–32px）**：`--term-header-font-size = clamp(10px, 终端字号, 20px)`；`--term-header-height = clamp(16px, round(头栏字号 × 1.6), 32px)`（10px 字号 → 16px，20px 字号 → 32px），由 `terminal.js` 的 `applyHeaderFontSize()` 在启动 / 改设置 / `Cmd +/-/0` 时写入。图标按钮 = 头栏字号 + 6px（符号 = 头栏字号）、红绿灯 = 0.75 × 头栏字号（符号 = 0.5 ×）、SSH 下拉字号 = **头栏字号 - 2px**、高 = `clamp(14px, 头栏字号 + 3px, 22px)`、宽 = `clamp(170px, 头栏字号 × 10, 260px)`（下拉箭头 = 头栏字号 - 2px）。下拉菜单宽度随触发器实测宽度（`createSelect` 的 `matchTrigger: true`）、条目高 = `max(22px, 头栏字号 + 8px)`（在原来基础上上下各 +1px）、上下 padding 1px、字号 = 头栏字号 - 2px、圆角 5px、无分隔线。独立文件窗口使用同一套映射（由 `file-window.js` 写入）。
     - **头部 SSH 下拉**（图标区最左）：列出 `~/.ssh/config` 里的主机，条目文本为 `用户名@主机地址`（无 `User` 时只显示主机地址）；占位「连接到服务器」**只显示在触发器上（未选择时），不出现在下拉列表里**。列表顺序为**有分组的主机在前（按分组在配置中出现的顺序）、未分组的主机排最后**；**存在多个分组时在每组条目前插入一个分组小标题**（不可点，未分组组的标题为「未分组」；只有一个分组时不显示标题）——分组来自 config 的 `# group:` 注释（见 §5.1）。**设置页对主机 / 分组的增删改会经 `ssh-config:changed` 广播，下拉实时刷新**。选中任意主机 → `ssh:connect`（带 `inTerminal: true`）→ 由主进程用 `ssh-service.buildCommand()` 拼 `ssh [-p 端口] [-i 私钥] [-J 跳板机] [user@]host` 并**注入当前终端会话**（不弹 iTerm，因此也不受「SSH 使用内置终端连接」开关影响）。**切换主机时的会话处理**：若当前已通过本应用发起过 SSH 连接（`sshTarget` 非空），渲染层先**销毁当前 PTY / shell 并重新创建一个登录 shell**（**不清屏**，只在终端里打印一行灰色提示「正在重建终端会话…」以保留原输出），等新会话就绪后再注入 `ssh …`，避免旧 ssh 会话残留 / 嵌套；若当前仍是系统 shell（`sshTarget` 为空），则**不重建**，直接在现有 shell 里执行。**同一台主机可以重复选**（每次选择都重新执行，便于断开后重连）。下拉**禁用**并降低不透明度当 `~/.ssh/config` 里没有主机；主机列表在窗口启动与 `settings:changed` 广播时重新读取。控件用 `select-compact`，宽度 / 高度 / 字号随头栏字号缩放（宽 `clamp(170px, 头栏字号 × 10, 260px)`、高 `clamp(14px, 头栏字号 + 3px, 22px)`，见 §3.9-2）。
-   - **屏幕 / 位置 / 尺寸记忆**（`terminal-window.json`，单槽）：打开、移动、缩放、关闭时把「所在屏幕 + 位置 + 尺寸」写入 `terminal-window.json`（关闭前同步落盘，拖动后立刻关窗也不会丢；写盘读窗口**此刻**的真实几何，程序化改尺寸不会被旧快照覆盖）。下次打开时：**该屏幕还在**（`id` + `scaleFactor` + `bounds` 全一致）→ 应用记忆的位置与尺寸（越界部分夹回该屏幕工作区，整窗可见）；**换屏 / 拔掉外接屏 / 分辨率或排列变了 / 无记录** → 用设置里的默认尺寸在当前屏幕（鼠标所在屏幕）工作区内居中。屏幕签名一致才复用，是因为分辨率 / 排列变化后记忆里的绝对坐标不再是同一块屏幕上的同一位置。**拖动时水平磁性吸附**：窗口中心与屏幕工作区的**垂直中线**（x 方向）对齐（±10px）时吸附到正中并轻微「卡」住，拖动超过 26px 才脱开（`CENTER_SNAP.xThreshold` / `xRelease`，仅改 x、不要求上下居中；与窗口模式主窗口同一行为）。
-3. **置顶与全屏**：默认置顶（`vessel.terminalWindow.alwaysOnTop` / `settings.terminalAlwaysOnTop`，缺省为开；`alwaysOnTop` 且 `setAlwaysOnTop(true, 'screen-saver')`）。**头栏没有置顶（图钉）按钮**，置顶只由设置 `terminalAlwaysOnTop`（`terminal:set-top` 仍可被设置界面 / 其它入口调用）决定。**该开关只作用于终端窗口，不影响主面板**（悬浮面板恒定置顶；窗口模式不置顶，见 §8.1）。空格行为是 `setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true })` = `NSWindowCollectionBehaviorDefault | FullScreenAuxiliary` —— **带全屏辅助、但不加入所有桌面**：可以浮在（当前桌面里的）全屏应用之上，同时**不会跟随桌面切换**，始终留在打开它的那个桌面。**该声明在窗口创建时、以及每次获得焦点时（此刻窗口就在活动桌面上）执行**（`skipTransformProcessType: true`：应用已是 `LSUIElement` 菜单栏 Agent，无需进程类型转换，转换会短暂隐藏窗口 / Dock 并改变激活行为）；**变球时不再重新声明**（变球发生在用户已切到其它桌面之后，此时再设会按 macOS 语义把窗口重新分配到「当前活动桌面」→ 球会跟着切换桌面，见 §3.9-12）；放大回来时最后重申一次，便于经全局快捷键把窗口带到当前桌面。iTerm 会强制切桌面，所以 SSH 连接改走这里。
+   - **屏幕 / 位置 / 尺寸记忆**（`terminal-window.json`，单槽）：打开、移动、缩放、关闭时把「所在屏幕 + 位置 + 尺寸」写入 `terminal-window.json`（关闭前同步落盘，拖动后立刻关窗也不会丢；写盘读窗口**此刻**的真实几何，程序化改尺寸不会被旧快照覆盖）。下次打开时：**该屏幕还在**（`id` + `scaleFactor` + `bounds` 全一致）→ 应用记忆的位置与尺寸（越界部分夹回该屏幕工作区，整窗可见）；**换屏 / 拔掉外接屏 / 分辨率或排列变了 / 无记录** → 用设置里的默认尺寸在当前屏幕（鼠标所在屏幕）工作区内居中。屏幕签名一致才复用，是因为分辨率 / 排列变化后记忆里的绝对坐标不再是同一块屏幕上的同一位置。**拖动时水平磁性吸附**：窗口中心与屏幕工作区的**垂直中线**（x 方向）对齐（±10px）时吸附到正中并轻微「卡」住，拖动超过 26px 才脱开（`CENTER_SNAP.xThreshold` / `xRelease`，仅改 x、不要求上下居中；与主窗口同一行为）。
+3. **置顶与全屏**：默认置顶（`vessel.terminalWindow.alwaysOnTop` / `settings.terminalAlwaysOnTop`，缺省为开；`alwaysOnTop` 且 `setAlwaysOnTop(true, 'screen-saver')`）。**头栏没有置顶（图钉）按钮**，置顶只由设置 `terminalAlwaysOnTop`（`terminal:set-top` 仍可被设置界面 / 其它入口调用）决定。**该开关只作用于终端窗口，不影响主窗口**（主窗口不置顶，见 §8.1）。空格行为是 `setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true })` = `NSWindowCollectionBehaviorDefault | FullScreenAuxiliary` —— **带全屏辅助、但不加入所有桌面**：可以浮在（当前桌面里的）全屏应用之上，同时**不会跟随桌面切换**，始终留在打开它的那个桌面。**该声明在窗口创建时、以及每次获得焦点时（此刻窗口就在活动桌面上）执行**（`skipTransformProcessType: true`：应用已是 `LSUIElement` 菜单栏 Agent，无需进程类型转换，转换会短暂隐藏窗口 / Dock 并改变激活行为）；**变球时不再重新声明**（变球发生在用户已切到其它桌面之后，此时再设会按 macOS 语义把窗口重新分配到「当前活动桌面」→ 球会跟着切换桌面，见 §3.9-12）；放大回来时最后重申一次，便于经全局快捷键把窗口带到当前桌面。iTerm 会强制切桌面，所以 SSH 连接改走这里。
 4. **终端**：与 §3.8 同一套 xterm.js + `pty-bridge.py` 真实 PTY，运行 shell（取设置 → 终端的**默认 shell**，`terminalShell`；留空或文件不存在时回退 `$SHELL` / `os.userInfo().shell`）；**滚动缓冲与字号取设置**（`terminalScrollback` / `terminalFontSize`，默认 10000 行 / 14px；`app:info.terminalScrollback` 仅作为配置缺失时的兜底）；窗口尺寸变化会同步 PTY 尺寸，关闭窗口即结束会话。
    - **不显示滚动条**：两处都关掉 —— ① 原生滚动条：`.xterm-viewport` 用 `scrollbar-width: none` / `::-webkit-scrollbar { display: none }`（`xterm.css` 先于本应用样式加载，保证规则生效）；② **xterm 自绘的滚动条**：`.xterm .xterm-scrollable-element > .scrollbar { display: none !important }`（xterm 6 只是用该元素做视觉指示，缓冲区滚动由它自己处理，隐藏后滚轮 / 触控板照常滚动）。主题里同时给出 macOS 风格的滑块色（`scrollbarSliderBackground/Hover/Active`）作为兜底，万一再出现滚动条也是圆角半透明样式。
    - **防跳变**：只在容器尺寸真的变化时 `fit()`，且只在 `cols`/`rows` 变化时才 `terminal:resize` —— 多余的 PTY resize 会让 shell 重绘，看起来像滚动时视图跳。

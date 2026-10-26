@@ -103,13 +103,20 @@ class SettingsService extends EventEmitter {
     const stored = readJson(SETTINGS_FILE, {});
     this.data = Object.assign({}, DEFAULT_SETTINGS, stored);
     const gameChanged = normalizeGameSettings(this.data, stored);
+    let changed = gameChanged;
     // 独立文件窗口曾默认置顶，且没有界面开关；把旧版本遗留的 true 归一为「不置顶」。
     if (this.data.fileWindowAlwaysOnTop === true) {
       this.data.fileWindowAlwaysOnTop = false;
-      writeJson(SETTINGS_FILE, this.data);
-    } else if (gameChanged) {
-      writeJson(SETTINGS_FILE, this.data);
+      changed = true;
     }
+    // 悬浮模式已整体移除：清理旧版本遗留的 floatMode / pinWindow，避免继续写回设置文件。
+    for (const key of ['floatMode', 'pinWindow']) {
+      if (Object.prototype.hasOwnProperty.call(this.data, key)) {
+        delete this.data[key];
+        changed = true;
+      }
+    }
+    if (changed) writeJson(SETTINGS_FILE, this.data);
   }
 
   getAll() {

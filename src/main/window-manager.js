@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const { BrowserWindow, screen, nativeTheme, app } = require('electron');
 const {
-  WINDOW,
   MAIN_WINDOW,
   SETTINGS_WINDOW,
   TERMINAL_WINDOW,
@@ -52,8 +51,6 @@ let fileWindowTarget = '';
 let fileWindowPath = '';
 let fileWindowOwnerId = null;
 let trayRef = null;
-let blurSuppressed = false;
-let pinnedPositioned = false;
 let terminalGeometryTimer = null;
 let suppressTerminalSizeSave = false;
 let fileWindowGeometryTimer = null;
@@ -142,8 +139,8 @@ function applyThemeBackgrounds() {
   for (const win of [getSettingsWindow(), getFileWindow(), getUpdateWindow()]) {
     if (win && !win.isDestroyed()) win.setBackgroundColor(color);
   }
-  // 窗口模式的主窗口：仅「无玻璃」时不透明，底色跟随主题（避免拖动露白）；玻璃开启时保持透明。
-  if (isWindowMode() && glassMode() === 'off') {
+  // 主窗口：仅「无玻璃」时不透明，底色跟随主题（避免拖动露白）；玻璃开启时保持透明。
+  if (glassMode() === 'off') {
     const mw = getMainWindow();
     if (mw && !mw.isDestroyed()) mw.setBackgroundColor(color);
   }
@@ -727,7 +724,7 @@ function liquidGlassAvailable() {
   }
 }
 
-// Glass mode for the popover: 'liquid' (native Liquid Glass, macOS 26+),
+// Glass mode for the main window: 'liquid' (native Liquid Glass, macOS 26+),
 // 'vibrancy' (hud NSVisualEffectView fallback) or 'off'.
 function glassMode() {
   if (process.platform !== 'darwin' || !settings.get('vibrancy')) return 'off';
@@ -739,7 +736,7 @@ function applyLiquidGlass(win) {
   const lg = getLiquidGlass();
   if (!lg || !win || win.isDestroyed()) return;
   try {
-    lg.addView(win.getNativeWindowHandle(), { cornerRadius: WINDOW.cornerRadius });
+    lg.addView(win.getNativeWindowHandle(), { cornerRadius: MAIN_WINDOW.cornerRadius });
   } catch (err) {
     logger.warn('liquid glass addView failed:', err.message);
   }
@@ -749,19 +746,10 @@ function setTray(tray) {
   trayRef = tray;
 }
 
-/* ------------------------------- 主窗口模式 -------------------------------
-   悬浮模式（settings.floatMode = true）：托盘下方的无边框透明弹出面板（原行为）。
-   窗口模式（默认，floatMode = false）：当前桌面中央的标准窗口，普通层级、不跨桌面，
-   位置 / 尺寸记入 main-window.json，下次还原；关闭按钮 = 隐藏（应用常驻托盘）。 */
-function isFloatMode() {
-  return settings.get('floatMode') === true;
-}
-
-function isWindowMode() {
-  return !isFloatMode();
-}
-
-// 窗口模式固定 640×480（不可缩放）。
+/* ------------------------------- 主窗口 ---------------------------------
+   当前桌面中央的标准窗口（普通层级、不跨桌面）；位置记入 main-window.json，
+   下次还原；关闭按钮 = 隐藏（应用常驻托盘）。 */
+// 固定 640×480（不可缩放）。
 function mainWindowSize() {
   return { width: MAIN_WINDOW.width, height: MAIN_WINDOW.height };
 }
@@ -791,7 +779,6 @@ function mainWindowBoundsForOpen() {
 }
 
 function saveMainWindowPosition() {
-  if (!isWindowMode()) return;
   const win = getMainWindow();
   if (!win || win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return;
   const b = win.getBounds();
@@ -824,7 +811,7 @@ function forgetMainWindowGeometry() {
 
 /* 拖动窗口时，窗口中心与屏幕（工作区）的**垂直中线**（x 方向）对齐就轻微「卡」一下
    （磁性吸附，带滞回）：进入阈值内吸附到正中、拖动超过释放阈值才脱开。
-   用于终端窗口与窗口模式的主窗口，仅改 x 坐标（不动尺寸、也不要求上下居中），
+   用于终端窗口与主窗口，仅改 x 坐标（不动尺寸、也不要求上下居中），
    左右拖动时即可感知。 */
 const xCenterSnapped = new WeakMap();
 
@@ -859,84 +846,15 @@ function maybeSnapHorizontalCenter(win) {
 
 function createMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
-  return isFloatMode() ? createFloatWindow() : createWindowWindow();
+  return createWindowWindow();
 }
 
-/* 悬浮模式：托盘下方的无边框透明面板。 */
-function createFloatWindow() {
-  const mode = glassMode();
-  const glassOptions =
-    mode === 'vibrancy' ? { vibrancy: VIBRANCY.type, visualEffectState: VIBRANCY.state } : {};
-
-  mainWindow = new BrowserWindow({
-    width: WINDOW.width,
-    height: WINDOW.height,
-    show: false,
-    frame: false,
-    transparent: true,
-    ...glassOptions,
-    resizable: false,
-    movable: false,
-    minimizable: false,
-    maximizable: false,
-    fullscreenable: false,
-    skipTaskbar: true,
-    // 面板自身永远置顶（§8.1）：它必须浮在全屏应用之上，否则点托盘时系统只能
-    // 切回普通桌面才显示得出来。与终端窗口的「置顶」开关无关。
-    alwaysOnTop: true,
-    hasShadow: true,
-    // Liquid Glass rounds itself; hud vibrancy needs the native rounded frame;
-    // otherwise the CSS radius shapes the panel.
-    roundedCorners: mode === 'vibrancy',
-    backgroundColor: '#00000000',
-    webPreferences: {
-      preload: path.join(PRELOAD_DIR, 'main-preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-      spellcheck: false,
-    },
-  });
-
-  // 加入所有桌面 + 全屏辅助：面板是菜单栏弹出层，要在任何桌面（含全屏应用之上）直接浮出。
-  mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
-  if (mainWindow.setMovable) mainWindow.setMovable(Boolean(settings.get('pinWindow')));
-  mainWindow.loadFile(path.join(RENDERER_DIR, 'index.html'));
-  // 页面缩放固定为 1（Electron 会按 origin 记住缩放，历史缩放会让布局 / 尺寸计算错位）。
-  mainWindow.webContents.setZoomFactor(1);
-  mainWindow.webContents.on('did-finish-load', () => {
-    try {
-      mainWindow.webContents.setZoomFactor(1);
-    } catch (err) {
-      /* ignore */
-    }
-  });
-
-  if (mode === 'liquid') {
-    const win = mainWindow;
-    win.webContents.once('did-finish-load', () => applyLiquidGlass(win));
-  }
-
-  mainWindow.on('blur', () => {
-    if (blurSuppressed) return;
-    if (settings.get('pinWindow')) return;
-    // 打开设置窗口时主面板已先隐藏；若两者同时打开，失焦（包括焦点转到设置窗口）也照常隐藏。
-    hideMainWindow();
-  });
-
-  mainWindow.on('closed', function onClosed() {
-    if (mainWindow === this) mainWindow = null;
-  });
-
-  return mainWindow;
-}
-
-/* 窗口模式：当前桌面中央的标准窗口（hiddenInset 标题栏 + 系统红绿灯）。 */
+/* 当前桌面中央的标准窗口（hiddenInset 标题栏 + 系统红绿灯）。 */
 function createWindowWindow() {
   const bounds = mainWindowBoundsForOpen();
-  // Liquid Glass / 毛玻璃在窗口模式同样生效（与悬浮模式一致）。
+  // Liquid Glass / 毛玻璃。
   const glass = glassMode();
-  logger.file(`[window-mode] create main window glass=${glass}`);
+  logger.file(`[main-window] create main window glass=${glass}`);
   const glassOptions =
     glass === 'vibrancy' ? { vibrancy: VIBRANCY.type, visualEffectState: VIBRANCY.state } : {};
   mainWindow = new BrowserWindow({
@@ -954,12 +872,12 @@ function createWindowWindow() {
     minimizable: true,
     maximizable: false,
     fullscreenable: false,
-    // 普通标准窗口层级：不常驻置顶（置顶只属于悬浮模式与终端 / 文件窗口）。
-    // 仍固定在自己的桌面，切换桌面时不跟随。
+    // 普通标准窗口层级：不常驻置顶（置顶只属于终端 / 文件 / 游戏窗口）。
+    // 固定在自己的桌面，切换桌面时不跟随。
     alwaysOnTop: false,
     // 玻璃开启时窗口透明（vibrancy 材质 / 原生玻璃视图透出），否则用主题底色。
-    // 注意：窗口模式是**标准窗口**，必须保留系统圆角（`roundedCorners` 默认 true）——
-    // 之前设成 false 会让 macOS 连标题栏 / 红绿灯一起去掉。
+    // 注意：这是**标准窗口**，必须保留系统圆角（`roundedCorners` 默认 true）——
+    // 设成 false 会让 macOS 连标题栏 / 红绿灯一起去掉。
     transparent: glass !== 'off',
     ...glassOptions,
     backgroundColor: glass !== 'off' ? '#00000000' : themeBackgroundColor(),
@@ -1012,103 +930,38 @@ function getMainWindow() {
   return mainWindow;
 }
 
-function positionUnderTray() {
-  const win = getMainWindow();
-  if (!win || !trayRef) return;
-
-  const trayBounds = trayRef.getBounds();
-  const winBounds = win.getBounds();
-  const display = screen.getDisplayNearestPoint({
-    x: trayBounds.x + Math.round(trayBounds.width / 2),
-    y: trayBounds.y + Math.round(trayBounds.height / 2),
-  });
-  const work = display.workArea;
-
-  let x = Math.round(trayBounds.x + trayBounds.width / 2 - winBounds.width / 2);
-  let y = Math.round(trayBounds.y + trayBounds.height + WINDOW.gapBelowTray);
-
-  const margin = 4;
-  x = Math.min(Math.max(x, work.x + margin), work.x + work.width - winBounds.width - margin);
-  if (y + winBounds.height > work.y + work.height) {
-    y = Math.max(work.y + margin, work.y + work.height - winBounds.height - margin);
-  }
-
-  win.setPosition(x, y, false);
-}
-
 function showMainWindow() {
   // Menu bar app: only open from the tray (ignore launch-time activation).
   if (!trayRef) return;
-  if (isWindowMode()) {
-    const win = getMainWindow() || createMainWindow();
-    if (win.isMinimized && win.isMinimized()) win.restore();
-    // 显示前先临时加入所有桌面，让窗口能在当前 Space 直接浮出；show / focus 后
-    // 立刻绑定回当前桌面。之后切换桌面时窗口留在原桌面；再次从其它桌面打开
-    // （隐藏状态）时又会先展开到当前桌面，因此不会被拉回旧桌面。
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
-    // 每次都放到当前鼠标所在屏幕（沿用保存的位置并夹回工作区；无记录则居中）。
-    win.setBounds(mainWindowBoundsForOpen(), false);
-    win.setAlwaysOnTop(false);
-    win.show();
-    win.focus();
-    // 不用 app.focus({ steal: true })：它会激活应用并可能把系统切回窗口原来的 Space。
-    if (typeof win.moveTop === 'function') win.moveTop();
-    // 等窗口真正在当前 Space 上显示后再撤销「所有桌面」，把它绑定到当前桌面。
-    setTimeout(() => {
-      if (win.isDestroyed()) return;
-      win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true });
-    }, 60);
-    return;
-  }
   const win = getMainWindow() || createMainWindow();
-  const pinned = Boolean(settings.get('pinWindow'));
-  if (!pinned || !pinnedPositioned) positionUnderTray();
-  // 每次弹出都重新声明一次「所有桌面 + 全屏辅助 + 置顶」：窗口层级 / 桌面归属可能被
-  // 系统或其它窗口影响，重新声明才能保证在当前界面（含全屏应用之上）直接浮出，
-  // 而不是被系统切到别的桌面去显示。
-  win.setAlwaysOnTop(true);
+  if (win.isMinimized && win.isMinimized()) win.restore();
+  // 显示前先临时加入所有桌面，让窗口能在当前 Space 直接浮出；show / focus 后
+  // 立刻绑定回当前桌面。之后切换桌面时窗口留在原桌面；再次从其它桌面打开
+  // （隐藏状态）时又会先展开到当前桌面，因此不会被拉回旧桌面。
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  // 每次都放到当前鼠标所在屏幕（沿用保存的位置并夹回工作区；无记录则居中）。
+  win.setBounds(mainWindowBoundsForOpen(), false);
+  win.setAlwaysOnTop(false);
   win.show();
   win.focus();
-  if (pinned) pinnedPositioned = true;
+  // 不用 app.focus({ steal: true })：它会激活应用并可能把系统切回窗口原来的 Space。
+  if (typeof win.moveTop === 'function') win.moveTop();
+  // 等窗口真正在当前 Space 上显示后再撤销「所有桌面」，把它绑定到当前桌面。
+  setTimeout(() => {
+    if (win.isDestroyed()) return;
+    win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  }, 60);
 }
 
-// 切换「悬浮模式 / 窗口模式」：窗口创建项不同，需销毁重建（此时主窗口通常已隐藏）。
-function rebuildMainWindowForMode() {
-  const win = getMainWindow();
-  if (win) win.destroy();
-  mainWindow = null;
-  pinnedPositioned = false;
-  createMainWindow();
-}
-
-// Applies the pin (keep-on-top) behavior: when pinned the popover can be moved
-// and keeps its position; when unpinned it hides and resets to the tray anchor.
-// 仅悬浮模式有效。
-function applyPin(pinned) {
-  if (isWindowMode()) return;
-  const win = getMainWindow();
-  if (win && win.setMovable) win.setMovable(Boolean(pinned));
-  if (pinned) {
-    pinnedPositioned = true;
-  } else {
-    pinnedPositioned = false;
-    hideMainWindow();
-    positionUnderTray();
-  }
-}
-
-// Toggle the native frosted glass. `vibrancy` and `roundedCorners` are
+// Toggle the native frosted glass. `vibrancy` / `roundedCorners` are
 // creation-time only (and must match so the material is clipped correctly),
-// so rebuild the popover — it is hidden while the settings window is open.
-// 悬浮模式与窗口模式都支持：切换时销毁重建窗口（此时通常已隐藏）。
+// so rebuild the window — it is hidden while the settings window is open.
 function applyVibrancy() {
   if (process.platform !== 'darwin') return;
   const win = getMainWindow();
   if (!win || win.isDestroyed()) return;
   if (win.isVisible()) win.hide();
   win.destroy();
-  pinnedPositioned = false;
   createMainWindow();
 }
 
@@ -1118,17 +971,8 @@ function hideMainWindow() {
 }
 
 function toggleMainWindow() {
-  if (isWindowMode()) {
-    // 窗口模式：始终「显示 / 带到前台」（再次点击切到它所在的桌面），不做隐藏切换。
-    showMainWindow();
-    return;
-  }
-  const win = getMainWindow() || createMainWindow();
-  if (win.isVisible()) {
-    hideMainWindow();
-  } else {
-    showMainWindow();
-  }
+  // 始终「显示 / 带到前台」（再次点击切到它所在的桌面），不做隐藏切换。
+  showMainWindow();
 }
 
 function openSettingsWindow(section, editSshAlias) {
@@ -1987,10 +1831,6 @@ function broadcast(channel, payload) {
   }
 }
 
-function setBlurSuppressed(value) {
-  blurSuppressed = Boolean(value);
-}
-
 // 设置 → 终端 → 窗口大小：改完立即作用到已打开的终端窗口。
 settings.on('changed', (_data, keys) => {
   if (!Array.isArray(keys)) {
@@ -1999,7 +1839,6 @@ settings.on('changed', (_data, keys) => {
     return;
   }
   if (keys.includes('theme')) applyThemeBackgrounds();
-  if (keys.includes('floatMode')) rebuildMainWindowForMode();
   if (keys.includes('terminalWindowWidth') || keys.includes('terminalWindowHeight')) {
     applyTerminalWindowSize();
   }
@@ -2066,7 +1905,5 @@ module.exports = {
   forgetFileWindowGeometry,
   applyFileWindowAlwaysOnTop,
   broadcast,
-  setBlurSuppressed,
-  applyPin,
   applyVibrancy,
 };

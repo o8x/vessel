@@ -2,32 +2,24 @@
 
 > Index: [docs/PRD.md](../PRD.md)
 
-### 8.1 主界面（窗口模式 / 悬浮模式）
+### 8.1 主界面
 
-主界面有两种模式，共用 `index.html`，由 `<html data-window-mode="window|float">` 切换外观（见 §3.2）。
-
-**窗口模式（默认）**
+主界面是固定的独立标准窗口，渲染页面为 `index.html`。
 
 - **标准窗口（不置顶）**：`titleBarStyle: 'hiddenInset'` + **系统红绿灯**（`trafficLightPosition {14,16}`）、不占 Dock；**普通窗口层级**（`alwaysOnTop: false`，不会永远浮在其它应用之上）；**固定 640 × 480、不可缩放**（`resizable: false`，`vessel.mainWindow`），仅位置可拖动。
 - **桌面归属**：窗口绑定到显示时所在的桌面，打开期间切换桌面不跟随；关闭（隐藏）后从其它桌面点托盘时，先 `setVisibleOnAllWorkspaces(true)`、显示聚焦后再 `false` 绑定当前桌面，因此在新桌面打开而不是回到旧桌面。
-- **只记忆位置（panel 式当前桌面显示）**：`main-window.json` 只存 `{ x, y }`，不记录桌面 / 屏幕 / 尺寸；显示时应用到当前鼠标所在屏幕并夹回工作区，无记录则居中。显示前先加入所有桌面，`show()` / `focus()` 后约 60ms 再 `false` 绑定当前桌面，避免 `show` / 激活时被系统拉回旧桌面。**拖动时水平磁性吸附**：窗口中心与屏幕工作区的**垂直中线**（x 方向）对齐（±10px）时吸附到正中并轻微「卡」一下，拖动超过 26px 才脱开（`CENTER_SNAP.xThreshold` / `xRelease`，仅改 x；与终端窗口同一行为）。
-- **布局适配**：顶部栏 `#tabbar` 左侧留出 **80px** 给系统红绿灯；**整条顶部栏可拖动窗口**——`#tabbar` / `#tablist` 均为 `-webkit-app-region: drag`（TAB 区虽铺满右侧，但其空白处也可拖动），仅真正的 **TAB 按钮**（`#tablist .tab`）为 `no-drag` 保证可点击；内容区加宽（`padding: 16px 20px`），工具内容 `#content > .tool-body` 用 `repeat(auto-fit, minmax(320px, 1fr))` 网格（固定 640 宽下为单列，窗口更宽时自动分栏）；面板圆角取消（`#panel border-radius:0`）。**图钉（固定悬浮）按钮隐藏**（仅悬浮模式有意义）；**Liquid Glass / 毛玻璃与悬浮模式一样生效**（开启时窗口透明、材质透出；见 §8.1「Liquid Glass」）。
-
-**悬浮模式（`floatMode = true`，原主面板行为）**
-
-- 尺寸：**400 × 500**（`vessel.window.width/height`），无边框、透明、不可缩放、置顶、不占 Dock。
-- **浮动行为（与终端窗口的置顶开关无关）**：面板 `alwaysOnTop: true`（**恒定**，不跟随 `settings.terminalAlwaysOnTop` —— 终端窗口头部图钉只改终端自己），并用 `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })` 加入所有桌面 + 全屏辅助；**每次弹出前**（`showMainWindow` → `setAlwaysOnTop(true)` + 重新声明上面的 collection behavior 后再 `show()`）都会重申一次，保证点击托盘时面板直接浮在当前界面（含全屏应用之上），而不是被系统切回某个桌面才显示得出来。`skipTransformProcessType: true`：本应用已是 `LSUIElement` 菜单栏 Agent（`app.dock.hide()`），不需要 Electron 在「UIElement ↔ 普通应用」之间转换进程类型 —— 该转换会短暂隐藏窗口 / Dock 并改变激活与窗口显示行为。
+- **只记忆位置（当前桌面显示）**：`main-window.json` 只存 `{ x, y }`，不记录桌面 / 屏幕 / 尺寸；显示时应用到当前鼠标所在屏幕并夹回工作区，无记录则居中。显示前先加入所有桌面，`show()` / `focus()` 后约 60ms 再 `false` 绑定当前桌面，避免 `show` / 激活时被系统拉回旧桌面。**拖动时水平磁性吸附**：窗口中心与屏幕工作区的**垂直中线**（x 方向）对齐（±10px）时吸附到正中并轻微「卡」一下，拖动超过 26px 才脱开（`CENTER_SNAP.xThreshold` / `xRelease`，仅改 x；与终端窗口同一行为）。
+- **布局适配**：顶部栏 `#tabbar` 左侧留出 **80px** 给系统红绿灯；**整条顶部栏可拖动窗口**——`#tabbar` / `#tablist` 均为 `-webkit-app-region: drag`（TAB 区虽铺满右侧，但其空白处也可拖动），仅真正的 **TAB 按钮**（`#tablist .tab`）为 `no-drag` 保证可点击；内容区加宽（`padding: 16px 20px`），工具内容 `#content > .tool-body` 用 `repeat(auto-fit, minmax(320px, 1fr))` 网格（固定 640 宽下为单列，窗口更宽时自动分栏）；`#panel` **无外层圆角**（`border-radius:0`）。
 - 结构：顶部栏（高 46px）：TAB 图标区右对齐、超出可横向滚动（图标 24×24px、按钮 40×40px、间距 8px）→ **固定工具标题区** `#tool-head-host`（不随内容滚动）→ 内容区（可滚动）→ 底部栏（高 34px）。
 - TAB 工具顺序由单一文件 `src/renderer/scripts/tool-order.js` 的 `window.ShipsToolOrder` 数组决定（改数组即改顺序；未列出的工具按注册顺序追加到末尾）。
-- 圆角：外层面板 `--radius-window`（10px），透明窗口使圆角外露；**主窗口无描边边框**（仅卡片/输入框有边框）。
-- 底部栏：左侧依次为 **App 彩色图标 + 名称**（16px 图标 / 12px 名称，固定不压缩）与版本号（`vX.Y.Z`；开发者模式开启时其右侧加一枚「开发者模式」标记）、右侧依次为**终端**（`terminal`，每次新开一扇置顶终端窗口，§3.9）、**文件管理**（`folder`，打开独立文件窗口且不选中任何连接，§3.9-11）、**网络测试**（`wifi`，打开设置 → 网络测试分区）、**外观**（`monitor`/`sun`/`moon`，循环切换跟随系统 / 浅色 / 深色）、图钉（固定悬浮）与设置按钮（齿轮），六个图标按钮均为 24×24px、**间距 12px**（比顶部 TAB 小，间距放大后图标之间的留白与顶部观感一致）。
-- `Escape` 隐藏面板；默认失焦自动隐藏；固定悬浮时保持显示并可通过底部左侧「应用图标 + 名称」区域拖动。
+- 底部栏：左侧依次为 **App 彩色图标 + 名称**（16px 图标 / 12px 名称，固定不压缩）与版本号（`vX.Y.Z`；开发者模式开启时其右侧加一枚「开发者模式」标记）、右侧依次为**终端**（`terminal`，每次新开一扇置顶终端窗口，§3.9）、**文件管理**（`folder`，打开独立文件窗口且不选中任何连接，§3.9-11）、**网络测试**（`wifi`，打开设置 → 网络测试分区）、**外观**（`monitor`/`sun`/`moon`，循环切换跟随系统 / 浅色 / 深色）与设置按钮（齿轮），五个图标按钮均为 24×24px、**间距 12px**。
+- `Escape` 与系统关闭按钮均隐藏窗口（应用常驻托盘）。
 - **Liquid Glass（设置项 `Liquid Glass`，键 `settings.vibrancy`，仅 macOS）**：粒度分三档，由 `window-manager.js` 的 `glassMode()` 判定：
-  - **`liquid`（macOS 26+，优先）**：用 `electron-liquid-glass` 在窗口内容后插入原生 `NSGlassEffectView`（Liquid Glass）。窗口 `transparent: true`、**不设 `vibrancy`**、`roundedCorners: false`，内容加载后 `liquidGlass.addView(win.getNativeWindowHandle(), { cornerRadius: WINDOW.cornerRadius })`（默认 10px）由玻璃自带圆角；**不叠加 tint，保持高透**（背景的 blur 与折射直接透出）。
-  - **`vibrancy`（旧 macOS 回退）**：用系统 `hud` 材质（强透明，Control Center 那种通透感；`content` / `under-window` 会几乎不透或发灰，故不用），`visualEffectState: active`，并需 `roundedCorners: true` 让系统裁剪材质；常量见 `shared/constants.js` 的 `VIBRANCY`。
-  - **`off`**：无玻璃，`roundedCorners: false`，由 CSS 圆角塑形。
-  - 说明：以上 `transparent` / `roundedCorners` 等创建参数针对**悬浮面板**；**窗口模式**是标准窗口——开启玻璃时 `transparent: true`，但**保留系统圆角**（`roundedCorners` 默认 `true`，`titleBarStyle: hiddenInset`），否则 macOS 会连标题栏 / 红绿灯一起去掉；关闭玻璃时不透明 + 系统圆角。
-  因 `roundedCorners` / `vibrancy` / 原生玻璃视图都是**创建期**行为，切换该设置时丢弃并按新配置**重建主面板**（此时面板隐藏，无闪烁；`main.js` 已订阅 `window-all-closed` 不退出）。`app.js` 在 macOS 下于 `<html>` 置 `data-vibrancy="on"`，`constants.css` 把 `--color-bg` 置 `transparent` 让玻璃透出（浅色下卡片 / 输入框保持不透明主题色，深色下沿用半透明 `--color-surface*`）；另由 `nativeTheme.themeSource` 使材质跟随应用主题。**透明度可调**：设置 → 应用的滑块 `settings.glassOpacity`（0–100，越大越透明，默认 80）由 `app.js` 换算成 `:root` 的 `--glass-surface` / `--glass-surface-2` / `--glass-surface-3`（base = `(100-glassOpacity)/100 × 0.4`，三项为 base ×1 / ×1.5 / ×2.75），`constants.css` 在 `[data-vibrancy='on']` 下用它们作为 `--color-surface*`，**实时生效**。**作用于主界面（悬浮模式与窗口模式都生效）**，设置窗口保持不透明；非 macOS 不生效（属性置 `off`，`glassMode()='off'`）。默认关闭。
+  - **`liquid`（macOS 26+，优先）**：用 `electron-liquid-glass` 在窗口内容后插入原生 `NSGlassEffectView`（Liquid Glass）。窗口 `transparent: true`、**不设 `vibrancy`**，内容加载后 `liquidGlass.addView(win.getNativeWindowHandle(), { cornerRadius: MAIN_WINDOW.cornerRadius })`（默认 10px）由玻璃自带圆角；**不叠加 tint，保持高透**。
+  - **`vibrancy`（旧 macOS 回退）**：用系统 `hud` 材质（强透明，Control Center 那种通透感），`visualEffectState: active`；常量见 `shared/constants.js` 的 `VIBRANCY`。
+  - **`off`**：无玻璃，窗口不透明、保留系统圆角。
+  - 说明：这是**标准窗口**——开启玻璃时 `transparent: true`，但**保留系统圆角**（`roundedCorners` 默认 `true`，`titleBarStyle: hiddenInset`），否则 macOS 会连标题栏 / 红绿灯一起去掉；关闭玻璃时不透明 + 系统圆角。
+  因 `roundedCorners` / `vibrancy` / 原生玻璃视图都是**创建期**行为，切换该设置时丢弃并按新配置**重建主窗口**（此时窗口隐藏，无闪烁；`main.js` 已订阅 `window-all-closed` 不退出）。`app.js` 在 macOS 下于 `<html>` 置 `data-vibrancy="on"`，`constants.css` 把 `--color-bg` 置 `transparent` 让玻璃透出；另由 `nativeTheme.themeSource` 使材质跟随应用主题。**透明度可调**：设置 → 应用的滑块 `settings.glassOpacity`（0–100，越大越透明，默认 80）由 `app.js` 换算成 `:root` 的 `--glass-surface` / `--glass-surface-2` / `--glass-surface-3`（base = `(100-glassOpacity)/100 × 0.4`，三项为 base ×1 / ×1.5 / ×2.75），`constants.css` 在 `[data-vibrancy='on']` 下用它们作为 `--color-surface*`，**实时生效**。设置窗口保持不透明；非 macOS 不生效（属性置 `off`，`glassMode()='off'`）。默认关闭。
 
 ### 8.2 设置窗口
 
@@ -93,4 +85,4 @@
 - 全屏：进入原生全屏后自动隐藏头栏与悬浮控制区，画面铺满屏幕；退出后恢复进入前的控制区显隐状态（由 `games:fullscreen` 事件驱动）。`Esc` 优先退出全屏（由 `window:control` 的 `fullscreen` 处理）。
 - 适配画面：控制区「适配画面」按钮按游戏宽高比调整窗口（`games:fit-window`），消除左右黑边，尽量保持窗口中心与屏幕工作区内。
 - 加载 / 错误：画面区覆盖加载遮罩（游戏名 + 引擎 + 动画）；失败显示「重试 / 打开工作目录」，不自动关闭窗口。
-- 游戏主界面：顶部不显示工具栏与工作目录路径，搜索框位于工具标题行右侧（窗口模式 350px 宽，悬浮模式 200px）；进入工具页自动扫描；分类为可折叠手风琴；顶部「最近启动」分类按最近启动时间倒序（最多 8 个）；网格窗口模式 **8 列**、悬浮模式 **4 列**，间距 8px；封面 1:1 圆角，名称 10px 最多 2 行；窗口模式封面约 68px，悬浮模式约 86px；占位封面使用主题中性色。
+- 游戏主界面：顶部不显示工具栏与工作目录路径，搜索框位于工具标题行右侧（350px 宽）；进入工具页自动扫描；分类为可折叠手风琴；顶部「最近启动」分类按最近启动时间倒序（最多 8 个）；网格固定 **8 列**，间距 8px；封面 1:1 圆角，名称 10px 最多 2 行；封面约 68px；占位封面使用主题中性色。

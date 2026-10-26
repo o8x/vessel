@@ -104,7 +104,7 @@ function registerWindowIpc(ipcMain) {
   });
 
   ipcMain.handle(IPC.DEVTOOLS_OPEN, (_event, target) => {
-    // target: 'main'（悬浮面板）/ 'settings' / 'terminal'（置顶终端窗口）/ 'file'（独立文件窗口）；
+    // target: 'main'（主窗口）/ 'settings' / 'terminal'（置顶终端窗口）/ 'file'（独立文件窗口）；
     // 未打开时先打开对应窗口。
     const win =
       target === 'settings'

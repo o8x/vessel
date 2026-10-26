@@ -23,10 +23,6 @@
         accentCustom: '自定义',
         launchAtLogin: '开机自启',
         launchAtLoginHint: '登录时自动启动 Vessel',
-        floatMode: '悬浮模式',
-        floatModeHint: '开 = 悬浮面板，关 = 独立窗口',
-        pin: '固定悬浮',
-        pinHint: '置顶常驻，失焦不隐藏（仅悬浮模式）',
         vibrancy: 'Liquid Glass',
         vibrancyHint: 'macOS 26+ 原生玻璃，旧系统回退毛玻璃',
         glassOpacity: 'Liquid Glass 透明度',
@@ -51,7 +47,7 @@
         developerMode: '开发者模式',
         developerModeHint: '显示开发者工具与主界面标记',
         developer: '开发者',
-        devPopover: '悬浮界面开发者工具',
+        devPopover: '主界面开发者工具',
         devSettings: '设置界面开发者工具',
         devTerminal: '终端界面开发者工具',
         devFile: '文件管理界面开发者工具',
@@ -74,10 +70,6 @@
         accentCustom: 'Custom',
         launchAtLogin: 'Launch at login',
         launchAtLoginHint: 'Start Vessel when you log in',
-        floatMode: 'Floating mode',
-        floatModeHint: 'On = floating panel, Off = standalone window',
-        pin: 'Keep on top',
-        pinHint: 'Keep on top and stay visible on blur (floating mode only)',
         vibrancy: 'Liquid Glass',
         vibrancyHint: 'Native glass on macOS 26+; frosted fallback on older systems',
         glassOpacity: 'Liquid Glass opacity',
@@ -103,7 +95,7 @@
         developerMode: 'Developer mode',
         developerModeHint: 'Show DevTools and the main-window badge',
         developer: 'Developer',
-        devPopover: 'Popover DevTools',
+        devPopover: 'Main window DevTools',
         devSettings: 'Settings DevTools',
         devTerminal: 'Terminal DevTools',
         devFile: 'File window DevTools',
@@ -207,15 +199,6 @@
     generalSection.appendChild(
       row(i18n.t('settingsPage.launchAtLogin'), i18n.t('settingsPage.launchAtLoginHint'), loginSwitch.root)
     );
-
-    // 主界面模式：悬浮（托盘弹出面板）/ 窗口（默认，独立标准窗口）。
-    const floatSwitch = switchControl(settings.floatMode === true, (value) => patch({ floatMode: value }));
-    generalSection.appendChild(
-      row(i18n.t('settingsPage.floatMode'), i18n.t('settingsPage.floatModeHint'), floatSwitch.root)
-    );
-
-    const pinSwitch = switchControl(settings.pinWindow, (value) => patch({ pinWindow: value }));
-    generalSection.appendChild(row(i18n.t('settingsPage.pin'), i18n.t('settingsPage.pinHint'), pinSwitch.root));
 
     const vibrancySwitch = switchControl(settings.vibrancy, (value) => patch({ vibrancy: value }));
     generalSection.appendChild(

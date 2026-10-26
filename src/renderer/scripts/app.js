@@ -17,7 +17,6 @@
     files: document.getElementById('btn-files'),
     networkTest: document.getElementById('btn-network-test'),
     theme: document.getElementById('btn-theme'),
-    pin: document.getElementById('btn-pin'),
     settings: document.getElementById('btn-settings'),
   };
 
@@ -184,24 +183,6 @@
     dom.brandName.textContent = i18n.t('appName');
   }
 
-  function updatePin() {
-    // 图钉只在悬浮模式有意义；窗口模式隐藏。
-    if (isWindowMode()) {
-      dom.pin.style.display = 'none';
-      dom.brand.classList.remove('brand-drag');
-      return;
-    }
-    dom.pin.style.display = '';
-    const pinned = Boolean(state.settings.pinWindow);
-    dom.pin.innerHTML = Icons.pin(15);
-    dom.pin.setAttribute('data-tip', i18n.t(pinned ? 'common.unpin' : 'common.pin'));
-    dom.pin.style.color = pinned ? 'var(--color-accent)' : '';
-    dom.pin.style.background = pinned
-      ? 'color-mix(in srgb, var(--color-accent) 15%, transparent)'
-      : '';
-    dom.brand.classList.toggle('brand-drag', pinned);
-  }
-
   /* 底部「外观」按钮：跟随系统 / 浅色 / 深色 循环切换，图标与提示随当前值变化。 */
   function renderThemeButton() {
     if (!dom.theme) return;
@@ -239,17 +220,11 @@
     renderThemeButton();
   }
 
-  function isWindowMode() {
-    return state.settings.floatMode !== true;
-  }
-
   function applySettings(settings) {
     state.settings = settings || {};
     i18n.setLocale(state.settings.locale || 'zh');
     window.ShipsTheme.set(state.settings);
-    // 悬浮 / 窗口模式：供 CSS 切换外观（圆角、内容多列、红绿灯留白等）。
-    document.documentElement.setAttribute('data-window-mode', isWindowMode() ? 'window' : 'float');
-    // Glass 仅 macOS；悬浮与窗口模式都生效。
+    // Glass 仅 macOS。
     const glass = Boolean(state.settings.vibrancy) && state.platform === 'darwin';
     document.documentElement.setAttribute('data-vibrancy', glass ? 'on' : 'off');
     applyGlassOpacity(state.settings.glassOpacity);
@@ -286,7 +261,6 @@
     renderTabs();
     renderFooter();
     renderBrand();
-    updatePin();
 
     const tools = orderedTools();
     if (tools.length) setActive(tools[0].id);
@@ -297,15 +271,11 @@
     dom.terminal.addEventListener('click', () => window.ships.openTerminal());
     // 打开独立文件管理窗口，不选中任何连接（target 传空串）。
     dom.files.addEventListener('click', () => window.ships.fileWindow.open(''));
-    dom.pin.addEventListener('click', () => {
-      window.ships.setSettings({ pinWindow: !state.settings.pinWindow });
-    });
     dom.theme.addEventListener('click', cycleTheme);
 
     window.ships.onSettingsChanged((next) => {
       const localeChanged = next.locale !== state.settings.locale;
       applySettings(next);
-      updatePin();
       renderThemeButton();
       if (localeChanged) {
         renderTabs();

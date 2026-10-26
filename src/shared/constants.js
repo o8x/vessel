@@ -177,16 +177,6 @@ const IPC = {
   SSH_CONFIG_CHANGED: 'ssh-config:changed',
 };
 
-const WINDOW = Object.assign(
-  {
-    width: 400,
-    height: 500,
-    gapBelowTray: 2,
-    cornerRadius: 10,
-  },
-  appConfig.window || {}
-);
-
 const SETTINGS_WINDOW = Object.assign(
   {
     width: 800,
@@ -195,11 +185,12 @@ const SETTINGS_WINDOW = Object.assign(
   appConfig.settingsWindow || {}
 );
 
-// 窗口模式（非悬浮）的主窗口：固定 640×480 的标准窗口（不可缩放），仅位置可拖动。
+// 主窗口：固定 640×480 的标准窗口（不可缩放），仅位置可拖动。
 const MAIN_WINDOW = Object.assign(
   {
     width: 640,
     height: 480,
+    cornerRadius: 10,
   },
   appConfig.mainWindow || {}
 );
@@ -264,7 +255,7 @@ const UPDATE_COUNTDOWN_SECONDS = 60;
 const SHORTCUT_DOUBLE_TAP_MS = 260;
 
 // 拖动窗口时，窗口中心与屏幕（工作区）**垂直中线**（x 方向）对齐的「磁性吸附」（px，滞回）：
-// 进入吸附的阈值 / 脱离吸附的释放阈值。用于终端窗口与窗口模式的主窗口；
+// 进入吸附的阈值 / 脱离吸附的释放阈值。用于终端窗口与主窗口；
 // 只比较 x，不要求上下也居中。
 const CENTER_SNAP = {
   xThreshold: 10,
@@ -302,9 +293,6 @@ const DEFAULT_SETTINGS = {
   theme: appConfig.defaultTheme || 'system',
   accent: appConfig.defaultAccent || '#2e6bfc',
   launchAtLogin: false,
-  // 主界面模式：false = 窗口模式（默认，居中标准窗口）；true = 悬浮模式（托盘下方弹出面板）。
-  floatMode: false,
-  pinWindow: false,
   vibrancy: false,
   // Liquid Glass 表面透明度（0–100；越大越透明）。默认 80 = 现有观感。
   glassOpacity: 80,
@@ -363,7 +351,6 @@ module.exports = {
   VERSION: pkg.version,
   appConfig,
   IPC,
-  WINDOW,
   MAIN_WINDOW,
   SETTINGS_WINDOW,
   TERMINAL_WINDOW,

@@ -28,8 +28,6 @@ window.ShipsI18n = (function createI18n() {
         confirm: '确定',
         unknown: '未知',
         loading: '加载中',
-        pin: '固定悬浮',
-        unpin: '取消固定',
       },
       tools: {
         timestamp: '时间戳转换',
@@ -82,8 +80,6 @@ window.ShipsI18n = (function createI18n() {
         confirm: 'OK',
         unknown: 'Unknown',
         loading: 'Loading',
-        pin: 'Keep on top',
-        unpin: 'Unpin',
       },
       tools: {
         timestamp: 'Timestamp',

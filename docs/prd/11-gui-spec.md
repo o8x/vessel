@@ -37,12 +37,11 @@
 
 | 名称 | 值 |
 | --- | --- |
-| 悬浮面板尺寸 | 400 × 500 |
-| 窗口模式主窗口尺寸 | 固定 640 × 480（不可缩放；`vessel.mainWindow`） |
+| 主窗口尺寸 | 固定 640 × 480（不可缩放；`vessel.mainWindow`） |
 | 设置窗口尺寸 | 800 × 600（固定，不可缩放 / 全屏） |
 | 更新窗口尺寸 | 380 × 150（`vessel.updateWindow`） |
 | 游戏窗口尺寸 | 默认 / 最小 480 × 320；最大 1440 × 900（`vessel.gameWindow`） |
-| 游戏主界面网格 | 窗口模式 8 列 / 悬浮模式 4 列，间距 8px；封面 1:1 |
+| 游戏主界面网格 | 8 列，间距 8px；封面 1:1 |
 | `--tabbar-height` | 46px |
 | `--footer-height` | 34px |
 | `--term-header-height` | 22px（终端窗口头栏最小高度，刚好放下自绘小红绿灯；实际为 `max(22px, --term-header-font-size + 6px)`） |
@@ -69,9 +68,9 @@
 - **工具标题行操作**：`app.js` 为 `.tool-head` 提供可选 `.tool-head-actions` 插槽；工具可将图标按钮合并到标题行右侧（当前剪贴板的刷新 / 清空按钮使用该插槽，不再单独占一行）。
 - **游戏组件**：`.game-toolbar` / `.game-category` / `.game-grid` / `.game-tile` / `.game-cover` / `.game-cover-placeholder`（占位封面：按 gameId 哈希生成稳定渐变 + 引擎缩写 + 首字母）/ `.game-name`（10px，2 行截断）；`.game-controls` 为绝对定位悬浮层（不占布局高度），全屏时隐藏；设置页 `.game-settings-card` / `.keycap` / `.game-settings-unique`（引擎专属徽标）/ `.game-settings-preset-row`（PC / 传统风格预设）；分区标题与说明上下排列，说明独占一行，重置按钮位于标题行右侧。
 - **更新窗口组件**：`.update-shell`（整窗拖拽区 + 纵向布局）/ `.update-title` / `.update-message`（提示消息，12px / 行高 1.6 / 自动换行）/ `.update-progress` + `.update-progress-fill`（强调色进度条，`transition: width 0.15s linear`）/ `.update-status` / `.update-actions`（`no-drag`，右对齐按钮，提示框按钮共用同一样式）。
-- **卡片 / 输入框间距统一 12px**：唯一来源是 `constants.css` 的 `--space-card-gap`（默认 12px）；`.section`（`gap` / `margin-bottom`）、窗口模式工具网格、手风琴、设置卡片、工具列表与输入区块均使用它（Tailwind 暴露为 `gap-card` / `mb-card` / `mt-card`），不再散落 10 / 12 / 16px 的卡片间距；编码转换（6 个连续输入框、二维码 / Data Matrix 分区与标题）与进制转换的 4 个进制输入框使用更紧凑的 8px 间距。
+- **卡片 / 输入框间距统一 12px**：唯一来源是 `constants.css` 的 `--space-card-gap`（默认 12px）；`.section`（`gap` / `margin-bottom`）、工具网格、手风琴、设置卡片、工具列表与输入区块均使用它（Tailwind 暴露为 `gap-card` / `mb-card` / `mt-card`），不再散落 10 / 12 / 16px 的卡片间距；编码转换（6 个连续输入框、二维码 / Data Matrix 分区与标题）与进制转换的 4 个进制输入框使用更紧凑的 8px 间距。
 - **统一标题（滚动联动）**：每个工具的标题由 `app.js` 渲染在内容区上方的固定 `#tool-head-host` 中（标题取 `tools.<id>`、说明取 `toolDesc.<id>`），**永远固定在顶部、不随内容滚动**。常态标题 17px / 700、说明 11px。**仅当内容实际可滚动时**才启用收起行为：内容在最顶部时，先收起标题并**保持内容不动**（滚动输入在收起动画约 190ms 内被锁定），标题缩为 13px / 650、说明变为 10px 并**与标题同一行**（超出省略）；动画完成后继续滚动才滚动内容，标题始终独占一行、内容不会滚到标题下面。滚回顶部后自动恢复（在顶部继续向上滚也会先展开标题）；JSON 等内部滚动区实际产生滚动时同样收起，回到其顶部恢复；内容未填满、无法滚动时（如短 JSON / Hash / 2FA / 剪贴板）滚动不会收起标题。切换 TAB 时内容区自动滚动回顶部并恢复常态。
-- **内容填充（fill）**：工具注册项可设 `fill: true`（当前为 JSON 格式化）；`app.js` 给 `#content` 加 `.tool-fill`，使内容区变为纵向 flex、`.tool-body` 占满剩余高度，JSON 编辑器 / 结构树用 `flex: 1` 铺满剩余高度与整行宽度（不再固定 180px），下方状态行保持贴底；窗口模式下的多列网格也由该规则覆盖为单列纵向布局（并重置 `align-items: stretch`，避免从网格的 `start` 继承导致编辑器宽度塌缩）。
+- **内容填充（fill）**：工具注册项可设 `fill: true`（当前为 JSON 格式化）；`app.js` 给 `#content` 加 `.tool-fill`，使内容区变为纵向 flex、`.tool-body` 占满剩余高度，JSON 编辑器 / 结构树用 `flex: 1` 铺满剩余高度与整行宽度（不再固定 180px），下方状态行保持贴底；多列网格也由该规则覆盖为单列纵向布局（并重置 `align-items: stretch`，避免从网格的 `start` 继承导致编辑器宽度塌缩）。
 - 自绘控件：下拉框默认**宽 120px**（`--control-width`），菜单宽度与触发器一致；二维码纠错等级 L / M / Q / H 分段控件同样为 **120px** 且按钮均分；下拉触发器只有可见的 120px 区域可点击（外层不使用 `<label>` 转发点击）（`select-trigger` / `select-menu` / `select-option`（`ShipsUI.createSelect`，替代系统 `<select>`；`.select-trigger.select-compact` 是头栏尺寸变体 —— 内边距 6px / 圆角取更紧凑的 `--radius-control-sm`（4px，比常规控件的 8px 小），字号与高度由 `#term-actions` 规则按头栏字号推导；终端窗口的下拉菜单同样与触发器同宽（120px）、条目高度与下拉本体一致，用于终端窗口头栏里的 SSH 主机下拉；支持 `{ header: true, label }` 形式的分组小标题 `select-group-title`（不可点、`pointer-events: none`，用于 SSH 下拉在两组之间区分，终端窗口内更紧凑））；**终端窗口自绘小红绿灯** `.traffic-light`（`.traffic-close` / `.traffic-minimize` / `.traffic-zoom`，9px 圆点 + 悬浮符号，见 §3.9-2）；悬浮提示 `ships-tip`（`ShipsUI.initTooltips`，元素加 `data-tip`，时间戳工具的偏移输入框用 `data-tip` 说明表达式语法；点击 / 窗口失焦 / 页面隐藏 / 滚动时立即隐藏，避免目标被移除后提示滞留）；JSON 覆盖式高亮编辑器 `json-editor` 与结构树 `json-tree`。
 - 输入校验态：普通输入框加 `.invalid` 时描红（`border-color: var(--color-danger)`），时间戳工具的两个偏移输入框即用它表示偏移表达式非法；`.field:disabled` 半透明 + `not-allowed` 光标（IP 工具网络测试在 ICMP / ARP / 扫描主机下禁用端口输入）。
 - 分段控件：`ShipsUI.segmented(options, value, onSelect, { className })` 支持选项 `disabled`（置灰不可点选，`.segment button:disabled` 透明 0.4）、`tip`（悬浮提示，配合 `data-tip`）与 `setOptions()`（原地重建，用于跟随状态变化）；`.segment-compact` 为单行多段变体（内边距 4px / 6px），设置 → 网络测试的类型切换即用它。

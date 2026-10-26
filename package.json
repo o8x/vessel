@@ -34,15 +34,10 @@
   },
   "vessel": {
     "showDockIcon": false,
-    "window": {
-      "width": 380,
-      "height": 500,
-      "gapBelowTray": 2,
-      "cornerRadius": 10
-    },
     "mainWindow": {
       "width": 640,
-      "height": 480
+      "height": 480,
+      "cornerRadius": 10
     },
     "settingsWindow": {
       "width": 800,

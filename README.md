@@ -4,7 +4,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-Vessel is a lightweight macOS menu bar toolbox for developers. It stays in the tray and drops a small panel right below the icon, so everyday utilities are one click away.
+Vessel is a lightweight macOS menu bar toolbox for developers. It stays in the tray and opens a compact window on the current desktop, so everyday utilities are one click away.
 
 ## Tools
 
