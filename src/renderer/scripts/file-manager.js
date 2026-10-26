@@ -160,6 +160,11 @@
     return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
   }
 
+  /* 列表 / CSV 的体积列：目录没有有意义的体积，固定显示 `-`。 */
+  function formatEntrySize(entry) {
+    return entry && entry.type === 'dir' ? '-' : formatSize(entry && entry.size);
+  }
+
   function formatTime(ms) {
     const value = Number(ms);
     if (!value) return '';
@@ -487,6 +492,18 @@
         });
     }
 
+    /* 目录右键菜单：目录树节点与文件列表里的目录行共用。 */
+    function directoryMenuItems(path) {
+      const items = [];
+      if (onCd) items.push({ label: i18n.t('filesUi.cdEnter'), run: () => enterDirectory(path) });
+      items.push(
+        { label: i18n.t('filesUi.upload'), run: () => chooseAndUpload(path) },
+        { label: i18n.t('filesUi.copyPath'), run: () => copyPath([path]) },
+        { label: i18n.t('filesUi.copyTransfer'), run: () => copyTransferCommand([path], true) }
+      );
+      return items;
+    }
+
     function makeTreeRow(name, path, depth) {
       const expanded = state.expanded.has(path);
       const row = el('div', { class: 'fm-tree-row', style: `padding-left:${6 + depth * 14}px` });
@@ -506,14 +523,7 @@
       row.addEventListener('contextmenu', (event) => {
         event.preventDefault();
         setStatusPath(path);
-        const items = [];
-        if (onCd) items.push({ label: i18n.t('filesUi.cdEnter'), run: () => enterDirectory(path) });
-        items.push(
-          { label: i18n.t('filesUi.upload'), run: () => chooseAndUpload(path) },
-          { label: i18n.t('filesUi.copyPath'), run: () => copyPath([path]) },
-          { label: i18n.t('filesUi.copyTransfer'), run: () => copyTransferCommand([path], true) }
-        );
-        openContextMenu(event.clientX, event.clientY, items);
+        openContextMenu(event.clientX, event.clientY, directoryMenuItems(path));
       });
       if (state.cwd === path) row.classList.add('selected');
       return row;
@@ -580,19 +590,27 @@
     }
 
     /* -------------------------------- list -------------------------------- */
-    /* 按当前排序列 / 方向对文件排序（'' = 不排序，保持服务端返回顺序；名称 / 体积 / 时间）。 */
+    /* 按当前排序列 / 方向对文件排序（'' = 不排序，保持服务端返回顺序；名称 / 体积 / 时间）。
+       目录始终排在文件前面，排序只在目录组与文件组内部生效。 */
     function sortedEntries() {
-      const files = state.entries.slice();
-      if (!state.sortKey) return files;
+      const dirs = [];
+      const files = [];
+      for (const entry of state.entries) {
+        if (entry.type === 'dir') dirs.push(entry);
+        else files.push(entry);
+      }
+      if (!state.sortKey) return dirs.concat(files);
       const dir = state.sortDir === 'desc' ? -1 : 1;
-      files.sort((a, b) => {
+      const compare = (a, b) => {
         let cmp;
         if (state.sortKey === 'size') cmp = (Number(a.size) || 0) - (Number(b.size) || 0);
         else if (state.sortKey === 'time') cmp = (Number(a.mtime) || 0) - (Number(b.mtime) || 0);
         else cmp = String(a.name || '').localeCompare(String(b.name || ''));
         return cmp * dir;
-      });
-      return files;
+      };
+      dirs.sort(compare);
+      files.sort(compare);
+      return dirs.concat(files);
     }
 
     /* 当前目录下、按显示顺序排列的远端路径（用于多选与范围选择）。 */
@@ -636,16 +654,30 @@
       }
       for (const entry of sortedEntries()) {
         const path = joinPath(state.cwd, entry.name);
+        const isDir = entry.type === 'dir';
         const row = el('div', { class: 'fm-row' });
         if (state.selection.has(path)) row.classList.add('selected');
         const icon = el('span', { class: 'fm-cell-icon' });
-        icon.innerHTML = (Icons[iconFor(entry.name)] || Icons.file)(13);
+        icon.innerHTML = (isDir ? Icons.folder : (Icons[iconFor(entry.name)] || Icons.file))(13);
         const name = el('span', { class: 'fm-cell-name' }, '');
         name.textContent = entry.name;
-        const size = el('span', { class: 'fm-cell-size' }, formatSize(entry.size));
+        // 目录不显示体积（SFTP 返回的 size 对目录没有意义），权限 / 时间照常显示。
+        const size = el('span', { class: 'fm-cell-size' }, formatEntrySize(entry));
         const time = el('span', { class: 'fm-cell-time' }, formatTime(entry.mtime));
         const perm = el('span', { class: 'fm-cell-perm' }, formatMode(entry.mode, entry.type));
         row.append(icon, name, size, perm, time);
+        if (isDir) {
+          row.classList.add('fm-row-dir');
+          // 目录行单击 = 目录树里点该目录名：导航进入该目录。
+          row.addEventListener('click', () => navigate(path));
+          row.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            setStatusPath(path);
+            openContextMenu(event.clientX, event.clientY, directoryMenuItems(path));
+          });
+          listEl.appendChild(row);
+          continue;
+        }
         // 多选：Shift = 从锚点范围选择；Cmd / Ctrl = 增删单条；普通点击 = 只选它。
         row.addEventListener('click', (event) => {
           if (event.shiftKey && state.anchor) selectRangeTo(path);
@@ -703,7 +735,8 @@
       }
       state.cwd = result.path;
       state.home = result.home || state.home;
-      state.entries = result.entries.filter((entry) => entry.type !== 'dir');
+      // 目录也进入右侧文件列表（固定排在最前，点击 = 进入该目录），不再只出现在左侧目录树。
+      state.entries = result.entries;
       state.selection = new Set();
       state.anchor = '';
       pathInput.value = result.path;
@@ -780,7 +813,7 @@
         [i18n.t('filesUi.name'), i18n.t('filesUi.size'), i18n.t('filesUi.perm'), i18n.t('filesUi.time')],
         ...ordered.map((entry) => [
           entry.name,
-          formatSize(entry.size),
+          formatEntrySize(entry),
           formatMode(entry.mode, entry.type),
           formatTime(entry.mtime),
         ]),

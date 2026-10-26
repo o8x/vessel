@@ -1496,6 +1496,10 @@ body.file-window .fm-tree-row {
   height: 1.9em;
   cursor: default;
 }
+/* 目录行底色比文件行略亮，便于快速区分（令牌见 styles/constants.css）。 */
+.fm-row-dir {
+  background: var(--fm-dir-row-bg);
+}
 .fm-row:hover {
   background: var(--color-surface-2);
 }

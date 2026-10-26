@@ -91,6 +91,8 @@
   --shadow-raise: 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(12, 16, 24, 0.06);
   /* 独立文件窗口固定纯白底（不跟随主界面主题）。 */
   --file-window-bg: #ffffff;
+  /* 文件列表里的目录行底色：比文件行略亮，便于区分（浅色模式）。 */
+  --fm-dir-row-bg: rgba(255, 255, 255, 0.72);
   /* 窗口失焦时自绘红绿灯的灰底 */
   --traffic-inactive: rgba(0, 0, 0, 0.18);
   /* 透明悬浮球拖动时的淡圆底（浅色模式：深色底；暗色模式在下方覆盖为浅色底） */
@@ -123,6 +125,8 @@
   --shadow-raise: 0 1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.4);
   --traffic-inactive: rgba(255, 255, 255, 0.28);
   --ball-drag-bg: rgba(255, 255, 255, 0.22);
+  /* 目录行底色：比文件行略亮（暗色模式）。 */
+  --fm-dir-row-bg: rgba(255, 255, 255, 0.04);
 }
 
 /*
@@ -148,6 +152,8 @@
   --color-accent-soft-2: color-mix(in srgb, var(--color-accent) 26%, transparent);
   --color-accent-line: color-mix(in srgb, var(--color-accent) 58%, transparent);
   --shadow-raise: none;
+  /* 玻璃下目录行用更淡的白色叠层，保持「略亮」而不遮挡材质。 */
+  --fm-dir-row-bg: rgba(255, 255, 255, 0.1);
 }
 
 [data-vibrancy='on'][data-theme='dark'] {
@@ -161,4 +167,9 @@
   --color-fg: #ffffff;
   --color-fg-muted: rgba(255, 255, 255, 0.62);
   --shadow-raise: none;
+}
+
+/* 独立文件窗口固定纯白底：目录行改用极淡的中性底色与文件行区分（无法比纯白更亮）。 */
+body.file-window {
+  --fm-dir-row-bg: rgba(15, 23, 42, 0.035);
 }
