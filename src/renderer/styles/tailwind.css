@@ -1869,6 +1869,9 @@ body.file-window .fm-tree-row {
 .encode-root {
   display: flex;
   flex-direction: column;
+  /* .tool-body 是网格且 align-items:start，改成 flex 后需重置为 stretch，
+     否则各分区按内容宽度收缩、输入框无法铺满。 */
+  align-items: stretch;
   gap: var(--space-2);
 }
 .encode-root > .section {
