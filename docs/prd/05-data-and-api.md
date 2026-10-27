@@ -49,7 +49,8 @@
 | `app:open-path` | `target` | `{ ok, error? }` | 终端路径链接：展开 `~`、校验绝对路径且存在，然后 `shell.showItemInFolder` 在 Finder 中定位（不执行文件 / 不启动 .app） |
 | `app:copy-image` | PNG data URL | `{ ok, error? }` | 把 PNG 图片写入系统剪贴板（Electron 44：`new ClipboardItem({ 'image/png': Blob })` + `await clipboard.write([…])`）；仅接受 `data:image/png;base64,` 前缀；编码转换工具的二维码「复制」用 |
 | `app:save-image` | `{ dataUrl, name? }` | `{ ok, path?, canceled?, error? }` | 保存对话框把 PNG data URL 存为本地文件（默认名 `qrcode.png`）；编码转换工具的二维码「下载到本地」用 |
-| `app:check-updates` | — | `{ ok, checking?, error?, message? }` | 设置 → 应用 → 关于 的「检查更新」：触发一次自动更新检查（`updater-service`）。**每次手动检查都会给出反馈**（有新版本 / 已是最新 / 暂时无法检查 / 开发模式不检查，均由**应用内提示框**即更新窗口显示），反复点击不会静默无响应；检查进行中再次点击返回 `{ ok: true, checking: true }`，设置页就地提示「正在检查…」。**失败只给一句友好提示，不暴露技术错误**，详情写日志；`message` 字段为向后兼容保留（界面不再重复显示，提示统一走更新窗口） |
+| `app:check-updates` | — | `{ ok, checking?, error?, message? }` | 设置 → 应用 → 关于 的「检查更新」：触发一次自动更新检查（`updater-service`）。**每次手动检查都会给出反馈**（有新版本 / 已是最新 / 暂时无法检查 / 开发模式不检查，均由**应用内提示框**即更新窗口显示），反复点击不会静默无响应；检查进行中（含自动检查）再次点击返回 `{ ok: true, checking: true }`，设置页就地提示「检查更新中…」。**失败只给一句友好提示，不暴露技术错误**，详情写日志；`message` 字段为向后兼容保留（界面不再重复显示，提示统一走更新窗口） |
+| `app:check-updates-state` | — | `{ checking }` | 设置页查询当前是否有自动 / 手动检查在进行；用于打开设置窗口时初始化「检查更新」按钮的禁用态与「检查更新中…」文案 |
 | `update:state` | — | `{ phase, mode, version, percent, transferred, total, bytesPerSecond, countdown, prompt }` 或 `null` | 更新窗口查询当前状态（`phase` ∈ `idle` / `downloading` / `downloaded`；`prompt` = 待处理的提示框 `{ id, title, message, buttons, defaultId, cancelId }` 或 `null`，窗口加载完成时据此补显示）；只接受来自**更新窗口**的请求 |
 | `update:cancel` | — | `{ ok }` | 下载窗口「取消」：下载阶段中止下载（`CancellationToken`），已完成则停止倒计时、不立即重启（退出本次更新）；只接受来自更新窗口的请求 |
 | `update:install` | — | `{ ok }` | 下载窗口「重启更新」：`quitAndInstall()` 立即重启并安装；只接受来自更新窗口的请求 |
@@ -181,6 +182,7 @@
 | `update:downloaded` | 状态快照 | 下载完成（`phase: 'downloaded'`、`countdown: 60`），只发给更新窗口 |
 | `update:countdown` | `{ countdown }` | 下载完成后的自动重启倒计时（每秒一次），只发给更新窗口 |
 | `update:prompt` | 提示框对象或 `null` | 应用内提示框（`{ id, title, message, buttons, defaultId, cancelId }`）；`null` = 提示结束 / 切回下载进度，只发给更新窗口 |
+| `app:update-checking` | `{ checking }` | 自动 / 手动检查开始 / 结束时推送给设置窗口（`checking: true` 时按钮禁用并显示「检查更新中…」，`false` 恢复）；设置窗口未打开时不推送 |
 | `settings:open-section` | `sectionId` | 请求设置窗口切换到指定分区（由 `window:open-settings` 的 `section` 触发） |
 
 ### 5.3 菜单与权限映射

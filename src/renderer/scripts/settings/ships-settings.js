@@ -43,7 +43,7 @@
         version: '版本',
         checkUpdates: '检查更新',
         check: '检查',
-        checking: '正在检查…',
+        checking: '检查更新中…',
         developerMode: '开发者模式',
         developerModeHint: '显示开发者工具与主界面标记',
         developer: '开发者',
@@ -91,7 +91,7 @@
         version: 'Version',
         checkUpdates: 'Check for updates',
         check: 'Check',
-        checking: 'Checking…',
+        checking: 'Checking for updates…',
         developerMode: 'Developer mode',
         developerModeHint: 'Show DevTools and the main-window badge',
         developer: 'Developer',
@@ -325,17 +325,35 @@
     const updateNote = el('div', { class: 'mt-0.5 break-all text-[11px] text-fg-muted' });
     updateLeft.appendChild(updateNote);
     const checkBtn = el('button', { class: 'btn shrink-0', type: 'button' }, i18n.t('settingsPage.check'));
+    let disposed = false;
+    function renderChecking(checking) {
+      checkBtn.disabled = Boolean(checking);
+      if (disposed) return;
+      if (checking) {
+        updateNote.textContent = i18n.t('settingsPage.checking');
+      } else if (updateNote.textContent === i18n.t('settingsPage.checking')) {
+        updateNote.textContent = '';
+      }
+    }
+    const offUpdateChecking = window.ships.onUpdateChecking((payload) =>
+      renderChecking(payload && payload.checking)
+    );
+    window.ships
+      .getUpdateChecking()
+      .then((state) => renderChecking(state && state.checking))
+      .catch(() => {});
     checkBtn.addEventListener('click', async () => {
       updateNote.textContent = '';
-      checkBtn.disabled = true;
+      renderChecking(true);
+      let stillChecking = false;
       try {
         const res = await window.ships.checkUpdates();
         // 结果（已最新 / 无法检查等）由更新窗口（应用内提示框）展示，这里不再重复。
-        if (res && res.checking) updateNote.textContent = i18n.t('settingsPage.checking');
+        stillChecking = Boolean(res && res.checking);
       } catch (err) {
         updateNote.textContent = String((err && err.message) || err);
       } finally {
-        checkBtn.disabled = false;
+        if (!stillChecking) renderChecking(false);
       }
     });
     updateRow.append(updateLeft, checkBtn);
@@ -378,6 +396,8 @@
     pane.append(aboutSection, devSection);
 
     return () => {
+      disposed = true;
+      if (typeof offUpdateChecking === 'function') offUpdateChecking();
       if (typeof offSettings === 'function') offSettings();
     };
   }

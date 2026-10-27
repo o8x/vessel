@@ -24,6 +24,8 @@ const api = {
   openConsole: () => ipcRenderer.invoke(IPC.OPEN_CONSOLE),
   clearData: () => ipcRenderer.invoke(IPC.CLEAR_DATA),
   checkUpdates: () => ipcRenderer.invoke(IPC.UPDATER_CHECK),
+  getUpdateChecking: () => ipcRenderer.invoke(IPC.UPDATER_CHECK_STATE),
+  onUpdateChecking: (cb) => on(IPC.UPDATER_CHECKING, cb),
   backup: {
     exportAll: () => ipcRenderer.invoke(IPC.BACKUP_EXPORT),
     importAll: () => ipcRenderer.invoke(IPC.BACKUP_IMPORT),

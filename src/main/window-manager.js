@@ -933,6 +933,8 @@ function getMainWindow() {
 function showMainWindow() {
   // Menu bar app: only open from the tray (ignore launch-time activation).
   if (!trayRef) return;
+  // 自动更新：每次打开主界面时静默检查一次。
+  require('./services/updater-service').maybeAutoCheck();
   const win = getMainWindow() || createMainWindow();
   if (win.isMinimized && win.isMinimized()) win.restore();
   // 显示前先临时加入所有桌面，让窗口能在当前 Space 直接浮出；show / focus 后
@@ -976,6 +978,8 @@ function toggleMainWindow() {
 }
 
 function openSettingsWindow(section, editSshAlias) {
+  // 自动更新：每次打开设置界面时静默检查一次。
+  require('./services/updater-service').maybeAutoCheck();
   const targetSection = editSshAlias ? 'ssh' : section;
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.show();

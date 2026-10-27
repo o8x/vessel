@@ -121,6 +121,9 @@ function registerAppIpc(ipcMain) {
     return updater.checkForUpdatesInteractive(win);
   });
 
+  // 设置界面查询当前是否正在自动 / 手动检查（按钮置灰 + 显示「检查更新中…」）。
+  ipcMain.handle(IPC.UPDATER_CHECK_STATE, () => ({ checking: updater.isChecking() }));
+
   // Directory picker (settings → terminal → SFTP download directory).
   ipcMain.handle(IPC.DIALOG_OPEN_DIR, async (event, options) => {
     const win = BrowserWindow.fromWebContents(event.sender);

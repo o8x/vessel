@@ -19,6 +19,7 @@ const pkg = require('../../../package.json');
    - **Windows**：仍用 electron-updater 自动下载并 `quitAndInstall()`（模式 = auto）。
    - 发现新版本 → 提示后下载 → 小型不可关闭的前台下载窗口（进度条 + 取消 + 安装按钮）。
    - 取消 = 退出本次更新（下载阶段会中止下载）。
+   - 自动检查：每次打开主界面 / 设置界面时触发（不再在启动后定时检查）。
    - 设置 → Vessel → 关于 可手动「检查更新」（提示已是最新 / 暂时无法检查，不报技术错误）。
    仅打包后的 macOS / Windows 生效；开发模式不检查。 */
 
@@ -54,6 +55,28 @@ let autoUpdater = null;
 let interactiveChecking = false;
 let manualCheck = false;
 let promptedVersion = '';
+
+/* 同步「正在检查」状态到设置窗口：自动 / 手动检查期间禁用检查按钮。 */
+function broadcastChecking() {
+  const win = wm.getSettingsWindow();
+  if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+  try {
+    win.webContents.send(IPC.UPDATER_CHECKING, { checking: interactiveChecking });
+  } catch (err) {
+    /* ignore */
+  }
+}
+
+function setChecking(value) {
+  const next = Boolean(value);
+  if (interactiveChecking === next) return;
+  interactiveChecking = next;
+  broadcastChecking();
+}
+
+function isChecking() {
+  return interactiveChecking;
+}
 
 // 下载窗口状态（可查询、可广播）。
 let downloadToken = null; // Windows（electron-updater）下载的取消令牌
@@ -650,7 +673,7 @@ async function checkForUpdatesMac(manual) {
     wm.openUpdateWindow();
     return { ok: true };
   }
-  interactiveChecking = true;
+  setChecking(true);
   const c = copy();
   try {
     const release = await fetchLatestMacRelease();
@@ -665,6 +688,8 @@ async function checkForUpdatesMac(manual) {
     if (!manual && release.version === promptedVersion) return { ok: true };
     promptedVersion = release.version;
     logger.info(`[updater] mac update available: ${release.version}`);
+    // 检查已完成：先恢复按钮状态，再等待用户选择是否下载。
+    setChecking(false);
     await promptDownload(release);
     return { ok: true };
   } catch (err) {
@@ -677,20 +702,16 @@ async function checkForUpdatesMac(manual) {
     }
     return { ok: false, error: 'check-failed' };
   } finally {
-    interactiveChecking = false;
+    setChecking(false);
   }
 }
 
-/* 启动时调用一次。仅打包后生效；静默检查，有新版本才弹窗。 */
+/* 初始化：注册 Windows 的 electron-updater 事件（macOS 无需提前注册）。
+   实际检查由「打开主界面 / 设置界面」触发（见 maybeAutoCheck）。 */
 function initUpdater() {
   if (!supported()) return;
   if (process.platform === 'darwin') {
     dl.mode = 'pkg';
-    setTimeout(() => {
-      checkForUpdatesMac(false).catch((err) => {
-        logger.warn('[updater] initial mac check failed:', (err && err.message) || err);
-      });
-    }, 5000);
     return;
   }
   const updater = loadUpdater();
@@ -703,7 +724,7 @@ function initUpdater() {
   updater.on('update-available', (info) => {
     const wasManual = manualCheck;
     manualCheck = false;
-    // 手动检查每次都要有反馈；启动时的静默检查对同一版本只提示一次，避免重复打扰。
+    // 手动检查每次都要有反馈；自动检查对同一版本只提示一次，避免重复打扰。
     if (!wasManual && info && info.version && info.version === promptedVersion) return;
     promptedVersion = info && info.version;
     logger.info(`[updater] update available: ${info && info.version}`);
@@ -749,13 +770,38 @@ function initUpdater() {
       }).catch(() => {});
     }
   });
+}
 
-  // 启动 5s 后静默检查一次（不打扰）。
-  setTimeout(() => {
-    updater.checkForUpdates().catch((err) => {
-      logger.warn('[updater] initial check failed:', (err && err.message) || err);
+/* 自动检查：每次打开主界面 / 设置界面时触发一次。
+   静默进行，有新版本才弹窗；检查期间设置窗口的按钮显示为「检查更新中」。 */
+function maybeAutoCheck() {
+  if (!supported()) return { started: false };
+  if (interactiveChecking || dl.phase !== 'idle') return { started: false };
+  if (process.platform === 'darwin') {
+    dl.mode = 'pkg';
+    checkForUpdatesMac(false).catch((err) => {
+      logger.warn('[updater] auto mac check failed:', (err && err.message) || err);
     });
-  }, 5000);
+    return { started: true };
+  }
+  const updater = loadUpdater();
+  if (!updater) return { started: false };
+  dl.mode = 'auto';
+  setChecking(true);
+  try {
+    const promise = updater.checkForUpdates();
+    if (promise && typeof promise.finally === 'function') {
+      promise
+        .catch((err) => logger.warn('[updater] auto check failed:', (err && err.message) || err))
+        .finally(() => setChecking(false));
+    } else {
+      setChecking(false);
+    }
+  } catch (err) {
+    logger.warn('[updater] auto check failed:', (err && err.message) || err);
+    setChecking(false);
+  }
+  return { started: true };
 }
 
 /* 设置界面「检查更新」（手动）：会提示已最新 / 暂时无法检查（不报技术错误）。 */
@@ -778,7 +824,7 @@ async function checkForUpdatesInteractive(_win) {
     return { ok: false, error: 'unavailable', message: copy().notCheckable };
   }
   if (interactiveChecking) return { ok: true, checking: true };
-  interactiveChecking = true;
+  setChecking(true);
   manualCheck = true;
   try {
     await updater.checkForUpdates();
@@ -788,7 +834,7 @@ async function checkForUpdatesInteractive(_win) {
     logger.warn('[updater] manual check failed:', (err && err.message) || err);
     return { ok: true };
   } finally {
-    interactiveChecking = false;
+    setChecking(false);
   }
   // 兜底：整次检查没有触发任何事件（理论上仅当更新被停用），也要给用户一个反馈。
   if (manualCheck) {
@@ -806,6 +852,8 @@ function getUpdateState() {
 
 module.exports = {
   initUpdater,
+  maybeAutoCheck,
+  isChecking,
   checkForUpdatesInteractive,
   getUpdateState,
   answerPrompt,

@@ -26,6 +26,8 @@ const IPC = {
   OPEN_EXTERNAL: 'app:open-external',
   OPEN_PATH: 'app:open-path',
   UPDATER_CHECK: 'app:check-updates',
+  UPDATER_CHECK_STATE: 'app:check-updates-state',
+  UPDATER_CHECKING: 'app:update-checking',
 
   // 更新窗口：状态查询 / 取消 / 立即重启安装 / 提示框选择（invoke）与进度 / 下载完成 / 倒计时 / 提示（主→渲染）。
   UPDATE_STATE: 'update:state',

@@ -98,7 +98,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A[应用启动（打包后）] --> B[延迟 5s 静默 checkForUpdates]
+  A["每次打开主界面 / 设置界面（打包后）"] --> B["静默检查一次"]
+  B --> B2["检查期间：设置窗口禁用「检查更新」按钮并显示「检查更新中…」"]
   J[设置→关于→检查更新] --> K["手动 checkForUpdates（每次点击都有反馈）"]
   B --> C{有新版本?}
   K --> C
