@@ -24,6 +24,8 @@
         windowSizeHint: '宽 × 高，最小 350 × 200，默认 1024 × 768；拖动窗口也会写回这里。终端会记住所在屏幕与位置：同一块屏幕沿用记忆，换屏或没有记录时按这里居中显示',
         scrollback: '缓冲区大小',
         scrollbackHint: '保留的历史行数，默认 10000',
+        opacity: '透明度',
+        opacityHint: '0% = 不透明，100% = 完全透明（实时生效）',
         downloadDir: 'SFTP 下载目录',
         downloadDirHint: '终端窗口文件面板下载文件的保存位置，默认 ~/Downloads（重名自动加序号）',
         chooseDir: '选择目录',
@@ -74,6 +76,8 @@
         windowSizeHint: 'width × height, min 350 × 200, default 1024 × 768; resizing the window writes back here. The terminal remembers its screen and position: the same screen restores it, otherwise this size is used, centered',
         scrollback: 'Scrollback',
         scrollbackHint: 'History lines to keep, default 10000',
+        opacity: 'Transparency',
+        opacityHint: '0% = opaque, 100% = fully transparent (live)',
         downloadDir: 'SFTP download folder',
         downloadDirHint: 'Where the terminal file panel saves downloads, default ~/Downloads (duplicates get a number)',
         chooseDir: 'Choose folder',
@@ -251,6 +255,46 @@
       for (const entry of sizeFields) entry.input.value = String(next[entry.def.key] || entry.def.fallback);
     });
     wrap.appendChild(row(i18n.t('terminalSettings.windowSize'), i18n.t('terminalSettings.windowSizeHint'), sizeControls));
+
+    /* 终端窗口背景透明度（0 = 不透明，100 = 完全透明）；拖动实时写回设置，终端窗口即时生效。 */
+    const TERM_OPACITY_DEFAULT = 5;
+    const normalizeTerminalOpacity = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : TERM_OPACITY_DEFAULT;
+    };
+    let terminalOpacity = normalizeTerminalOpacity(ctx.settings.terminalOpacity);
+    const terminalOpacityLabel = el(
+      'span',
+      { class: 'w-[42px] shrink-0 text-right font-mono text-[11px] text-fg-muted' },
+      `${terminalOpacity}%`
+    );
+    const terminalOpacitySlider = el('input', {
+      type: 'range',
+      min: '0',
+      max: '100',
+      step: '1',
+      class: 'glass-slider',
+    });
+    terminalOpacitySlider.value = String(terminalOpacity);
+    terminalOpacitySlider.addEventListener('input', () => {
+      terminalOpacity = normalizeTerminalOpacity(terminalOpacitySlider.value);
+      terminalOpacityLabel.textContent = `${terminalOpacity}%`;
+      ctx.patch({ terminalOpacity });
+    });
+    syncers.push((next) => {
+      terminalOpacity = normalizeTerminalOpacity(next.terminalOpacity);
+      terminalOpacitySlider.value = String(terminalOpacity);
+      terminalOpacityLabel.textContent = `${terminalOpacity}%`;
+    });
+    const terminalOpacityControl = el('div', { class: 'flex w-[220px] shrink-0 items-center gap-2' });
+    terminalOpacityControl.append(terminalOpacitySlider, terminalOpacityLabel);
+    wrap.appendChild(
+      row(
+        i18n.t('terminalSettings.opacity'),
+        i18n.t('terminalSettings.opacityHint'),
+        terminalOpacityControl
+      )
+    );
 
     /* scrollback */
     const scrollField = field(null, { class: 'field w-[110px] shrink-0 font-mono', type: 'number', min: '100', step: '1000' });

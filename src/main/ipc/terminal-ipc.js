@@ -16,6 +16,7 @@ const TERMINAL_SETTING_KEYS = [
   'terminalShell',
   'terminalFontSize',
   'terminalScrollback',
+  'terminalOpacity',
   'terminalWindowWidth',
   'terminalWindowHeight',
   'terminalAlwaysOnTop',

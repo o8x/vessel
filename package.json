@@ -50,6 +50,7 @@
       "minHeight": 200,
       "alwaysOnTop": true,
       "scrollback": 10000,
+      "opacity": 5,
       "hotkey": "CommandOrControl+Shift+Z",
       "closeAction": "destroy",
       "fontSize": 14,

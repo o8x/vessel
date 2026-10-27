@@ -206,6 +206,8 @@ const TERMINAL_WINDOW = Object.assign(
     minHeight: 200,
     alwaysOnTop: true,
     scrollback: 10000,
+    // 终端窗口背景透明度：0 = 不透明，100 = 完全透明。
+    opacity: 5,
     ballSize: 90,
     ballEnabled: true,
     ballDelayMs: 50,
@@ -308,6 +310,8 @@ const DEFAULT_SETTINGS = {
   // 终端字体家族（空 = 使用系统等宽字体栈）。设置页通过 macOS 系统字体选择框选取。
   terminalFontFamily: (appConfig.terminalWindow && appConfig.terminalWindow.fontFamily) || '',
   terminalScrollback: (appConfig.terminalWindow && appConfig.terminalWindow.scrollback) || 10000,
+  // 终端窗口背景透明度：0 = 不透明，100 = 完全透明（实时生效）。
+  terminalOpacity: Number.isFinite(TERMINAL_WINDOW.opacity) ? TERMINAL_WINDOW.opacity : 5,
   terminalWindowWidth: TERMINAL_WINDOW.width,
   terminalWindowHeight: TERMINAL_WINDOW.height,
   terminalAlwaysOnTop: TERMINAL_WINDOW.alwaysOnTop !== false,

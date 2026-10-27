@@ -113,7 +113,8 @@
     const css = getComputedStyle(document.documentElement);
     const read = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
     return {
-      background: read('--term-bg', dark ? '#0e1116' : '#ffffff'),
+      // 背景由 #term-shell 绘制（见 tailwind.css），这样透明度只影响底色、不影响文字。
+      background: 'rgba(0, 0, 0, 0)',
       foreground: read('--color-fg', '#1d1d1f'),
       cursor: read('--color-accent', '#2e6bfc'),
       selectionBackground: read('--color-fg-muted', '#8a8a8f'),
@@ -918,6 +919,13 @@
   function applyBallTransparent(enabled) {
     document.documentElement.dataset.ballTransparent = enabled ? 'on' : 'off';
   }
+  // 终端窗口背景透明度（0 = 不透明，100 = 完全透明）：只改 #term-shell 底色的 alpha，
+  // 文字 / 图标保持不透明；xterm 背景透明后由 #term-shell 透出。
+  function applyTerminalOpacity(value) {
+    const n = Number(value);
+    const transparency = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+    document.documentElement.style.setProperty('--term-bg-alpha', `${100 - transparency}%`);
+  }
   // 以「持续输出」判断程序是否仍在运行：连续 5s 没有输出即视为已停止。
   const BALL_IDLE_STOP_MS = 5000;
   // 弹跳一个完整循环的时长（读 styles/ball-animations.css 的 --ball-bounce-duration，带兜底）。
@@ -1167,6 +1175,7 @@
     applyBallIcon(settings && settings.terminalBallIcon);
     applyTerminalDark((settings && settings.terminalBallDark) !== false);
     applyBallTransparent((settings && settings.terminalBallTransparent) !== false);
+    applyTerminalOpacity(settings && settings.terminalOpacity);
     renderHeader();
     sshPicker = setupSshPicker();
     refreshSshPicker();
@@ -1190,6 +1199,7 @@
       applyBallIcon(next && next.terminalBallIcon);
       applyTerminalDark((next && next.terminalBallDark) !== false);
       applyBallTransparent((next && next.terminalBallTransparent) !== false);
+      applyTerminalOpacity(next && next.terminalOpacity);
       renderHeader();
       refreshSshPicker();
       if (term) term.options.theme = themeColors();
