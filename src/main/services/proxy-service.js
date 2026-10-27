@@ -37,6 +37,11 @@ function formatHost(host) {
   return net.isIPv6(host) ? `[${host}]` : host;
 }
 
+function describeProxy(proxy) {
+  if (!proxy || proxy.kind === 'direct') return 'direct';
+  return `${proxy.kind} ${formatHost(proxy.host)}:${proxy.port}`;
+}
+
 /* `scutil --proxy` prints a dictionary; parse the scalar keys we care about. */
 function readSystemProxy() {
   if (process.platform !== 'darwin') return {};
@@ -249,11 +254,20 @@ function createTunnelSocket(proxy, targetHost, targetPort) {
 
 /* Agent for the updater's Node http(s) requests. */
 async function agentForUrl(parsed) {
-  if (!enabled() || !parsed || !parsed.hostname) return null;
+  if (!parsed || !parsed.hostname) return null;
   const secure = parsed.protocol === 'https:';
   const port = Number(parsed.port) || (secure ? 443 : 80);
+  const target = `${formatHost(parsed.hostname)}:${port}`;
+  if (!enabled()) {
+    logger.file(`[proxy] updater ${target} -> direct (follow system proxy off)`);
+    return null;
+  }
   const proxy = await resolveTarget(parsed.hostname, port);
-  if (proxy.kind === 'direct') return null;
+  if (proxy.kind === 'direct') {
+    logger.file(`[proxy] updater ${target} -> direct (system proxy resolves to DIRECT)`);
+    return null;
+  }
+  logger.file(`[proxy] updater ${target} -> ${describeProxy(proxy)}`);
 
   const Base = secure ? https.Agent : http.Agent;
   class TunnelAgent extends Base {
@@ -309,14 +323,23 @@ async function warmUp() {
   try {
     const proxy = await resolveTarget('example.com', 443);
     if (proxy.kind !== 'direct') genericProxy = proxy;
+    logger.file(`[proxy] warm-up -> ${describeProxy(proxy)}`);
   } catch (err) {
     logger.file(`[proxy] warm-up failed: ${err.message}`);
   }
 }
 
+function logFollowState() {
+  logger.file(`[proxy] follow system proxy: ${enabled() ? 'on' : 'off'}`);
+}
+
 function init() {
+  logFollowState();
   settings.on('changed', (_data, keys) => {
-    if (!keys || keys.includes('followSystemProxy')) warmUp().catch(() => {});
+    if (!keys || keys.includes('followSystemProxy')) {
+      logFollowState();
+      warmUp().catch(() => {});
+    }
   });
   warmUp().catch(() => {});
 }

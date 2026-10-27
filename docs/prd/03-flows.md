@@ -162,4 +162,4 @@
 5. **SFTP**：与 `ssh2` 探测一致，仅 SOCKS5；失败时连接报错，不回退到无代理的静默重试。
 6. **更新**：`updater-service` 的 Node `http(s)` 请求按系统代理走 **SOCKS5** 或 **HTTP CONNECT** 隧道；代理不可用 / 解析失败时回退直连（不阻断更新，错误写日志）。
 7. **不支持**：代理认证（需要用户名密码的代理视为不可用）、SOCKS4；PAC 的按 URL 细粒度规则在终端环境变量里只能用通用结果近似（SSH / SFTP / 更新按具体目标解析，支持 PAC）。
-8. **日志**：解析失败、隧道建立失败、SOCKS5 连不上时分别写 `[proxy]` / `[ssh]` / `[sftp]` 日志。
+8. **日志**：启动 / 切换「遵循系统代理」时写 `[proxy] follow system proxy: on|off`；更新请求按目标写 `[proxy] updater <host:port> -> direct|http|socks5 <proxy-host:port>`（关闭开关或 PAC 解析为 DIRECT 时也会明确记录 direct 及原因）；解析失败、隧道建立失败、SOCKS5 连不上时分别写 `[proxy]` / `[ssh]` / `[sftp]` 日志。
