@@ -12,6 +12,12 @@
       editor: {
         save: '保存',
         saveAs: '另存为',
+        openVSCode: '从 VS Code 打开',
+        download: '下载到本地',
+        downloading: '下载中…',
+        downloaded: '已下载到 {path}',
+        downloadFailed: '下载失败：{error}',
+        openedVSCode: '已用 VS Code 打开 {path}',
         reload: '重新加载',
         undo: '撤销',
         redo: '重做',
@@ -40,6 +46,12 @@
       editor: {
         save: 'Save',
         saveAs: 'Save as',
+        openVSCode: 'Open from VS Code',
+        download: 'Download to local',
+        downloading: 'Downloading…',
+        downloaded: 'Saved to {path}',
+        downloadFailed: 'Download failed: {error}',
+        openedVSCode: 'Opened in VS Code: {path}',
         reload: 'Reload',
         undo: 'Undo',
         redo: 'Redo',
@@ -144,6 +156,8 @@
     host: document.getElementById('editor-host'),
     save: document.getElementById('ed-save'),
     saveAs: document.getElementById('ed-save-as'),
+    openVSCode: document.getElementById('ed-open-vscode'),
+    download: document.getElementById('ed-download'),
     reload: document.getElementById('ed-reload'),
     undo: document.getElementById('ed-undo'),
     redo: document.getElementById('ed-redo'),
@@ -172,6 +186,7 @@
     modeLabel: '',
     dirty: false,
     saving: false,
+    downloading: false,
     wrap: false,
     statusText: '',
     statusKind: '',
@@ -353,7 +368,7 @@
   }
 
   async function save() {
-    if (!state.cm || state.saving) return;
+    if (!state.cm || state.saving) return false;
     state.saving = true;
     setStatus(i18n.t('editor.saving'));
     let result = null;
@@ -369,10 +384,12 @@
       state.dirty = false;
       const time = new Date().toLocaleTimeString();
       setStatus(`${i18n.t('editor.saved')} ${time}`, 'is-success');
-    } else {
-      setStatus(i18n.t('editor.saveFailed', { error: (result && result.error) || 'error' }), 'is-error');
+      renderStatus();
+      return true;
     }
+    setStatus(i18n.t('editor.saveFailed', { error: (result && result.error) || 'error' }), 'is-error');
     renderStatus();
+    return false;
   }
 
   function closeModal() {
@@ -432,6 +449,43 @@
     renderStatus();
   }
 
+  async function ensureSaved() {
+    if (!state.dirty) return true;
+    return save();
+  }
+
+  async function openInVSCode() {
+    if (!state.cm || state.saving || state.downloading) return;
+    if (!(await ensureSaved())) return;
+    state.downloading = true;
+    setStatus(i18n.t('editor.downloading'));
+    let result = null;
+    try {
+      result = await window.ships.fileEditor.openVSCode();
+    } catch (err) {
+      result = { ok: false, error: err.message };
+    }
+    state.downloading = false;
+    if (result && result.ok) setStatus(i18n.t('editor.openedVSCode', { path: result.path }), 'is-success');
+    else setStatus(i18n.t('editor.downloadFailed', { error: (result && result.error) || 'error' }), 'is-error');
+  }
+
+  async function downloadToLocal() {
+    if (!state.cm || state.saving || state.downloading) return;
+    if (!(await ensureSaved())) return;
+    state.downloading = true;
+    setStatus(i18n.t('editor.downloading'));
+    let result = null;
+    try {
+      result = await window.ships.fileEditor.download();
+    } catch (err) {
+      result = { ok: false, error: err.message };
+    }
+    state.downloading = false;
+    if (result && result.ok) setStatus(i18n.t('editor.downloaded', { path: result.path }), 'is-success');
+    else setStatus(i18n.t('editor.downloadFailed', { error: (result && result.error) || 'error' }), 'is-error');
+  }
+
   async function reload() {
     if (!state.cm) return;
     if (state.dirty && !window.confirm(i18n.t('editor.reloadConfirm'))) return;
@@ -453,6 +507,8 @@
   function applyLocale() {
     dom.save.textContent = i18n.t('editor.save');
     dom.saveAs.textContent = i18n.t('editor.saveAs');
+    dom.openVSCode.textContent = i18n.t('editor.openVSCode');
+    dom.download.textContent = i18n.t('editor.download');
     dom.reload.textContent = i18n.t('editor.reload');
     dom.undo.textContent = i18n.t('editor.undo');
     dom.redo.textContent = i18n.t('editor.redo');
@@ -463,6 +519,8 @@
 
   dom.save.addEventListener('click', () => save());
   dom.saveAs.addEventListener('click', () => saveAs());
+  dom.openVSCode.addEventListener('click', () => openInVSCode());
+  dom.download.addEventListener('click', () => downloadToLocal());
   dom.reload.addEventListener('click', () => reload());
   dom.undo.addEventListener('click', () => state.cm && state.cm.undo());
   dom.redo.addEventListener('click', () => state.cm && state.cm.redo());
@@ -506,6 +564,13 @@
     if (!state.dirty) return;
     event.preventDefault();
     event.returnValue = '';
+  });
+
+  window.ships.sftp.onProgress((payload) => {
+    if (!state.downloading || !payload || payload.direction !== 'download') return;
+    if (payload.name && state.name !== payload.name) return;
+    const percent = payload.total ? Math.min(100, Math.round((payload.transferred / payload.total) * 100)) : 0;
+    setStatus(`${i18n.t('editor.downloading')} ${percent}%`);
   });
 
   async function boot() {

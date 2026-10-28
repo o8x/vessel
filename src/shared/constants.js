@@ -136,6 +136,8 @@ const IPC = {
   FILE_EDITOR_READ: 'file-editor:read',
   FILE_EDITOR_SAVE: 'file-editor:save',
   FILE_EDITOR_SAVE_AS: 'file-editor:save-as',
+  FILE_EDITOR_OPEN_VSCODE: 'file-editor:open-vscode',
+  FILE_EDITOR_DOWNLOAD: 'file-editor:download',
   FILE_EDITOR_CLOSE_ALL: 'file-editor:close-all',
 
   GAME_SCAN: 'games:scan',

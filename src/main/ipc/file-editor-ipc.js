@@ -7,6 +7,7 @@
 const { IPC } = require('../../shared/constants');
 const wm = require('../window-manager');
 const sftp = require('../services/sftp-service');
+const vscode = require('../services/vscode-service');
 
 /* 只有终端窗口的内嵌面板 / 独立文件窗口可以打开编辑器。 */
 function isFileManagerSender(event) {
@@ -71,6 +72,31 @@ function registerFileEditorIpc(ipcMain) {
       if (result && result.ok) wm.updateFileEditorPath(event.sender.id, nextPath);
       return result;
     });
+  });
+
+
+  // 从 VS Code 打开：下载当前远端文件后用 VS Code 打开（编辑器会先保存未保存内容）。
+  ipcMain.handle(IPC.FILE_EDITOR_OPEN_VSCODE, async (event) => {
+    const info = wm.getFileEditorInfoForWebContents(event.sender.id);
+    if (!info) return { ok: false, error: 'forbidden' };
+    const result = await sftp.download(info.sessionId, info.path, (progress) =>
+      event.sender.send(IPC.SFTP_PROGRESS, Object.assign({ id: info.sessionId }, progress))
+    );
+    if (!result || !result.ok) return result;
+    const opened = await vscode.openPath(result.path);
+    if (!opened || !opened.ok) {
+      return { ok: false, error: (opened && opened.error) || 'vscode-failed', path: result.path };
+    }
+    return result;
+  });
+
+  // 下载到本地（设置的下载目录），与文件管理器的「下载到本地」一致。
+  ipcMain.handle(IPC.FILE_EDITOR_DOWNLOAD, (event) => {
+    const info = wm.getFileEditorInfoForWebContents(event.sender.id);
+    if (!info) return { ok: false, error: 'forbidden' };
+    return sftp.download(info.sessionId, info.path, (progress) =>
+      event.sender.send(IPC.SFTP_PROGRESS, Object.assign({ id: info.sessionId }, progress))
+    );
   });
 
   // 文件管理器销毁时（分离 / 断开 / 关闭）关闭它打开的所有编辑器。
