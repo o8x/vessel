@@ -272,7 +272,7 @@
     if (dom.size) dom.size.textContent = formatBytes(state.sizeBytes);
     if (dom.state) {
       dom.state.textContent = state.statusText;
-      dom.state.className = `editor-save-state${state.statusKind ? ` ${state.statusKind}` : ''}`;
+      dom.state.className = `editor-status-right${state.statusKind ? ` ${state.statusKind}` : ''}`;
     }
     if (state.cm) {
       const cursor = state.cm.getCursor();

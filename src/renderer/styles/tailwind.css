@@ -2502,8 +2502,11 @@ body.editor-window {
   padding: 5px 8px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
+  overflow-x: auto;
 }
 .editor-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control-sm);
   background: var(--color-control);
@@ -2566,10 +2569,11 @@ body.editor-window {
   flex: 0 0 auto;
   gap: 10px;
 }
-/* 保存状态放在工具栏右侧的固定宽度槽位：文本变化不会改变状态栏 / 工具栏布局。 */
-.editor-save-state {
+/* 保存状态放在状态栏右侧的固定宽度槽位：文本变化不会改变状态栏 / 工具栏布局。 */
+.editor-status-right {
   flex: 0 0 auto;
   width: 150px;
+  min-width: 150px;
   overflow: hidden;
   text-align: right;
   text-overflow: ellipsis;
@@ -2578,13 +2582,13 @@ body.editor-window {
   font-size: 11px;
   color: var(--color-fg-muted);
 }
-.editor-save-state.is-dirty {
+.editor-status-right.is-dirty {
   color: var(--color-accent);
 }
-.editor-save-state.is-error {
+.editor-status-right.is-error {
   color: var(--color-danger);
 }
-.editor-save-state.is-success {
+.editor-status-right.is-success {
   color: var(--color-success);
 }
 .editor-modal {
