@@ -1131,7 +1131,10 @@ function getFontPickerWindow() {
 /* Always-on-top terminal: floats above other apps and above full-screen spaces
    (Steam-overlay style). 每次调用都新开一扇窗口，落在当前桌面 / 鼠标所在屏幕；
    窗口一旦打开就留在那个桌面，不会被拉去别的桌面（Steam 式独立窗口）。 */
-function openTerminalWindow() {
+function openTerminalWindow(options) {
+  const opts = options || {};
+  // 新建终端时可传入本次专用的悬浮球图标（不写设置、仅该窗口有效）。
+  const ballIcon = typeof opts.ballIcon === 'string' ? opts.ballIcon : '';
   // 有同屏记忆就用记忆里的屏幕 / 位置 / 尺寸，否则默认尺寸居中（见 terminalBoundsForOpen）。
   const bounds = terminalBoundsForOpen();
   // 已有多扇时逐扇偏移一段，避免完全盖在一起（并夹回该屏幕工作区）。
@@ -1212,7 +1215,7 @@ function openTerminalWindow() {
   // Steam-like: pinned on top + may float above a full-screen app, but must NOT join
   // every space — it stays on the desktop it was opened on.
   win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true });
-  win.loadFile(path.join(RENDERER_DIR, 'terminal.html'));
+  win.loadFile(path.join(RENDERER_DIR, 'terminal.html'), { query: ballIcon ? { ballIcon } : {} });
   win.on('focus', () => {
     win.__everFocused = true;
     lastTerminalWindow = win;

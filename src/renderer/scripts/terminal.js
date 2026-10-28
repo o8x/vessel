@@ -21,6 +21,14 @@
         failed: '无法启动终端会话：{error}',
         restarting: '正在重建终端会话…',
         noTerminal: 'xterm 未能加载，无法显示终端',
+        menuNewTerminal: '新建终端',
+        menuCopy: '复制',
+        menuPaste: '粘贴',
+        menuIterm: '从 iTerm 打开',
+        menuConnect: '连接到服务器',
+        menuNoHosts: '无可用主机',
+        menuFiles: '切换文件管理器',
+        menuUpload: '上传文件到此处',
       },
     },
     en: {
@@ -36,6 +44,14 @@
         failed: 'Cannot start the terminal session: {error}',
         restarting: 'Restarting terminal session…',
         noTerminal: 'xterm failed to load',
+        menuNewTerminal: 'New terminal',
+        menuCopy: 'Copy',
+        menuPaste: 'Paste',
+        menuIterm: 'Open in iTerm',
+        menuConnect: 'Connect to server',
+        menuNoHosts: 'No hosts available',
+        menuFiles: 'Toggle file manager',
+        menuUpload: 'Upload files here',
       },
     },
   });
@@ -89,6 +105,8 @@
   let showLines = false; // 左侧行号（默认关闭）
   let shellPath = '';
   let sshPicker = null;
+  // ~/.ssh/config 主机缓存（头部下拉与右键菜单共用，随 ssh-config:changed 刷新）。
+  let sshHosts = [];
   let sizeBadgeTimer = null;
   let metricsTimer = null;
   let lastMetricsKey = '';
@@ -579,6 +597,14 @@
     return Boolean(sessionId);
   }
 
+  /* 行号开关（头栏 eye 按钮与右键菜单共用）：切换后重新 fit + 整格对齐。 */
+  function toggleLineNumbers() {
+    showLines = !showLines;
+    document.body.classList.toggle('show-lines', showLines);
+    renderHeader();
+    fitIfNeeded(true);
+  }
+
   function renderHeader() {
     linesBtn.innerHTML = (showLines ? Icons.eyeOff : Icons.eye)(15);
     linesBtn.style.color = showLines ? 'var(--color-accent)' : '';
@@ -639,24 +665,16 @@
     const result = await window.ships.ssh.connect({ alias, inTerminal: true });
     if (!result || !result.ok) {
       write(`\r\n${ANSI.error}${i18n.t('terminalWin.sshFailed', { error: (result && result.error) || 'error' })}${ANSI.reset}\r\n`);
+    } else if (sshPicker && typeof sshPicker.setValue === 'function') {
+      // 与头栏 SSH 下拉联动：从右键菜单连接成功后同步选中项。
+      sshPicker.setValue(alias);
     }
     if (term) term.focus();
   }
 
-  async function refreshSshPicker() {
-    if (!sshPicker) return;
-    if (typeof sshPicker.setPlaceholder === 'function') {
-      sshPicker.setPlaceholder(i18n.t('terminalWin.sshPlaceholder'));
-    }
-    let hosts = [];
-    try {
-      const result = await window.ships.ssh.list();
-      hosts = (result && result.hosts) || [];
-    } catch (err) {
-      hosts = [];
-    }
-    // 占位「SSH」不再作为可选项出现（仅未选择时显示在触发器上）。
-    // 顺序：有分组的主机（按分组出现顺序）在前，未分组的主机排最后。
+  /* 把 ~/.ssh/config 主机按 group 排序：有分组的主机在前（按分组在配置中出现的顺序）、
+     未分组的主机排最后；存在多个分组时显示分组小标题。头部下拉与右键菜单共用。 */
+  function groupSshHosts(hosts) {
     const grouped = [];
     const byGroup = new Map();
     const ungrouped = [];
@@ -675,11 +693,32 @@
       byGroup.get(key).hosts.push(host);
     }
     const sections = grouped.length + (ungrouped.length ? 1 : 0);
-    const showHeaders = sections > 1;
+    return { grouped, ungrouped, showHeaders: sections > 1 };
+  }
+
+  function sshHostLabel(host) {
+    return host.user ? `${host.user}@${host.hostName}` : String(host.hostName || host.alias || '');
+  }
+
+  async function refreshSshPicker() {
+    if (!sshPicker) return;
+    if (typeof sshPicker.setPlaceholder === 'function') {
+      sshPicker.setPlaceholder(i18n.t('terminalWin.sshPlaceholder'));
+    }
+    let hosts = [];
+    try {
+      const result = await window.ships.ssh.list();
+      hosts = (result && result.hosts) || [];
+    } catch (err) {
+      hosts = [];
+    }
+    sshHosts = hosts;
+    // 占位「SSH」不再作为可选项出现（仅未选择时显示在触发器上）。
+    // 顺序：有分组的主机（按分组出现顺序）在前，未分组的主机排最后。
+    const { grouped, ungrouped, showHeaders } = groupSshHosts(hosts);
     const options = [];
     const pushHost = (host) => {
-      const address = host.user ? `${host.user}@${host.hostName}` : String(host.hostName || host.alias || '');
-      options.push({ value: host.alias, label: address });
+      options.push({ value: host.alias, label: sshHostLabel(host) });
     };
     for (const section of grouped) {
       if (showHeaders) options.push({ header: true, label: section.name });
@@ -808,9 +847,125 @@
     true
   );
 
-  /* Windows cmd style quick-edit: a single right-click copies the current selection
-     when there is one (then clears it), otherwise pastes the system clipboard. There is
-     no context menu. xterm keeps its selection on right-click, so this reads it first. */
+  /* ---------------------------- 右键菜单 ----------------------------
+     终端内容区右键弹出菜单（复用文件管理器的 .fm-menu 外观）。菜单项都走已有的入口：
+     新建窗口 / iTerm 交接 / SSH 连接 / 文件面板等，不重复实现功能。
+     SSH 主机子菜单按 ~/.ssh/config 的分组显示；选择后由 connectSshHost() 先销毁当前
+     SSH 会话再重建并连接（与头部下拉行为一致）。 */
+  let menuEl = null;
+  let submenuEl = null;
+  let submenuParent = null;
+  let submenuTimer = null;
+
+  function hideSubmenu() {
+    clearTimeout(submenuTimer);
+    submenuTimer = null;
+    if (submenuEl) submenuEl.remove();
+    submenuEl = null;
+    if (submenuParent) submenuParent.classList.remove('active');
+    submenuParent = null;
+  }
+
+  function scheduleHideSubmenu() {
+    clearTimeout(submenuTimer);
+    submenuTimer = setTimeout(hideSubmenu, 140);
+  }
+
+  function onMenuDocDown(event) {
+    const insideMenu = menuEl && menuEl.contains(event.target);
+    const insideSub = submenuEl && submenuEl.contains(event.target);
+    if (!insideMenu && !insideSub) closeMenu();
+  }
+
+  function onMenuKeyDown(event) {
+    if (event.key === 'Escape') closeMenu();
+  }
+
+  function closeMenu() {
+    hideSubmenu();
+    if (!menuEl) return;
+    document.removeEventListener('mousedown', onMenuDocDown, true);
+    document.removeEventListener('keydown', onMenuKeyDown, true);
+    window.removeEventListener('blur', closeMenu);
+    window.removeEventListener('resize', closeMenu);
+    menuEl.remove();
+    menuEl = null;
+  }
+
+  function showSubmenu(btn, sub) {
+    clearTimeout(submenuTimer);
+    if (submenuParent === btn && submenuEl) return;
+    hideSubmenu();
+    submenuParent = btn;
+    btn.classList.add('active');
+    menuEl && menuEl.addEventListener('scroll', hideSubmenu);
+    sub.classList.add('term-submenu');
+    document.body.appendChild(sub);
+    submenuEl = sub;
+    const rect = btn.getBoundingClientRect();
+    const subRect = sub.getBoundingClientRect();
+    const left =
+      rect.right + 4 + subRect.width <= window.innerWidth - 4
+        ? rect.right + 4
+        : Math.max(4, rect.left - 4 - subRect.width);
+    const top = Math.max(4, Math.min(rect.top, window.innerHeight - subRect.height - 4));
+    sub.style.left = `${left}px`;
+    sub.style.top = `${top}px`;
+  }
+
+  function menuItem(item) {
+    if (item.header) return el('div', { class: 'fm-menu-title' }, item.label);
+    const btn = el('button', { class: 'fm-menu-item term-menu-item', type: 'button' });
+    btn.appendChild(el('span', { class: 'term-menu-label' }, item.label));
+    if (item.submenu) {
+      btn.classList.add('has-submenu');
+      const caret = el('span', { class: 'term-menu-caret' });
+      caret.innerHTML = Icons.caretRight(11);
+      btn.appendChild(caret);
+      const sub = buildMenu(item.submenu);
+      sub.addEventListener('pointerenter', () => clearTimeout(submenuTimer));
+      sub.addEventListener('pointerleave', scheduleHideSubmenu);
+      const openSub = () => showSubmenu(btn, sub);
+      btn.addEventListener('pointerenter', openSub);
+      btn.addEventListener('pointerleave', scheduleHideSubmenu);
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openSub();
+      });
+    } else if (item.disabled) {
+      btn.disabled = true;
+      btn.setAttribute('aria-disabled', 'true');
+    } else {
+      btn.addEventListener('click', () => {
+        const run = item.run;
+        closeMenu();
+        if (typeof run === 'function') run();
+      });
+    }
+    return btn;
+  }
+
+  function buildMenu(items) {
+    const menu = el('div', { class: 'fm-menu term-menu' });
+    for (const item of items) menu.appendChild(menuItem(item));
+    return menu;
+  }
+
+  function openContextMenu(x, y, items) {
+    closeMenu();
+    const menu = buildMenu(items);
+    document.body.appendChild(menu);
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - rect.width - 4))}px`;
+    menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - rect.height - 4))}px`;
+    menuEl = menu;
+    document.addEventListener('mousedown', onMenuDocDown, true);
+    document.addEventListener('keydown', onMenuKeyDown, true);
+    window.addEventListener('blur', closeMenu);
+    window.addEventListener('resize', closeMenu);
+  }
+
+  /* 粘贴：读取系统剪贴板并注入当前 shell（遵循 bracketed paste 与 \n → \r 转换）。 */
   function pasteFromClipboard() {
     window.ships.terminal.pasteText().then((result) => {
       if (result && result.ok && result.text && term) {
@@ -820,17 +975,72 @@
     });
   }
 
+  function sshMenuItems() {
+    if (!sshHosts.length) return [{ label: i18n.t('terminalWin.menuNoHosts'), disabled: true }];
+    const { grouped, ungrouped, showHeaders } = groupSshHosts(sshHosts);
+    const items = [];
+    const pushHost = (host) => {
+      items.push({ label: sshHostLabel(host), run: () => void connectSshHost(host.alias) });
+    };
+    for (const section of grouped) {
+      if (showHeaders) items.push({ header: true, label: section.name });
+      for (const host of section.hosts) pushHost(host);
+    }
+    if (ungrouped.length) {
+      if (showHeaders) items.push({ header: true, label: i18n.t('terminalWin.ungrouped') });
+      for (const host of ungrouped) pushHost(host);
+    }
+    return items;
+  }
+
+  /* 新建终端时随机挑一个与当前不同的悬浮球图标（仅通过 URL 参数传给新窗口，不写设置）。 */
+  function randomBallIconName(exclude) {
+    const names = (window.shipsBallIcons && window.shipsBallIcons.names) || [];
+    const pool = names.filter((name) => name !== exclude);
+    if (!pool.length) return '';
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function openTerminalWithNewBall() {
+    window.ships.openTerminal({ ballIcon: randomBallIconName(ballIconName) });
+  }
+
+  function contextMenuItems() {
+    const selection = term ? term.getSelection() : '';
+    const sshReady = Boolean(sshTarget);
+    return [
+      { label: i18n.t('terminalWin.menuNewTerminal'), run: openTerminalWithNewBall },
+      { label: i18n.t('terminalWin.menuIterm'), run: () => window.ships.terminal.openIterm() },
+      {
+        label: i18n.t('terminalWin.menuCopy'),
+        disabled: !selection,
+        run: () => {
+          if (selection) window.ships.terminal.copyText(selection);
+        },
+      },
+      { label: i18n.t('terminalWin.menuPaste'), run: pasteFromClipboard },
+      { label: i18n.t('terminalWin.menuConnect'), submenu: sshMenuItems() },
+      {
+        label: i18n.t('terminalWin.menuFiles'),
+        disabled: !sshReady || !filesApi,
+        run: () => {
+          if (filesApi) filesApi.toggle();
+        },
+      },
+      {
+        label: i18n.t('terminalWin.menuUpload'),
+        disabled: !sshReady || !filesApi,
+        run: () => {
+          if (filesApi) filesApi.uploadHere();
+        },
+      },
+    ];
+  }
+
   host.addEventListener('contextmenu', (event) => {
     event.preventDefault();
     if (!term) return;
-    const selection = term.getSelection();
-    if (selection) {
-      window.ships.terminal.copyText(selection).then(() => {
-        if (term) term.clearSelection();
-      });
-    } else {
-      pasteFromClipboard();
-    }
+    openContextMenu(event.clientX, event.clientY, contextMenuItems());
   });
 
   /* 文件面板：头部文件夹按钮显隐底部面板；SFTP 连接跟随当前 ssh 目标。 */
@@ -861,13 +1071,7 @@
   window.addEventListener('resize', onWindowResize);
   syncWindowFocus();
   if (linesBtn) {
-    linesBtn.addEventListener('click', () => {
-      showLines = !showLines;
-      document.body.classList.toggle('show-lines', showLines);
-      renderHeader();
-      // 左侧让出行号栏宽度 → 重新 fit + 对齐。
-      fitIfNeeded(true);
-    });
+    linesBtn.addEventListener('click', toggleLineNumbers);
   }
   if (splitBtn) {
     // 新开一扇终端窗口（与主面板底部栏的终端按钮行为一致）。
@@ -900,7 +1104,9 @@
     shellEl.style.transform = 'none';
   }
 
-  /* 悬浮球图标：来自设置 settings.terminalBallIcon（assets/icons/ball/ 下的文件名），可实时切换。 */
+  /* 悬浮球图标：来自设置 settings.terminalBallIcon（assets/icons/ball/ 下的文件名），可实时切换。
+     新建终端时可通过 URL 查询参数传一个本次专用的图标（不写入设置，仅该窗口有效）。 */
+  const BALL_ICON_OVERRIDE = new URLSearchParams(window.location.search).get('ballIcon') || '';
   let ballIconName = 'ball-11.svg';
   function applyBallIcon(name) {
     ballIconName = name || 'ball-11.svg';
@@ -1172,7 +1378,7 @@
     i18n.setLocale((settings && settings.locale) || 'zh');
     window.ShipsTheme.set(settings || {});
     syncBallTimerState();
-    applyBallIcon(settings && settings.terminalBallIcon);
+    applyBallIcon(BALL_ICON_OVERRIDE || (settings && settings.terminalBallIcon));
     applyTerminalDark((settings && settings.terminalBallDark) !== false);
     applyBallTransparent((settings && settings.terminalBallTransparent) !== false);
     applyTerminalOpacity(settings && settings.terminalOpacity);
@@ -1196,7 +1402,8 @@
     window.ships.onSettingsChanged((next) => {
       i18n.setLocale((next && next.locale) || 'zh');
       window.ShipsTheme.set(next || {});
-      applyBallIcon(next && next.terminalBallIcon);
+      // 本次专用悬浮球图标（新建终端时随机指定）优先，不随设置变更覆盖。
+      if (!BALL_ICON_OVERRIDE) applyBallIcon(next && next.terminalBallIcon);
       applyTerminalDark((next && next.terminalBallDark) !== false);
       applyBallTransparent((next && next.terminalBallTransparent) !== false);
       applyTerminalOpacity(next && next.terminalOpacity);

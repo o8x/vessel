@@ -1612,6 +1612,40 @@ body.file-window .fm-tree-row {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 终端内容区右键菜单：复用 .fm-menu 的外观，追加右侧子菜单（SSH 主机）。 */
+.term-menu {
+  min-width: 180px;
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
+}
+.term-menu-item {
+  justify-content: space-between;
+  gap: 18px;
+}
+.term-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-menu-caret {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--color-fg-muted);
+}
+.term-menu-item.has-submenu.active {
+  background: var(--color-surface-2);
+}
+/* 二级菜单：挂到 <body>（position: fixed），左右位置由内联 left/top 决定，避免被主菜单裁切。 */
+.term-submenu {
+  position: fixed;
+  z-index: 301;
+  min-width: 180px;
+  max-width: 320px;
+  max-height: min(360px, calc(100vh - 8px));
+  overflow-y: auto;
+}
 .fm-list.drag-over {
   outline: 2px dashed var(--color-accent);
   outline-offset: -4px;

@@ -337,6 +337,8 @@
       pendingCd: null,
       // 打开时希望进入的初始目录（如从内嵌面板分离出来时带过去的当前目录）
       pendingStart: '',
+      // 连接就绪前请求的「上传到此处」：连上后再打开系统文件选择窗口
+      pendingUpload: false,
       entries: [],
       // 文件列表多选：selection = 选中的远端路径集合，anchor = Shift 范围选择的锚点
       selection: new Set(),
@@ -1123,6 +1125,16 @@
       if (result && result.paths && result.paths.length) uploadLocalPaths(result.paths, targetDir);
     }
 
+    /* 上传到当前目录：已连接时直接弹系统文件选择窗口；连接未就绪则排队，连上后再弹。
+       供终端右键菜单「上传文件到此处」使用（会先打开内嵌文件面板）。 */
+    function uploadToCurrent() {
+      if (!state.connected) {
+        state.pendingUpload = true;
+        return;
+      }
+      chooseAndUpload(state.cwd);
+    }
+
     async function connect() {
       if (!state.target || state.connected || state.connecting) return;
       state.connecting = true;
@@ -1173,6 +1185,10 @@
         state.pendingCd = null;
         followCd(raw);
       }
+      if (state.pendingUpload) {
+        state.pendingUpload = false;
+        chooseAndUpload(state.cwd);
+      }
     }
 
     function resetConnection() {
@@ -1192,6 +1208,7 @@
       state.shellCwd = '';
       state.pendingCd = null;
       state.pendingStart = '';
+      state.pendingUpload = false;
       state.entries = [];
       state.selection = new Set();
       state.anchor = '';
@@ -1482,6 +1499,7 @@
       setLayout,
       followCd,
       openPath,
+      uploadToCurrent,
       applyLocale,
       destroy,
       isConnected: () => state.connected,

@@ -98,7 +98,10 @@ function runInTerminal(command, secret, target) {
 }
 
 function registerTerminalIpc(ipcMain) {
-  ipcMain.handle(IPC.TERMINAL_OPEN, () => ({ ok: Boolean(wm.openTerminalWindow()) }));
+  ipcMain.handle(IPC.TERMINAL_OPEN, (_event, payload) => {
+    const ballIcon = payload && typeof payload.ballIcon === 'string' ? payload.ballIcon : '';
+    return { ok: Boolean(wm.openTerminalWindow({ ballIcon })) };
+  });
 
   ipcMain.handle(IPC.TERMINAL_START, (event, payload) => {
     const ownerId = event.sender.id;

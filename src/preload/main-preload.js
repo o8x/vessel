@@ -59,7 +59,7 @@ const api = {
       return '';
     }
   },
-  openTerminal: () => ipcRenderer.invoke(IPC.TERMINAL_OPEN),
+  openTerminal: (options) => ipcRenderer.invoke(IPC.TERMINAL_OPEN, options),
   terminal: {
     start: (cols, rows, shell) => ipcRenderer.invoke(IPC.TERMINAL_START, { cols, rows, shell }),
     input: (id, data) => ipcRenderer.invoke(IPC.TERMINAL_INPUT, { id, data }),

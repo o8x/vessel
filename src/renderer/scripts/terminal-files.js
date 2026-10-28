@@ -124,6 +124,13 @@
       else show();
     }
 
+    /* 右键菜单「上传文件到此处」：先展开内嵌文件面板，再对当前目录打开系统文件选择窗口。 */
+    function uploadHere() {
+      if (!enabled) return;
+      show();
+      if (manager) manager.uploadToCurrent();
+    }
+
     function setSshTarget(next) {
       const value = String(next || '');
       if (value === target) return;
@@ -172,6 +179,7 @@
     return {
       setSshTarget,
       toggle,
+      uploadHere,
       followCd,
       closeConnection,
       isOpen: () => open,
