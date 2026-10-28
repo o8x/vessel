@@ -151,6 +151,14 @@
     return i >= 0 ? s.slice(i + 1) : s;
   }
 
+  /* 上级目录：根目录返回 ''（没有上一级），否则去掉末尾斜杠后截到最后一个 '/'。 */
+  function parentPath(dir) {
+    const s = String(dir || '').replace(/\/+$/, '');
+    if (!s || s === '/') return '';
+    const i = s.lastIndexOf('/');
+    return i <= 0 ? '/' : s.slice(0, i);
+  }
+
   function formatSize(bytes) {
     const value = Number(bytes);
     if (!Number.isFinite(value)) return '';
@@ -641,17 +649,37 @@
       state.selection = new Set(paths.slice(lo, hi + 1));
     }
 
+    /* 列表第一行 `..`：有上一级目录时显示（根目录除外），点击回到上一级。 */
+    function makeParentRow() {
+      const parent = parentPath(state.cwd);
+      if (!parent) return null;
+      const row = el('div', { class: 'fm-row fm-row-dir fm-row-parent' });
+      const icon = el('span', { class: 'fm-cell-icon' });
+      icon.innerHTML = Icons.arrowUp(13);
+      const name = el('span', { class: 'fm-cell-name' }, '..');
+      const size = el('span', { class: 'fm-cell-size' }, '-');
+      const perm = el('span', { class: 'fm-cell-perm' }, '');
+      const time = el('span', { class: 'fm-cell-time' }, '');
+      row.append(icon, name, size, perm, time);
+      row.addEventListener('click', () => navigate(parent));
+      return row;
+    }
+
     function renderList() {
       listEl.innerHTML = '';
       const files = state.entries;
+      const parentRow = makeParentRow();
       if (state.busy && !files.length) {
+        if (parentRow) listEl.appendChild(parentRow);
         listEl.appendChild(el('div', { class: 'fm-list-hint' }, i18n.t('filesUi.loading')));
         return;
       }
       if (!files.length) {
+        if (parentRow) listEl.appendChild(parentRow);
         listEl.appendChild(el('div', { class: 'fm-list-hint' }, i18n.t('filesUi.empty')));
         return;
       }
+      if (parentRow) listEl.appendChild(parentRow);
       for (const entry of sortedEntries()) {
         const path = joinPath(state.cwd, entry.name);
         const isDir = entry.type === 'dir';
