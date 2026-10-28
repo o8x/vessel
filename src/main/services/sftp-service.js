@@ -22,7 +22,7 @@ const READY_TIMEOUT_MS = 12000;
 const KEEPALIVE_MS = 15000;
 const DEFAULT_DOWNLOAD_DIR = '~/Downloads';
 const DEFAULT_IDENTITY = '~/.ssh/id_ed25519';
-// 内置编辑器读取上限（文件管理器只对 ≤ 8M 的明确文本文件提供「编辑文件」）。
+// 内置编辑器读取上限（文件管理器对 ≤ 8M 的任意类型文件提供「编辑文件」，二进制只读）。
 const EDITOR_READ_MAX_BYTES = 8 * 1024 * 1024;
 
 // id -> { id, client, sftp, target, resolved, home, closed }
@@ -474,7 +474,8 @@ function reference(id, remotePaths) {
   return { ok: true, references: list.map((item) => `${host}:${item}`) };
 }
 
-/* 内置编辑器读取文本：拒绝目录 / 超大文件 / 含 NUL 的二进制内容。 */
+/* 内置编辑器读取：拒绝目录 / 超过 8M 的文件；二进制内容也允许打开，
+   但以带 `binary` 标记的有损 UTF-8 文本返回，由渲染层按只读处理。 */
 function readText(id, remotePath) {
   const entry = get(id);
   if (!entry) return Promise.resolve({ ok: false, error: 'not-connected', code: 'not-connected' });
@@ -502,16 +503,14 @@ function readText(id, remotePath) {
           return;
         }
         const data = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || '');
-        if (data.subarray(0, 8192).includes(0)) {
-          resolve({ ok: false, error: 'binary', code: 'binary' });
-          return;
-        }
+        const binary = data.subarray(0, 8192).includes(0);
         logger.file(`[sftp] read ${target} (${data.length} bytes)`);
         resolve({
           ok: true,
           content: data.toString('utf8'),
           size: data.length,
           mtime: (Number(attrs && attrs.mtime) || 0) * 1000,
+          binary,
         });
       });
     });

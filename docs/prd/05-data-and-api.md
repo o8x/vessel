@@ -93,7 +93,7 @@
 | `file-window:snap-size` | `{ height }` | `{ ok, height? }` | 保留兼容：独立文件窗口已**不再自动对齐整行高度**，渲染层不再调用；通道仍按工作区 / 最小高度夹取后设置内容高度；只接受来自该窗口的请求 |
 | `file-editor:open` | `{ sessionId, path, name? }` | `{ ok, error? }` | 从文件管理器打开一扇内置编辑器窗口（每文件一扇、可多开）；`sessionId` 必须是**发起窗口自己**的 SFTP 会话；只接受终端窗口 / 独立文件窗口的请求 |
 | `file-editor:info` | — | `{ ok, path, name, reference }` | 编辑器启动后读取当前文件信息与引用（`用户名@地址:路径`）；只接受来自编辑器窗口的请求 |
-| `file-editor:read` | — | `{ ok, content, size, mtime, error?, code? }` | 读取当前远端文件文本（≤ 4MB，拒绝目录 / 含 NUL 的二进制内容）；只接受来自编辑器窗口的请求 |
+| `file-editor:read` | — | `{ ok, content, size, mtime, binary, error?, code? }` | 读取当前远端文件文本（≤ 8MB，拒绝目录）；含 NUL 的二进制内容不报错，按有损 UTF-8 解码返回并置 `binary: true`，渲染层据此只读；只接受来自编辑器窗口的请求 |
 | `file-editor:save` | `{ content }` | `{ ok, path?, bytes?, error? }` | 覆盖写回当前远端文件（编辑器状态栏显示保存中 / 已保存）；只接受来自编辑器窗口的请求 |
 | `file-editor:save-as` | `{ path, content }` | `{ ok, path?, bytes?, error? }` | 另存为：`path` 必须为 `/` 开头的远端绝对路径，写入成功后该编辑器切换到新文件；只接受来自编辑器窗口的请求 |
 | `file-editor:open-vscode` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「从 VS Code 打开」：把编辑器当前内容写成本地文件（下载目录，重名自动加 ` (n)`）后用 VS Code 打开；不修改远端文件；只接受来自编辑器窗口的请求 |

@@ -19,8 +19,6 @@
   const VSCODE_MAX_BYTES = constants.FILE_VSCODE_MAX_BYTES || 128 * 1024 * 1024;
   // 「编辑文件」只对小于等于 8M 且扩展名明确为文本的文件提供。
   const EDITOR_MAX_BYTES = constants.FILE_EDITOR_MAX_BYTES || 8 * 1024 * 1024;
-  const TEXT_EXTENSIONS = new Set(constants.TEXT_EXTENSIONS || []);
-  const TEXT_FILENAMES = new Set(constants.TEXT_FILENAMES || []);
   const NON_TEXT_EXTENSIONS = new Set(constants.NON_TEXT_EXTENSIONS || []);
   const WIRESHARK_EXTENSIONS = new Set(constants.WIRESHARK_EXTENSIONS || []);
   const WIRESHARK_MAX_BYTES = constants.WIRESHARK_MAX_BYTES || 4 * 1024 * 1024 * 1024;
@@ -240,30 +238,14 @@
     return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1) : '';
   }
 
-  /* 明确为文本：扩展名在白名单内，或文件名为常见无扩展名 / 点文件文本文件。 */
-  function isTextEntry(entry) {
-    const name = String((entry && entry.name) || '').toLowerCase();
-    if (TEXT_FILENAMES.has(name)) return true;
-    if (TEXT_EXTENSIONS.has(entryExtension(entry))) return true;
-    // 点文件（如 `.env` / `.gitignore`）没有扩展名，按去掉前导点后的名字匹配。
-    if (name.startsWith('.') && !name.slice(1).includes('.')) {
-      return TEXT_EXTENSIONS.has(name.slice(1));
-    }
-    return false;
-  }
-
   /* 已知的无法按文本读取的二进制类型：禁用 VS Code 菜单项。 */
   function isBinaryEntry(entry) {
     return NON_TEXT_EXTENSIONS.has(entryExtension(entry));
   }
 
-  /* 可用内置编辑器打开：明确为文本、非已知二进制类型，且体积不超过 8M。 */
-  function isEditableTextEntry(entry) {
-    return (
-      !isBinaryEntry(entry) &&
-      isTextEntry(entry) &&
-      (Number(entry && entry.size) || 0) <= EDITOR_MAX_BYTES
-    );
+  /* 可用内置编辑器打开：体积不超过 8M（不限类型；二进制文件由编辑器只读打开）。 */
+  function isEditorEntry(entry) {
+    return (Number(entry && entry.size) || 0) <= EDITOR_MAX_BYTES;
   }
 
   /* 双击下载后用 VS Code 打开：体积落在 8M–128M 区间。 */
@@ -856,8 +838,8 @@
           scrollTreeToSelected();
         });
 
-        // 双击：目录进入；已知二进制 / 非文本类型（NON_TEXT_EXTENSIONS）不论大小都
-        // 下载并在 Finder 中定位；≤ 8M 的明确文本文件用内置编辑器打开；
+        // 双击：目录进入；≤ 8M 的任意文件用内置编辑器打开（二进制只读）；
+        // 已知二进制 / 非文本类型（NON_TEXT_EXTENSIONS）下载并在 Finder 中定位；
         // 8M–128M 的文件下载后用 VS Code 打开；其余用系统默认程序（下载 + 定位）。
         row.addEventListener('dblclick', () => {
           clearCellCopyTimer();
@@ -865,12 +847,12 @@
             navigate(path);
             return;
           }
-          if (isBinaryEntry(entry)) {
-            openFiles([path]);
+          if (isEditorEntry(entry)) {
+            openInEditor(path);
             return;
           }
-          if (isEditableTextEntry(entry)) {
-            openInEditor(path);
+          if (isBinaryEntry(entry)) {
+            openFiles([path]);
             return;
           }
           if (isVSCodeSizeEntry(entry)) openFilesVSCode([path]);
@@ -905,7 +887,7 @@
           const singleEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
           items.push({
             label: i18n.t('filesUi.editFile'),
-            disabled: !singleEntry || !isEditableTextEntry(singleEntry),
+            disabled: !singleEntry || !isEditorEntry(singleEntry),
             run: () => openInEditor(paths[0]),
           });
           items.push({ label: nativeOpenLabel(), run: () => openFiles(paths) });

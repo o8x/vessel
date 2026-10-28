@@ -1,8 +1,8 @@
 'use strict';
 
-/* Lightweight built-in text editor window (CodeMirror 5). Opened from the file
-   manager for text files < 2 MB; reuses the file manager's SFTP session so saving
-   writes straight back to the remote file. */
+/* Lightweight built-in editor window (CodeMirror 5). Opened from the file
+   manager for any file ≤ 8 MB; reuses the file manager's SFTP session so saving
+   writes straight back to the remote file. Binary files open read-only. */
 
 (function bootstrapFileEditor() {
   const i18n = window.ShipsI18n;
@@ -30,6 +30,7 @@
         loading: '加载中…',
         loadFailed: '加载失败：{error}',
         saveFailed: '保存失败：{error}',
+        binaryReadOnly: '二进制文件，已按只读文本打开（不会写回原文件）',
         reloadConfirm: '文件已修改，确定放弃修改并重新加载？',
         saveAsTitle: '另存为（远端路径）',
         saveAsPlaceholder: '远端绝对路径，如 /home/user/file.txt',
@@ -64,6 +65,7 @@
         loading: 'Loading…',
         loadFailed: 'Load failed: {error}',
         saveFailed: 'Save failed: {error}',
+        binaryReadOnly: 'Binary file opened read-only (changes are not written back)',
         reloadConfirm: 'Discard changes and reload this file?',
         saveAsTitle: 'Save as (remote path)',
         saveAsPlaceholder: 'Absolute remote path, e.g. /home/user/file.txt',
@@ -188,6 +190,8 @@
     dirty: false,
     saving: false,
     downloading: false,
+    readOnly: false,
+    binary: false,
     wrap: false,
     statusText: '',
     statusKind: '',
@@ -312,6 +316,7 @@
       mode: mode || null,
       lineNumbers: true,
       lineWrapping: wrap,
+      readOnly: state.readOnly,
       tabSize: 2,
       indentUnit: 2,
       indentWithTabs: false,
@@ -328,6 +333,15 @@
     state.cm.on('change', syncDirty);
     state.cm.on('cursorActivity', renderStatus);
     renderStatus();
+  }
+
+  /* 二进制文件按只读方式呈现：禁用保存 / 另存为 / 从 VS Code 打开 / 下载，
+     避免把有损解码后的文本写回或导出。 */
+  function applyReadOnlyState() {
+    if (state.cm) state.cm.setOption('readOnly', state.readOnly);
+    for (const button of [dom.save, dom.saveAs, dom.openVSCode, dom.download]) {
+      if (button) button.disabled = state.readOnly;
+    }
   }
 
   async function loadFile() {
@@ -350,6 +364,8 @@
     state.separatorLabel = sep.label;
     state.original = normalize(read.content);
     state.sizeBytes = Number(read.size) || 0;
+    state.binary = Boolean(read.binary);
+    state.readOnly = state.binary;
     state.mode = modeForName(state.name);
     state.modeLabel = labelForMode(state.mode, state.name);
     try {
@@ -360,11 +376,16 @@
     }
     state.dirty = false;
     createEditor(state.mode, state.original);
-    setStatus('');
+    applyReadOnlyState();
+    setStatus(state.binary ? i18n.t('editor.binaryReadOnly') : '');
   }
 
   async function save() {
     if (!state.cm || state.saving) return false;
+    if (state.readOnly) {
+      setStatus(i18n.t('editor.binaryReadOnly'));
+      return false;
+    }
     state.saving = true;
     setStatus(i18n.t('editor.saving'));
     let result = null;
@@ -393,6 +414,10 @@
 
   function saveAs() {
     if (!state.cm) return;
+    if (state.readOnly) {
+      setStatus(i18n.t('editor.binaryReadOnly'));
+      return;
+    }
     dom.modalTitle.textContent = i18n.t('editor.saveAsTitle');
     dom.modalInput.placeholder = i18n.t('editor.saveAsPlaceholder');
     dom.modalInput.value = state.path;
@@ -405,6 +430,10 @@
 
   async function saveAsTo(nextPath) {
     if (!state.cm || state.saving) return;
+    if (state.readOnly) {
+      setStatus(i18n.t('editor.binaryReadOnly'));
+      return;
+    }
     const value = String(nextPath || '').trim();
     if (!value.startsWith('/')) {
       setStatus(i18n.t('editor.badPath'), 'is-error');
@@ -445,6 +474,10 @@
 
   async function openInVSCode() {
     if (!state.cm || state.saving || state.downloading) return;
+    if (state.readOnly) {
+      setStatus(i18n.t('editor.binaryReadOnly'));
+      return;
+    }
     state.downloading = true;
     setStatus(i18n.t('editor.downloading'));
     let result = null;
@@ -460,6 +493,10 @@
 
   async function downloadToLocal() {
     if (!state.cm || state.saving || state.downloading) return;
+    if (state.readOnly) {
+      setStatus(i18n.t('editor.binaryReadOnly'));
+      return;
+    }
     state.downloading = true;
     setStatus(i18n.t('editor.downloading'));
     let result = null;
@@ -486,9 +523,12 @@
     state.separatorLabel = sep.label;
     state.original = normalize(read.content);
     state.sizeBytes = Number(read.size) || 0;
+    state.binary = Boolean(read.binary);
+    state.readOnly = state.binary;
     state.dirty = false;
     state.cm.setValue(state.original);
-    setStatus('');
+    applyReadOnlyState();
+    setStatus(state.binary ? i18n.t('editor.binaryReadOnly') : '');
   }
 
   function setIconButton(button, icon, tipKey) {
