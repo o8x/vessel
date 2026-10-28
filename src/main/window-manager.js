@@ -859,7 +859,6 @@ function createWindowWindow() {
   const bounds = mainWindowBoundsForOpen();
   // Liquid Glass / 毛玻璃。
   const glass = glassMode();
-  logger.file(`[main-window] create main window glass=${glass}`);
   const glassOptions =
     glass === 'vibrancy' ? { vibrancy: VIBRANCY.type, visualEffectState: VIBRANCY.state } : {};
   mainWindow = new BrowserWindow({
@@ -895,6 +894,8 @@ function createWindowWindow() {
     },
   });
 
+  const windowId = mainWindow.id;
+  logger.file(`[main-window] window created (${windowId}) glass=${glass}`);
   // 普通窗口层级（不置顶）；先按单桌面窗口创建，显示时再「临时加入所有桌面 →
   // 绑定当前桌面」，避免被拉回旧 Space。
   mainWindow.setAlwaysOnTop(false);
@@ -924,6 +925,7 @@ function createWindowWindow() {
     mainWindow.hide();
   });
   mainWindow.on('closed', function onClosed() {
+    logger.file(`[main-window] window destroyed (${windowId})`);
     if (mainWindow === this) mainWindow = null;
   });
 
@@ -1025,6 +1027,8 @@ function openSettingsWindow(section, editSshAlias) {
     },
   });
 
+  const windowId = settingsWindow.id;
+  logger.file(`[settings-window] window created (${windowId})`);
   settingsWindow.loadFile(path.join(RENDERER_DIR, 'settings.html'));
   settingsWindow.webContents.setZoomFactor(1);
   settingsWindow.webContents.on('did-finish-load', () => {
@@ -1049,6 +1053,7 @@ function openSettingsWindow(section, editSshAlias) {
     }
   });
   settingsWindow.on('closed', () => {
+    logger.file(`[settings-window] window destroyed (${windowId})`);
     settingsWindow = null;
     closeFontPickerWindow();
   });
@@ -1092,6 +1097,8 @@ function openFontPickerWindow() {
     },
   });
 
+  const windowId = fontPickerWindow.id;
+  logger.file(`[font-picker] window created (${windowId})`);
   fontPickerWindow.loadFile(path.join(RENDERER_DIR, 'font-picker.html'));
   fontPickerWindow.webContents.setZoomFactor(1);
   fontPickerWindow.webContents.on('did-finish-load', () => {
@@ -1106,6 +1113,7 @@ function openFontPickerWindow() {
     fontPickerWindow.focus();
   });
   fontPickerWindow.on('closed', () => {
+    logger.file(`[font-picker] window destroyed (${windowId})`);
     fontPickerWindow = null;
   });
 
@@ -1171,8 +1179,10 @@ function openTerminalWindow() {
       spellcheck: false,
     },
   });
+  const windowId = win.id;
   terminalWindows.add(win);
   lastTerminalWindow = win;
+  logger.file(`[terminal] window created (${windowId})`);
   // 创建时（页面还没加载完、窗口尚未 show）就读取并记录所在 Space：读取值代表「打开时」的桌面，
   // 避免 ready-to-show / focus 时用户已切换桌面，把切换后的桌面误记成原桌面。
   rememberTerminalSpace(win);
@@ -1262,6 +1272,7 @@ function openTerminalWindow() {
     saveTerminalGeometry(win);
   });
   win.on('closed', () => {
+    logger.file(`[terminal] window destroyed (${windowId})`);
     // 窗口销毁 = 会话结束：该窗口的 SFTP 连接一并关闭（延迟 require 避免依赖环）。
     require('./services/sftp-service').closeForOwner(ownerId);
     terminalWindows.delete(win);
@@ -1387,6 +1398,8 @@ function openFileWindow(target, pathArg) {
       spellcheck: false,
     },
   });
+  const windowId = fileWindow.id;
+  logger.file(`[file-window] window created (${windowId})`);
   fileWindowOwnerId = fileWindow.webContents.id;
   fileWindow.webContents.setVisualZoomLevelLimits(1, 1);
   fileWindow.webContents.setZoomFactor(1);
@@ -1412,6 +1425,7 @@ function openFileWindow(target, pathArg) {
   });
   fileWindow.on('close', () => saveFileWindowGeometry());
   fileWindow.on('closed', () => {
+    logger.file(`[file-window] window destroyed (${windowId})`);
     require('./services/sftp-service').closeForOwner(fileWindowOwnerId);
     fileWindowOwnerId = null;
     fileWindow = null;
@@ -1485,7 +1499,9 @@ function openFileEditorWindow(ownerSender, payload) {
     name,
     target: String((payload && payload.target) || ''),
   };
+  const windowId = win.id;
   fileEditorWindows.add(win);
+  logger.file(`[file-editor] window created (${windowId}) ${filePath}`);
   win.setTitle(fileEditorTitle(win.__editorInfo));
   win.loadFile(path.join(RENDERER_DIR, 'file-editor.html'));
   win.webContents.setVisualZoomLevelLimits(1, 1);
@@ -1506,6 +1522,7 @@ function openFileEditorWindow(ownerSender, payload) {
     win.focus();
   });
   win.on('closed', () => {
+    logger.file(`[file-editor] window destroyed (${windowId})`);
     fileEditorWindows.delete(win);
   });
   // 文件管理器窗口被销毁时（关闭 / 分离 / 断开连接），自动关闭其打开的编辑器。
@@ -1697,6 +1714,8 @@ function openGameWindow(game) {
       spellcheck: false,
     },
   });
+  const windowId = gameWindow.id;
+  logger.file(`[game-window] window created (${windowId}) game=${game && game.id ? game.id : '-'}`);
   gameWindowGame = game;
   gameWindowClosePending = false;
   if (gameWindowCloseTimer) {
@@ -1771,6 +1790,7 @@ function openGameWindow(game) {
     if (!win.isDestroyed()) win.webContents.send(IPC.GAME_FULLSCREEN, { fullscreen: false });
   });
   win.on('closed', () => {
+    logger.file(`[game-window] window destroyed (${windowId})`);
     if (gameWindowCloseTimer) {
       clearTimeout(gameWindowCloseTimer);
       gameWindowCloseTimer = null;
@@ -1903,6 +1923,8 @@ function openUpdateWindow() {
     },
   });
 
+  const windowId = updateWindow.id;
+  logger.file(`[update-window] window created (${windowId})`);
   updateWindow.loadFile(path.join(RENDERER_DIR, 'update.html'));
   updateWindow.webContents.setZoomFactor(1);
   updateWindow.webContents.on('did-finish-load', () => {
@@ -1923,6 +1945,7 @@ function openUpdateWindow() {
     updateWindow.focus();
   });
   updateWindow.on('closed', () => {
+    logger.file(`[update-window] window destroyed (${windowId})`);
     updateWindow = null;
   });
 
