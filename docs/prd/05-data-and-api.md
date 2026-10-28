@@ -75,13 +75,14 @@
 | `sftp:connect` | `{ target, username?, host?, port?, auth?: 'password' \| 'key', password?, identityFile? }` | `{ ok, id?, home?, target?, error?, code? }` | 新建一条 SFTP 会话。`target` = ssh 目标 token（命中 `~/.ssh/config` 时用记录里的 host / port / user / IdentityFile；ProxyJump 返回 `proxyjump`）。独立文件窗口还可传手动字段：`host` / `username` / `port` **显式字段优先于 config**；`auth: 'password'` 用 `password` 认证（**仅用于本次连接，不持久化**），`auth: 'key'` 用 `identityFile`（留空用 config / `~/.ssh/id_ed25519`）。返回会话 `id`（内嵌面板与独立窗口各持一个）；`code` ∈ `proxyjump`/`auth`/`timeout`/`sftp`/`connect`/`no-target`；只接受来自终端窗口或独立文件窗口的请求 |
 | `sftp:list` | `{ id, path? }` | `{ ok, path, parent, home, entries?, code?, error? }` | 列远端目录（`entries[]` = `{ name, type: dir\|file\|link, size, mtime, mode }`，目录在前；`mode` 为 st_mode，用于渲染权限列）；`path` 省略 / `~` 取家目录；会话不存在返回 `code: 'not-connected'` |
 | `sftp:download` | `{ id, path }` | `{ ok, path?, name?, error? }` | 下载远端文件到设置的下载目录（重名自动加 ` (n)`），返回本地绝对路径；过程中经 `sftp:progress` 回传进度 |
-| `sftp:open` | `{ id, path }` | `{ ok, path?, name?, error? }` | 右键「从文件夹打开」：先下载（同 `sftp:download`，含进度回传），成功后由主进程 `shell.showItemInFolder` 在系统文件管理器中定位该文件；只接受来自终端窗口或独立文件窗口的请求 |
+| `sftp:open` | `{ id, path }` | `{ ok, path?, name?, error? }` | 右键「从 Finder 打开」（Windows 文案为「在资源管理器中显示」）：先下载（同 `sftp:download`，含进度回传），成功后由主进程 `shell.showItemInFolder` 在系统文件管理器中定位该文件；只接受来自终端窗口或独立文件窗口的请求 |
 | `sftp:open-vscode` | `{ id, path }` | `{ ok, path?, name?, error? }` | 右键「从 VS Code 打开」：先下载（同 `sftp:download`，含进度回传），成功后由主进程用 **Visual Studio Code** 打开该文件（优先 `code` CLI，否则 `open -b com.microsoft.VSCode`）；打开失败返回 `{ ok: false, error }`；只接受来自终端窗口或独立文件窗口的请求 |
 | `sftp:upload` | `{ id, localPath, remoteDir }` | `{ ok, name?, path?, error? }` | 把本地文件上传到远端目录（`remoteDir` 省略 / `~` 取家目录），同名覆盖；过程中经 `sftp:progress` 回传进度 |
 | `sftp:close` | `{ id }` | `{ ok }` | 关闭指定 SFTP 会话（切换 ssh / 窗口销毁时调用） |
-| `sftp:transfer-command` | `{ id, paths, recursive? }` | `{ ok, command?, error? }` | 生成把远端文件 / 目录传回本地下载目录的 `scp` 命令（`paths` 为数组，支持多选 → 多个源；目录加 `-r`，端口 22 / 默认私钥省略，远端路径加引号），**并写入系统剪贴板**；只接受终端窗口 / 独立文件窗口的请求 |
+| `sftp:transfer-command` | `{ id, paths, recursive? }` | `{ ok, command?, error? }` | 生成把远端文件 / 目录传回本地下载目录的 `scp` 命令（`paths` 为数组，支持多选 → 多个源；目录加 `-r`，端口 22 / 默认私钥省略，远端路径加引号），**并写入系统剪贴板**；界面已移除「复制传输命令」菜单，通道仅为向后兼容保留；只接受终端窗口 / 独立文件窗口的请求 |
 | `sftp:copy-path` | `{ paths }` | `{ ok, paths?, error? }` | 右键「复制路径」：把选中的远端绝对路径写入系统剪贴板（`paths` 为数组，多条按换行）；空数组返回 `{ ok: false }`；只接受终端窗口 / 独立文件窗口的请求 |
 | `sftp:copy-text` | `{ text }` | `{ ok, error? }` | 文件列表 Cmd / Ctrl + C：把选中行导出的 CSV 文本写入系统剪贴板；空文本返回 `{ ok: false }`；只接受终端窗口 / 独立文件窗口的请求 |
+| `sftp:copy-reference` | `{ id, paths }` | `{ ok, references?, error? }` | 右键「复制引用」：按会话的 `用户名@主机` 把 `用户名@地址:远端绝对路径` 写入系统剪贴板（`paths` 为数组，多条按换行）；空数组返回 `{ ok: false }`；只接受终端窗口 / 独立文件窗口的请求 |
 | `cd-history:list` | `{ id }` | `{ ok, entries }` | 读取该 SFTP 会话所属 ssh 目标（`用户名@主机`）的 cd 历史；会话不存在 / 未连接返回空数组 |
 | `cd-history:add` | `{ id, path }` | `{ ok, entries }` | 记录一次 cd 到的远端目录（去重、越新越靠前、最多 10 条，写 `cd-history.json`）；只接受终端窗口 / 独立文件窗口的请求 |
 | `file-window:open` | `{ target?, path? }` | `{ ok }` | 打开 / 聚焦独立文件窗口；`target` 省略沿用上次目标，传**空串** = **不选中任何连接**（主面板「文件管理」按钮用），传别名 = 自动连接该主机（SSH 管理 `folder` 图标用）；`path` = 连接后要进入的初始目录（内嵌面板「分离为独立窗口」带过去当前目录）。已存在时把 `{ target, path }` 经 `file-window:target` 发过去 |
@@ -89,6 +90,12 @@
 | `file-window:close` | — | `{ ok }` | 销毁独立文件窗口（自绘红绿灯关闭按钮）；只接受来自该窗口的请求 |
 | `file-window:set-top` | `{ value: boolean }` | `{ ok, alwaysOnTop }` | 独立文件窗口的置顶开关：写 `settings.fileWindowAlwaysOnTop`；**默认关**（普通窗口），持久 |
 | `file-window:snap-size` | `{ height }` | `{ ok, height? }` | 保留兼容：独立文件窗口已**不再自动对齐整行高度**，渲染层不再调用；通道仍按工作区 / 最小高度夹取后设置内容高度；只接受来自该窗口的请求 |
+| `file-editor:open` | `{ sessionId, path, name? }` | `{ ok, error? }` | 从文件管理器打开一扇内置编辑器窗口（每文件一扇、可多开）；`sessionId` 必须是**发起窗口自己**的 SFTP 会话；只接受终端窗口 / 独立文件窗口的请求 |
+| `file-editor:info` | — | `{ ok, path, name, reference }` | 编辑器启动后读取当前文件信息与引用（`用户名@地址:路径`）；只接受来自编辑器窗口的请求 |
+| `file-editor:read` | — | `{ ok, content, size, mtime, error?, code? }` | 读取当前远端文件文本（≤ 4MB，拒绝目录 / 含 NUL 的二进制内容）；只接受来自编辑器窗口的请求 |
+| `file-editor:save` | `{ content }` | `{ ok, path?, bytes?, error? }` | 覆盖写回当前远端文件（编辑器状态栏显示保存中 / 已保存）；只接受来自编辑器窗口的请求 |
+| `file-editor:save-as` | `{ path, content }` | `{ ok, path?, bytes?, error? }` | 另存为：`path` 必须为 `/` 开头的远端绝对路径，写入成功后该编辑器切换到新文件；只接受来自编辑器窗口的请求 |
+| `file-editor:close-all` | — | `{ ok, closed }` | 关闭发起窗口打开的所有编辑器窗口（文件管理器销毁 / 断开 / 切换目标时调用）；只接受终端窗口 / 独立文件窗口的请求 |
 | `games:scan` | — | `{ ok, workDir, resolvedWorkDir, isDefault, engines }` | 扫描游戏工作目录；`engines[].games[]` 含 `{ id, name, engine, label, core, romRelativePath, size, mtime, played, coverUrl, romUrl }`（`played` 表示该游戏是否启动过）；支持 `roms/<engine>/<文件夹>/xxx.rom`（单 ROM 子目录以文件夹名为游戏名；多 ROM 子目录生成 `<引擎> - <文件夹>` 独立分类），扩展名匹配不区分大小写；已启动过的游戏会以 `id: recent` 的「最近启动」分类置顶（按 `lastPlayedAt` 倒序最多 8 个）；只接受主窗口 / 设置窗口请求 |
 | `games:open` | `{ gameId }` | `{ ok, error? }` | 打开 / 复用游戏窗口并加载游戏，同时更新 `meta.json` 的 `lastPlayedAt`；只接受主窗口请求 |
 | `games:window-info` | — | `{ ok, game, emulatorVersion, settings }` | 游戏窗口启动时读取当前游戏与按键 / 音量 / `hasFdsBios` 设置；只接受游戏窗口请求 |

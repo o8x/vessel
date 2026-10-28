@@ -101,6 +101,7 @@ const api = {
     close: (id) => ipcRenderer.invoke(IPC.SFTP_CLOSE, { id }),
     transferCommand: (id, paths, recursive) => ipcRenderer.invoke(IPC.SFTP_TRANSFER_COMMAND, { id, paths, recursive }),
     copyPath: (paths) => ipcRenderer.invoke(IPC.SFTP_COPY_PATH, { paths }),
+    copyReference: (id, paths) => ipcRenderer.invoke(IPC.SFTP_COPY_REFERENCE, { id, paths }),
     copyText: (text) => ipcRenderer.invoke(IPC.SFTP_COPY_TEXT, { text }),
     cdHistory: {
       list: (id) => ipcRenderer.invoke(IPC.CD_HISTORY_LIST, { id }),
@@ -113,6 +114,14 @@ const api = {
     set: (scope, patch) => ipcRenderer.invoke(IPC.FILES_LAYOUT_SET, { scope, patch }),
   },
   games: gamesApi,
+  fileEditor: {
+    open: (payload) => ipcRenderer.invoke(IPC.FILE_EDITOR_OPEN, payload),
+    info: () => ipcRenderer.invoke(IPC.FILE_EDITOR_INFO),
+    read: () => ipcRenderer.invoke(IPC.FILE_EDITOR_READ),
+    save: (content) => ipcRenderer.invoke(IPC.FILE_EDITOR_SAVE, { content }),
+    saveAs: (path, content) => ipcRenderer.invoke(IPC.FILE_EDITOR_SAVE_AS, { path, content }),
+    closeAll: () => ipcRenderer.invoke(IPC.FILE_EDITOR_CLOSE_ALL),
+  },
   fileWindow: {
     open: (target, path) => ipcRenderer.invoke(IPC.FILE_WINDOW_OPEN, { target, path }),
     info: () => ipcRenderer.invoke(IPC.FILE_WINDOW_INFO),
@@ -133,6 +142,7 @@ const api = {
 };
 
 contextBridge.exposeInMainWorld('ships', api);
+contextBridge.exposeInMainWorld('shipsPlatform', process.platform);
 contextBridge.exposeInMainWorld('shipsIcons', loadIcons());
 contextBridge.exposeInMainWorld('shipsBallIcons', loadBallIcons());
 contextBridge.exposeInMainWorld('shipsFlags', { get: (code, shape) => getFlag(code, shape) });

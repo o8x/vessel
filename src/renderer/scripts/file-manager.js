@@ -16,7 +16,10 @@
   const STATUS_TTL_MS = constants.FILE_STATUS_TTL_MS || 30000;
   // 双击打开方式：超过该体积、或属于非文本类型时用系统默认程序，否则用 VS Code。
   const VSCODE_MAX_BYTES = constants.FILE_VSCODE_MAX_BYTES || 10 * 1024 * 1024;
+  // 「编辑文件」只对小于 2M 的文本文件提供（二进制类型不提供）。
+  const EDITOR_MAX_BYTES = constants.FILE_EDITOR_MAX_BYTES || 2 * 1024 * 1024;
   const NON_TEXT_EXTENSIONS = new Set(constants.NON_TEXT_EXTENSIONS || []);
+  const PLATFORM = window.shipsPlatform || '';
 
   const DEFAULT_LAYOUT = {
     treeWidth: 300,
@@ -46,15 +49,23 @@
         perm: '权限',
         upload: '上传',
         download: '下载到本地',
-        open: '从文件夹打开',
+        open: '从文件管理器打开',
+        openFinder: '从 Finder 打开',
+        openExplorer: '在资源管理器中显示',
+        openFileManager: '从文件管理器打开',
         openVSCode: '从 VS Code 打开',
+        editFile: '编辑文件',
         copyPath: '复制路径',
+        copyReference: '复制引用',
         copiedPath: '已复制路径：{path}',
+        copiedReference: '已复制引用：{reference}',
+        copiedCell: '已复制：{value}',
         copiedCsv: '已复制 {count} 行到剪贴板',
         cdHistory: '最近访问',
         copyTransfer: '复制传输命令',
         copiedCommand: '已复制：{command}',
-        copyFailed: '复制传输命令失败',
+        copyFailed: '复制失败',
+        editFailed: '无法打开编辑器：{error}',
         empty: '空目录',
         loading: '加载中…',
         connecting: '正在连接 SFTP：{target}…',
@@ -93,15 +104,23 @@
         perm: 'Perm',
         upload: 'Upload',
         download: 'Download to local',
-        open: 'Open from folder',
+        open: 'Open from file manager',
+        openFinder: 'Reveal in Finder',
+        openExplorer: 'Show in Explorer',
+        openFileManager: 'Open from file manager',
         openVSCode: 'Open from VS Code',
+        editFile: 'Edit file',
         copyPath: 'Copy path',
+        copyReference: 'Copy reference',
         copiedPath: 'Copied path: {path}',
+        copiedReference: 'Copied reference: {reference}',
+        copiedCell: 'Copied: {value}',
         copiedCsv: 'Copied {count} rows as CSV',
         cdHistory: 'Recent',
         copyTransfer: 'Copy transfer command',
         copiedCommand: 'Copied: {command}',
-        copyFailed: 'Failed to copy transfer command',
+        copyFailed: 'Copy failed',
+        editFailed: 'Cannot open editor: {error}',
         empty: 'Empty directory',
         loading: 'Loading…',
         connecting: 'Connecting SFTP: {target}…',
@@ -207,13 +226,33 @@
 
   /* 双击打开方式：体积超过 10M、或属于图片 / PDF / Word 等非文本类型时用系统默认程序
      「打开」，否则用 VS Code 打开。 */
+  function entryExtension(entry) {
+    const name = String((entry && entry.name) || '').toLowerCase();
+    const dot = name.lastIndexOf('.');
+    return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1) : '';
+  }
+
+  /* 已知的无法按文本读取的二进制类型：禁用 VS Code / 内置编辑器。 */
+  function isBinaryEntry(entry) {
+    return NON_TEXT_EXTENSIONS.has(entryExtension(entry));
+  }
+
+  /* 可用内置编辑器打开：小于 2M 且不是二进制类型。 */
+  function isEditableTextEntry(entry) {
+    return !isBinaryEntry(entry) && (Number(entry && entry.size) || 0) < EDITOR_MAX_BYTES;
+  }
+
   function prefersNativeOpen(entry) {
     const size = Number(entry && entry.size) || 0;
     if (size > VSCODE_MAX_BYTES) return true;
-    const name = String((entry && entry.name) || '').toLowerCase();
-    const dot = name.lastIndexOf('.');
-    const ext = dot > 0 && dot < name.length - 1 ? name.slice(dot + 1) : '';
-    return NON_TEXT_EXTENSIONS.has(ext);
+    return isBinaryEntry(entry);
+  }
+
+  /* 系统文件管理器名称：macOS = Finder，Windows = 资源管理器，其它平台用通用文案。 */
+  function nativeOpenLabel() {
+    if (PLATFORM === 'win32') return i18n.t('filesUi.openExplorer');
+    if (PLATFORM === 'darwin') return i18n.t('filesUi.openFinder');
+    return i18n.t('filesUi.openFileManager');
   }
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -290,6 +329,8 @@
       // 文件列表多选：selection = 选中的远端路径集合，anchor = Shift 范围选择的锚点
       selection: new Set(),
       anchor: '',
+      // 单元格选择：{ path, key }（key ∈ name / size / perm / time），与整行选择互斥。
+      cellSelection: null,
       // 列表排序：列名（'' = 不排序 / name / size / time）+ 方向；初始值取持久化布局。
       sortKey: layoutData.sortKey || '',
       sortDir: layoutData.sortDir === 'desc' ? 'desc' : 'asc',
@@ -507,7 +548,7 @@
       items.push(
         { label: i18n.t('filesUi.upload'), run: () => chooseAndUpload(path) },
         { label: i18n.t('filesUi.copyPath'), run: () => copyPath([path]) },
-        { label: i18n.t('filesUi.copyTransfer'), run: () => copyTransferCommand([path], true) }
+        { label: i18n.t('filesUi.copyReference'), run: () => copyReference([path]) }
       );
       return items;
     }
@@ -665,6 +706,64 @@
       return row;
     }
 
+    function cellValue(entry, key) {
+      if (key === 'name') return String((entry && entry.name) || '');
+      if (key === 'size') return formatEntrySize(entry);
+      if (key === 'perm') return formatMode(entry && entry.mode, entry && entry.type);
+      if (key === 'time') return formatTime(entry && entry.mtime);
+      return '';
+    }
+
+    /* 只更新选中样式（不重建 DOM，避免单击后 dblclick 因节点被替换而失效）。 */
+    function applySelectionClasses() {
+      for (const row of listEl.querySelectorAll('.fm-row[data-path]')) {
+        const path = row.dataset.path;
+        row.classList.toggle('selected', state.selection.has(path));
+        for (const cell of row.querySelectorAll('[data-cell]')) {
+          const selected = Boolean(
+            state.cellSelection &&
+              state.cellSelection.path === path &&
+              state.cellSelection.key === cell.dataset.cell
+          );
+          cell.classList.toggle('cell-selected', selected);
+        }
+      }
+    }
+
+    /* 单元格单击复制：延迟 180ms，双击（进入目录 / 打开文件）时取消，避免误复制。 */
+    let cellCopyTimer = null;
+    function clearCellCopyTimer() {
+      if (cellCopyTimer) {
+        clearTimeout(cellCopyTimer);
+        cellCopyTimer = null;
+      }
+    }
+    function copyCellSoon(entry, key) {
+      clearCellCopyTimer();
+      const value = cellValue(entry, key);
+      if (!value) return;
+      cellCopyTimer = setTimeout(() => {
+        cellCopyTimer = null;
+        window.ships.sftp.copyText(value).then((result) => {
+          if (result && result.ok) setStatus(i18n.t('filesUi.copiedCell', { value }));
+          else setStatus(i18n.t('filesUi.copyFailed'), true);
+        });
+      }, 180);
+    }
+
+    /* 双击文本文件：用内置编辑器（新窗口）打开；编辑器窗口随文件管理器销毁而关闭。 */
+    function openInEditor(path) {
+      if (!state.connected || !state.id || !window.ships.fileEditor) return;
+      window.ships.fileEditor
+        .open({ sessionId: state.id, path, name: baseName(path) })
+        .then((result) => {
+          if (!result || !result.ok) {
+            setStatus(i18n.t('filesUi.editFailed', { error: (result && result.error) || 'error' }), true);
+          }
+        })
+        .catch((err) => setStatus(i18n.t('filesUi.editFailed', { error: err.message }), true));
+    }
+
     function renderList() {
       listEl.innerHTML = '';
       const files = state.entries;
@@ -684,20 +783,66 @@
         const path = joinPath(state.cwd, entry.name);
         const isDir = entry.type === 'dir';
         const row = el('div', { class: 'fm-row' });
+        row.dataset.path = path;
         if (state.selection.has(path)) row.classList.add('selected');
         const icon = el('span', { class: 'fm-cell-icon' });
+        icon.dataset.cell = 'icon';
         icon.innerHTML = (isDir ? Icons.folder : (Icons[iconFor(entry.name)] || Icons.file))(13);
         const name = el('span', { class: 'fm-cell-name' }, '');
+        name.dataset.cell = 'name';
         name.textContent = entry.name;
         // 目录不显示体积（SFTP 返回的 size 对目录没有意义），权限 / 时间照常显示。
         const size = el('span', { class: 'fm-cell-size' }, formatEntrySize(entry));
+        size.dataset.cell = 'size';
         const time = el('span', { class: 'fm-cell-time' }, formatTime(entry.mtime));
+        time.dataset.cell = 'time';
         const perm = el('span', { class: 'fm-cell-perm' }, formatMode(entry.mode, entry.type));
+        perm.dataset.cell = 'perm';
         row.append(icon, name, size, perm, time);
+        if (isDir) row.classList.add('fm-row-dir');
+
+        // 单击单元格：选中该单元格并把内容复制到剪贴板；点最左侧图标才选中整行。
+        row.addEventListener('click', (event) => {
+          const cellNode = event.target && event.target.closest ? event.target.closest('[data-cell]') : null;
+          if (!cellNode) return;
+          const key = cellNode.dataset.cell;
+          setStatusPath(path);
+          if (key === 'icon') {
+            clearCellCopyTimer();
+            if (event.shiftKey && state.anchor) selectRangeTo(path);
+            else if (event.metaKey || event.ctrlKey) toggleSelect(path);
+            else selectOnly(path);
+            state.cellSelection = null;
+          } else {
+            state.selection = new Set();
+            state.anchor = path;
+            state.cellSelection = { path, key };
+            copyCellSoon(entry, key);
+          }
+          applySelectionClasses();
+          // 让列表获得焦点，便于 Cmd/Ctrl+C 复制选中行（见 wrap 的 keydown）。
+          listEl.focus();
+          // 点文件时把左侧目录树滚动定位到它所在的目录节点。
+          scrollTreeToSelected();
+        });
+
+        // 双击：目录进入；小于 2M 的文本文件用内置编辑器打开；
+        // 大文件 / 图片 / PDF / Word 等非文本用系统默认程序打开；其余文本仍用 VS Code。
+        row.addEventListener('dblclick', () => {
+          clearCellCopyTimer();
+          if (isDir) {
+            navigate(path);
+            return;
+          }
+          if (isEditableTextEntry(entry)) {
+            openInEditor(path);
+            return;
+          }
+          if (prefersNativeOpen(entry)) openFiles([path]);
+          else openFilesVSCode([path]);
+        });
+
         if (isDir) {
-          row.classList.add('fm-row-dir');
-          // 目录行单击 = 目录树里点该目录名：导航进入该目录。
-          row.addEventListener('click', () => navigate(path));
           row.addEventListener('contextmenu', (event) => {
             event.preventDefault();
             setStatusPath(path);
@@ -706,39 +851,34 @@
           listEl.appendChild(row);
           continue;
         }
-        // 多选：Shift = 从锚点范围选择；Cmd / Ctrl = 增删单条；普通点击 = 只选它。
-        row.addEventListener('click', (event) => {
-          if (event.shiftKey && state.anchor) selectRangeTo(path);
-          else if (event.metaKey || event.ctrlKey) toggleSelect(path);
-          else selectOnly(path);
-          setStatusPath(path);
-          renderList();
-          // 让列表获得焦点，便于 Cmd/Ctrl+C 复制选中行（见 wrap 的 keydown）。
-          listEl.focus();
-          // 点文件时把左侧目录树滚动定位到它所在的目录节点。
-          scrollTreeToSelected();
-        });
-        // 双击：小体积文本文件用 VS Code 打开；大文件 / 图片 / PDF / Word 等非文本用系统默认程序打开。
-        row.addEventListener('dblclick', () => {
-          if (prefersNativeOpen(entry)) openFiles([path]);
-          else openFilesVSCode([path]);
-        });
+
         row.addEventListener('contextmenu', (event) => {
           event.preventDefault();
           // 右键未选中的行：先只选它；已选中的行：保留当前多选。
           if (!state.selection.has(path)) selectOnly(path);
+          state.cellSelection = null;
           setStatusPath(path);
-          renderList();
+          applySelectionClasses();
           listEl.focus();
           scrollTreeToSelected();
           const paths = selectionPaths();
-          openContextMenu(event.clientX, event.clientY, [
-            { label: i18n.t('filesUi.open'), run: () => openFiles(paths) },
-            { label: i18n.t('filesUi.openVSCode'), run: () => openFilesVSCode(paths) },
+          const selectedEntries = sortedEntries().filter((item) =>
+            state.selection.has(joinPath(state.cwd, item.name))
+          );
+          const items = [];
+          if (selectedEntries.length === 1 && isEditableTextEntry(selectedEntries[0])) {
+            items.push({ label: i18n.t('filesUi.editFile'), run: () => openInEditor(paths[0]) });
+          }
+          items.push({ label: nativeOpenLabel(), run: () => openFiles(paths) });
+          if (selectedEntries.every((item) => !isBinaryEntry(item))) {
+            items.push({ label: i18n.t('filesUi.openVSCode'), run: () => openFilesVSCode(paths) });
+          }
+          items.push(
             { label: i18n.t('filesUi.download'), run: () => downloadFiles(paths) },
             { label: i18n.t('filesUi.copyPath'), run: () => copyPath(paths) },
-            { label: i18n.t('filesUi.copyTransfer'), run: () => copyTransferCommand(paths, false) },
-          ]);
+            { label: i18n.t('filesUi.copyReference'), run: () => copyReference(paths) }
+          );
+          openContextMenu(event.clientX, event.clientY, items);
         });
         listEl.appendChild(row);
       }
@@ -767,6 +907,7 @@
       state.entries = result.entries;
       state.selection = new Set();
       state.anchor = '';
+      state.cellSelection = null;
       pathInput.value = result.path;
       setStatusPath(result.path);
       renderTree();
@@ -829,6 +970,18 @@
       else setStatus(i18n.t('filesUi.copyFailed'), true);
     }
 
+    /* 右键「复制引用」：把「用户名@地址:远端绝对路径」写入系统剪贴板（多条按换行）。 */
+    async function copyReference(paths) {
+      const list = (paths || []).filter(Boolean);
+      if (!state.connected || !list.length) return;
+      const result = await window.ships.sftp.copyReference(state.id, list);
+      if (result && result.ok) {
+        setStatus(i18n.t('filesUi.copiedReference', { reference: (result.references || []).join('\n') }));
+      } else {
+        setStatus(i18n.t('filesUi.copyFailed'), true);
+      }
+    }
+
     /* 单选 / 多选后按 Cmd/Ctrl+C：把选中行按表格列导出为 CSV 写入剪贴板。 */
     function csvField(value) {
       const s = String(value == null ? '' : value);
@@ -851,15 +1004,6 @@
         if (result && result.ok) setStatus(i18n.t('filesUi.copiedCsv', { count: ordered.length }));
         else setStatus(i18n.t('filesUi.copyFailed'), true);
       });
-    }
-
-    /* 右键「复制传输命令」：按会话连接信息生成 scp 命令（可多个源）并复制到剪贴板。 */
-    async function copyTransferCommand(paths, recursive) {
-      const list = (paths || []).filter(Boolean);
-      if (!state.connected || !list.length) return;
-      const result = await window.ships.sftp.transferCommand(state.id, list, Boolean(recursive));
-      if (result && result.ok) setStatus(i18n.t('filesUi.copiedCommand', { command: result.command }));
-      else setStatus(i18n.t('filesUi.copyFailed'), true);
     }
 
     /* 下载一个远端文件并更新进度 / 状态。 */
@@ -969,6 +1113,7 @@
       state.cwd = state.home;
       state.selection = new Set();
       state.anchor = '';
+      state.cellSelection = null;
       setStatus(i18n.t('filesUi.connected', { target: state.target }), false);
       setStatusPath(state.home);
       pathInput.value = state.home;
@@ -988,6 +1133,12 @@
 
     function resetConnection() {
       closeHistoryMenu();
+      // 文件管理器销毁 / 断开 / 切换目标时，关闭它打开的内置编辑器窗口。
+      try {
+        if (window.ships && window.ships.fileEditor) window.ships.fileEditor.closeAll();
+      } catch (err) {
+        /* ignore */
+      }
       if (state.id) window.ships.sftp.close(state.id);
       state.id = '';
       state.connecting = false;
@@ -1000,6 +1151,7 @@
       state.entries = [];
       state.selection = new Set();
       state.anchor = '';
+      state.cellSelection = null;
       state.expanded = new Set();
       state.children = new Map();
       treeEl.innerHTML = '';

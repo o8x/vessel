@@ -28,20 +28,29 @@ window.ShipsConstants = {
   // 双击文件的默认打开方式：超过该体积、或属于下面的非文本类型时用系统默认程序「打开」，
   // 否则用 VS Code 打开。
   FILE_VSCODE_MAX_BYTES: 10 * 1024 * 1024,
+  // 「编辑文件」上限：仅小于 2M 的文本文件可用内置编辑器打开。
+  FILE_EDITOR_MAX_BYTES: 2 * 1024 * 1024,
   NON_TEXT_EXTENSIONS: [
-    // 图片
-    'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'tif', 'tiff', 'heic', 'avif',
-    // 文档（Word / Excel / PPT / PDF 等）
+    // 图片 / 设计稿
+    'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'icns', 'cur', 'tif', 'tiff',
+    'heic', 'avif', 'raw', 'cr2', 'nef', 'arw', 'dng', 'psd', 'psb', 'ai', 'sketch', 'fig', 'xcf',
+    // 文档（Word / Excel / PPT / PDF / 电子书等）
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf',
-    'pages', 'numbers', 'key',
+    'pages', 'numbers', 'key', 'epub', 'mobi', 'azw', 'azw3', 'djvu',
     // 音视频
-    'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'mp4', 'mov', 'mkv', 'avi', 'webm', 'mpg', 'mpeg',
-    // 压缩 / 镜像
-    'zip', 'gz', 'tgz', 'bz2', 'xz', 'zst', 'tar', '7z', 'rar', 'dmg', 'iso',
-    // 可执行 / 二进制
-    'exe', 'dll', 'so', 'dylib', 'bin', 'app', 'pkg', 'deb', 'rpm',
+    'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'ape', 'aiff', 'wma',
+    'mp4', 'mov', 'mkv', 'avi', 'webm', 'mpg', 'mpeg', 'm4v', '3gp', 'm2ts', 'vob', 'flv', 'wmv',
+    // 压缩 / 镜像 / 虚拟磁盘
+    'zip', 'gz', 'tgz', 'bz2', 'xz', 'zst', 'tar', '7z', 'rar', 'dmg', 'iso', 'img',
+    'vmdk', 'vdi', 'qcow2', 'ova', 'ovf',
+    // 可执行 / 二进制 / 包
+    'exe', 'dll', 'so', 'dylib', 'bin', 'app', 'pkg', 'deb', 'rpm', 'msi', 'msix', 'appx',
+    'apk', 'xapk', 'ipa', 'jar', 'war', 'ear', 'class', 'dex', 'pyc', 'pyo', 'o', 'a', 'lib',
+    'obj', 'ko', 'wasm', 'crx', 'xpi', 'vsix',
+    // 数据 / 数据库 / 3D
+    'db', 'sqlite', 'sqlite3', 'mdb', 'dat', 'blend', '3ds', 'stl', 'glb', 'gltf', 'fbx',
     // 字体
-    'ttf', 'otf', 'woff', 'woff2', 'eot',
+    'ttf', 'ttc', 'otf', 'woff', 'woff2', 'eot',
   ],
   DEBOUNCE_MS: 120,
   // 游戏列表分批渲染：每批 tile 数量（几千个 ROM 时避免一次性建满 DOM）。

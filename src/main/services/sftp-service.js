@@ -22,6 +22,8 @@ const READY_TIMEOUT_MS = 12000;
 const KEEPALIVE_MS = 15000;
 const DEFAULT_DOWNLOAD_DIR = '~/Downloads';
 const DEFAULT_IDENTITY = '~/.ssh/id_ed25519';
+// 内置编辑器读取上限（文件管理器只对 < 2M 的文本文件提供「编辑文件」，这里留一点余量）。
+const EDITOR_READ_MAX_BYTES = 4 * 1024 * 1024;
 
 // id -> { id, client, sftp, target, resolved, home, closed }
 const sessions = new Map();
@@ -436,12 +438,100 @@ function upload(id, localPath, remoteDir, onProgress) {
   });
 }
 
+
+/* 会话拥有者（open / close 的窗口 webContents id），用于校验编辑器请求来源。 */
+function ownerId(id) {
+  const entry = get(id);
+  return entry ? entry.ownerId : null;
+}
+
+/* 「复制引用」：用户名@地址:远端绝对路径（多条按数组返回）。 */
+function reference(id, remotePaths) {
+  const entry = get(id);
+  if (!entry) return { ok: false, error: 'not-connected' };
+  const list = (Array.isArray(remotePaths) ? remotePaths : [remotePaths])
+    .map((item) => String(item || ''))
+    .filter(Boolean);
+  if (!list.length) return { ok: false, error: 'no-path' };
+  const resolved = entry.resolved || {};
+  const host = resolved.username ? `${resolved.username}@${resolved.host}` : String(resolved.host || entry.target || '');
+  return { ok: true, references: list.map((item) => `${host}:${item}`) };
+}
+
+/* 内置编辑器读取文本：拒绝目录 / 超大文件 / 含 NUL 的二进制内容。 */
+function readText(id, remotePath) {
+  const entry = get(id);
+  if (!entry) return Promise.resolve({ ok: false, error: 'not-connected', code: 'not-connected' });
+  const target = String(remotePath || '');
+  if (!target) return Promise.resolve({ ok: false, error: 'no-path' });
+  const sftp = entry.sftp;
+  return new Promise((resolve) => {
+    sftp.stat(target, (statErr, attrs) => {
+      if (statErr) {
+        resolve({ ok: false, error: statErr.message, code: 'stat' });
+        return;
+      }
+      if (attrs && typeof attrs.isDirectory === 'function' && attrs.isDirectory()) {
+        resolve({ ok: false, error: 'not-a-file', code: 'notAFile' });
+        return;
+      }
+      const size = Number(attrs && attrs.size) || 0;
+      if (size > EDITOR_READ_MAX_BYTES) {
+        resolve({ ok: false, error: 'too-large', code: 'tooLarge' });
+        return;
+      }
+      sftp.readFile(target, (err, buffer) => {
+        if (err) {
+          resolve({ ok: false, error: err.message, code: 'read' });
+          return;
+        }
+        const data = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || '');
+        if (data.subarray(0, 8192).includes(0)) {
+          resolve({ ok: false, error: 'binary', code: 'binary' });
+          return;
+        }
+        logger.file(`[sftp] read ${target} (${data.length} bytes)`);
+        resolve({
+          ok: true,
+          content: data.toString('utf8'),
+          size: data.length,
+          mtime: (Number(attrs && attrs.mtime) || 0) * 1000,
+        });
+      });
+    });
+  });
+}
+
+/* 内置编辑器保存文本（覆盖写入远端原文件）。 */
+function writeText(id, remotePath, content) {
+  const entry = get(id);
+  if (!entry) return Promise.resolve({ ok: false, error: 'not-connected', code: 'not-connected' });
+  const target = String(remotePath || '');
+  if (!target.startsWith('/')) return Promise.resolve({ ok: false, error: 'bad-path' });
+  const data = Buffer.from(String(content == null ? '' : content), 'utf8');
+  return new Promise((resolve) => {
+    entry.sftp.writeFile(target, data, (err) => {
+      if (err) {
+        logger.error(`[sftp] write failed (${target}): ${err.message}`);
+        resolve({ ok: false, error: err.message });
+        return;
+      }
+      logger.file(`[sftp] saved ${target} (${data.length} bytes)`);
+      resolve({ ok: true, path: target, bytes: data.length });
+    });
+  });
+}
+
 module.exports = {
   connect,
   listDir,
   download,
   upload,
   transferCommand,
+  reference,
+  readText,
+  writeText,
+  ownerId,
   close,
   closeAll,
   closeForOwner,

@@ -17,3 +17,11 @@ Copyright (C) 2026 Vessel
 The corresponding source code of any bundled GPL-licensed components is
 available from the upstream project at the version listed above, and from the
 source repository of this project.
+
+## CodeMirror 5
+
+- License: MIT
+- Source: <https://github.com/codemirror/codemirror5>
+- Version: 5.65.21 (pinned in `package.json`)
+- Bundled path: `node_modules/codemirror/`
+- Modifications: none (unmodified upstream distribution)

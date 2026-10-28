@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh" data-theme="light" data-theme-lock="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    />
+    <title>Vessel Editor</title>
+    <link rel="stylesheet" href="../../node_modules/codemirror/lib/codemirror.css" />
+    <link rel="stylesheet" href="./styles/constants.css" />
+    <link rel="stylesheet" href="./styles/tailwind.build.css" />
+  </head>
+  <body class="editor-window">
+    <div class="editor-shell">
+      <header class="editor-toolbar">
+        <button id="ed-save" class="editor-btn primary" type="button"></button>
+        <button id="ed-save-as" class="editor-btn" type="button"></button>
+        <button id="ed-reload" class="editor-btn" type="button"></button>
+        <span class="editor-toolbar-spacer"></span>
+        <button id="ed-undo" class="editor-btn" type="button"></button>
+        <button id="ed-redo" class="editor-btn" type="button"></button>
+        <button id="ed-wrap" class="editor-btn" type="button"></button>
+      </header>
+      <div id="editor-host" class="editor-host"></div>
+      <footer class="editor-status">
+        <span id="ed-ref" class="editor-status-ref"></span>
+        <span class="editor-status-mid">
+          <span id="ed-mode"></span>
+          <span id="ed-eol"></span>
+          <span id="ed-pos"></span>
+          <span id="ed-size"></span>
+        </span>
+        <span id="ed-state" class="editor-status-right"></span>
+      </footer>
+    </div>
+
+    <div id="ed-modal" class="editor-modal" hidden>
+      <div class="editor-modal-card">
+        <div id="ed-modal-title" class="editor-modal-title"></div>
+        <input id="ed-modal-input" class="editor-modal-input" type="text" spellcheck="false" autocomplete="off" />
+        <div class="editor-modal-actions">
+          <button id="ed-modal-cancel" class="editor-btn" type="button"></button>
+          <button id="ed-modal-confirm" class="editor-btn primary" type="button"></button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./scripts/theme.js"></script>
+    <script src="./scripts/constants.js"></script>
+    <script src="./scripts/i18n.js"></script>
+    <script src="./scripts/ui.js"></script>
+    <script src="../../node_modules/codemirror/lib/codemirror.js"></script>
+    <script src="../../node_modules/codemirror/addon/edit/matchbrackets.js"></script>
+    <script src="../../node_modules/codemirror/addon/edit/closebrackets.js"></script>
+    <script src="../../node_modules/codemirror/addon/selection/active-line.js"></script>
+    <script src="./scripts/file-editor.js"></script>
+  </body>
+</html>

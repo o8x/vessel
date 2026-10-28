@@ -94,6 +94,15 @@ function registerSftpIpc(ipcMain) {
     return { ok: true, paths: list };
   });
 
+  // 右键「复制引用」：把「用户名@地址:远端绝对路径」写入系统剪贴板（多条按换行）。
+  ipcMain.handle(IPC.SFTP_COPY_REFERENCE, (event, payload) => {
+    if (!isAllowedSender(event)) return { ok: false };
+    const raw = (payload && payload.paths) || (payload && payload.path);
+    const result = sftp.reference(payload && payload.id, raw);
+    if (result && result.ok) clipboard.writeText(result.references.join('\n'));
+    return result;
+  });
+
   // 文件列表 Cmd/Ctrl+C：把选中行以 CSV 写入系统剪贴板。
   ipcMain.handle(IPC.SFTP_COPY_TEXT, (event, payload) => {
     if (!isAllowedSender(event)) return { ok: false };

@@ -114,6 +114,7 @@ const IPC = {
   SFTP_PROGRESS: 'sftp:progress',
   SFTP_COPY_PATH: 'sftp:copy-path',
   SFTP_COPY_TEXT: 'sftp:copy-text',
+  SFTP_COPY_REFERENCE: 'sftp:copy-reference',
 
   CD_HISTORY_LIST: 'cd-history:list',
   CD_HISTORY_ADD: 'cd-history:add',
@@ -128,6 +129,14 @@ const IPC = {
   FILE_WINDOW_SNAP_SIZE: 'file-window:snap-size',
   FILE_WINDOW_ZOOM: 'file-window:zoom',
   FILE_WINDOW_TARGET: 'file-window:target',
+
+  // 内置文本编辑器窗口（由文件管理器打开，可多开，随文件管理器销毁而关闭）。
+  FILE_EDITOR_OPEN: 'file-editor:open',
+  FILE_EDITOR_INFO: 'file-editor:info',
+  FILE_EDITOR_READ: 'file-editor:read',
+  FILE_EDITOR_SAVE: 'file-editor:save',
+  FILE_EDITOR_SAVE_AS: 'file-editor:save-as',
+  FILE_EDITOR_CLOSE_ALL: 'file-editor:close-all',
 
   GAME_SCAN: 'games:scan',
   GAME_OPEN: 'games:open',
@@ -228,6 +237,17 @@ const FILE_WINDOW = Object.assign(
     alwaysOnTop: false,
   },
   appConfig.fileWindow || {}
+);
+
+// 内置文本编辑器窗口：panel 模式（默认 640×480，可拖动 / 缩放，可多开不复用）。
+const FILE_EDITOR_WINDOW = Object.assign(
+  {
+    width: 640,
+    height: 480,
+    minWidth: 360,
+    minHeight: 240,
+  },
+  appConfig.fileEditorWindow || {}
 );
 
 // 独立游戏窗口：panel 模式（置顶、可浮在全屏应用之上、不跨桌面），单窗口复用。
@@ -361,6 +381,7 @@ module.exports = {
   SETTINGS_WINDOW,
   TERMINAL_WINDOW,
   FILE_WINDOW,
+  FILE_EDITOR_WINDOW,
   GAME_WINDOW,
   UPDATE_WINDOW,
   UPDATE_COUNTDOWN_SECONDS,

@@ -8,6 +8,7 @@ const {
   SETTINGS_WINDOW,
   TERMINAL_WINDOW,
   FILE_WINDOW,
+  FILE_EDITOR_WINDOW,
   GAME_WINDOW,
   UPDATE_WINDOW,
   CENTER_SNAP,
@@ -50,6 +51,10 @@ let updateWindow = null;
 let fileWindowTarget = '';
 let fileWindowPath = '';
 let fileWindowOwnerId = null;
+// 内置编辑器窗口：可多开，记录归属的文件管理器窗口与服务端文件，随文件管理器销毁而关闭。
+const fileEditorWindows = new Set();
+// ownerId -> 该窗口销毁时关闭其所有编辑器的清理函数（每个 owner 只挂一个监听，避免多开时监听器堆积）。
+const fileEditorOwnerCleanup = new Map();
 let trayRef = null;
 let terminalGeometryTimer = null;
 let suppressTerminalSizeSave = false;
@@ -1440,6 +1445,116 @@ function snapFileWindowContentSize(win, height) {
   return { ok: true, height: next };
 }
 
+function fileEditorTitle(info) {
+  const name = (info && info.name) || 'Untitled';
+  return `${name} — Vessel Editor`;
+}
+
+function openFileEditorWindow(ownerSender, payload) {
+  if (!ownerSender || ownerSender.isDestroyed()) return null;
+  const sessionId = String((payload && payload.sessionId) || '');
+  const filePath = String((payload && payload.path) || '');
+  if (!sessionId || !filePath) return null;
+  const name = String((payload && payload.name) || path.posix.basename(filePath));
+  const win = new BrowserWindow({
+    width: FILE_EDITOR_WINDOW.width,
+    height: FILE_EDITOR_WINDOW.height,
+    minWidth: FILE_EDITOR_WINDOW.minWidth,
+    minHeight: FILE_EDITOR_WINDOW.minHeight,
+    title: 'Vessel Editor',
+    titleBarStyle: 'default',
+    backgroundColor: themeBackgroundColor(),
+    show: false,
+    resizable: true,
+    movable: true,
+    minimizable: true,
+    maximizable: true,
+    fullscreenable: false,
+    webPreferences: {
+      preload: path.join(PRELOAD_DIR, 'main-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      spellcheck: false,
+    },
+  });
+  win.__editorInfo = {
+    ownerId: ownerSender.id,
+    sessionId,
+    path: filePath,
+    name,
+    target: String((payload && payload.target) || ''),
+  };
+  fileEditorWindows.add(win);
+  win.setTitle(fileEditorTitle(win.__editorInfo));
+  win.loadFile(path.join(RENDERER_DIR, 'file-editor.html'));
+  win.webContents.setVisualZoomLevelLimits(1, 1);
+  win.webContents.setZoomFactor(1);
+  win.webContents.on('did-finish-load', () => {
+    try {
+      win.webContents.setZoomFactor(1);
+    } catch (err) {
+      /* ignore */
+    }
+  });
+  win.webContents.on('zoom-changed', (event) => {
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    win.webContents.setZoomLevel(0);
+  });
+  win.once('ready-to-show', () => {
+    win.show();
+    win.focus();
+  });
+  win.on('closed', () => {
+    fileEditorWindows.delete(win);
+  });
+  // 文件管理器窗口被销毁时（关闭 / 分离 / 断开连接），自动关闭其打开的编辑器。
+  const ownerId = ownerSender.id;
+  if (!fileEditorOwnerCleanup.has(ownerId)) {
+    const cleanup = () => {
+      fileEditorOwnerCleanup.delete(ownerId);
+      closeFileEditorsForOwner(ownerId);
+    };
+    ownerSender.once('destroyed', cleanup);
+    fileEditorOwnerCleanup.set(ownerId, cleanup);
+  }
+  return win;
+}
+
+function getFileEditorInfoForWebContents(id) {
+  for (const win of fileEditorWindows) {
+    if (!win.isDestroyed() && win.webContents.id === id) return win.__editorInfo || null;
+  }
+  return null;
+}
+
+function updateFileEditorPath(id, nextPath) {
+  const info = getFileEditorInfoForWebContents(id);
+  if (!info) return null;
+  info.path = String(nextPath || '');
+  info.name = path.posix.basename(info.path);
+  for (const win of fileEditorWindows) {
+    if (!win.isDestroyed() && win.webContents.id === id) win.setTitle(fileEditorTitle(info));
+  }
+  return info;
+}
+
+function closeFileEditorsForOwner(ownerId) {
+  if (ownerId == null) return 0;
+  let closed = 0;
+  for (const win of Array.from(fileEditorWindows)) {
+    if (win.isDestroyed()) {
+      fileEditorWindows.delete(win);
+      continue;
+    }
+    if (win.__editorInfo && win.__editorInfo.ownerId === ownerId) {
+      win.destroy();
+      closed += 1;
+    }
+  }
+  return closed;
+}
+
 function closeFileWindow() {
   const win = getFileWindow();
   if (!win) return null;
@@ -1906,6 +2021,10 @@ module.exports = {
   isFileWindow,
   snapFileWindowContentSize,
   closeFileWindow,
+  openFileEditorWindow,
+  getFileEditorInfoForWebContents,
+  updateFileEditorPath,
+  closeFileEditorsForOwner,
   forgetFileWindowGeometry,
   applyFileWindowAlwaysOnTop,
   broadcast,
