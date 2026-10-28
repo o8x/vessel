@@ -2564,16 +2564,25 @@ body.editor-window {
   flex: 0 0 auto;
   gap: 10px;
 }
-.editor-status-right {
+/* 保存状态放在工具栏右侧的固定宽度槽位：文本变化不会改变状态栏 / 工具栏布局。 */
+.editor-save-state {
   flex: 0 0 auto;
+  width: 150px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-fg-muted);
 }
-.editor-status .is-dirty {
+.editor-save-state.is-dirty {
   color: var(--color-accent);
 }
-.editor-status .is-error {
+.editor-save-state.is-error {
   color: var(--color-danger);
 }
-.editor-status .is-success {
+.editor-save-state.is-success {
   color: var(--color-success);
 }
 .editor-modal {
