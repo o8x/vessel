@@ -22,8 +22,8 @@ const READY_TIMEOUT_MS = 12000;
 const KEEPALIVE_MS = 15000;
 const DEFAULT_DOWNLOAD_DIR = '~/Downloads';
 const DEFAULT_IDENTITY = '~/.ssh/id_ed25519';
-// 内置编辑器读取上限（文件管理器只对 < 2M 的文本文件提供「编辑文件」，这里留一点余量）。
-const EDITOR_READ_MAX_BYTES = 4 * 1024 * 1024;
+// 内置编辑器读取上限（文件管理器只对 ≤ 8M 的明确文本文件提供「编辑文件」）。
+const EDITOR_READ_MAX_BYTES = 8 * 1024 * 1024;
 
 // id -> { id, client, sftp, target, resolved, home, closed }
 const sessions = new Map();

@@ -25,11 +25,37 @@ window.ShipsConstants = {
   GLASS_MAX_ALPHA: 0.4,
   // 文件管理状态栏：所有提示的保留时长（到点惰性清除）。
   FILE_STATUS_TTL_MS: 30000,
-  // 双击文件的默认打开方式：超过该体积、或属于下面的非文本类型时用系统默认程序「打开」，
-  // 否则用 VS Code 打开。
-  FILE_VSCODE_MAX_BYTES: 10 * 1024 * 1024,
-  // 「编辑文件」上限：仅小于 2M 的文本文件可用内置编辑器打开。
-  FILE_EDITOR_MAX_BYTES: 2 * 1024 * 1024,
+  // 双击文件的默认打开方式：落在 [MIN, MAX] 体积区间内的文件下载后用 VS Code 打开。
+  FILE_VSCODE_MIN_BYTES: 8 * 1024 * 1024,
+  FILE_VSCODE_MAX_BYTES: 128 * 1024 * 1024,
+  // 「编辑文件」上限：仅小于等于 8M、且扩展名属于 TEXT_EXTENSIONS 的文件可用内置编辑器打开。
+  FILE_EDITOR_MAX_BYTES: 8 * 1024 * 1024,
+  // 明确可按纯文本编辑的扩展名白名单（小写、不含点）。
+  TEXT_EXTENSIONS: [
+    // 纯文本 / 数据 / 配置
+    'txt', 'text', 'log', 'md', 'markdown', 'mdx', 'rst', 'adoc', 'asciidoc',
+    'csv', 'tsv', 'json', 'json5', 'jsonc', 'ndjson', 'jsonl', 'xml', 'xm', 'xsd', 'xsl',
+    'yaml', 'yml', 'toml', 'ini', 'conf', 'cfg', 'config', 'properties', 'env',
+    'editorconfig', 'gitignore', 'gitattributes', 'gitmodules', 'npmrc', 'nvmrc', 'yarnrc',
+    'prettierrc', 'eslintrc', 'babelrc', 'lock', 'sql', 'graphql', 'gql', 'diff', 'patch',
+    // 代码
+    'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'mts', 'cts', 'vue', 'svelte', 'astro',
+    'py', 'pyi', 'rb', 'php', 'go', 'rs', 'c', 'h', 'cc', 'cpp', 'cxx', 'hxx', 'hpp', 'hh',
+    'cs', 'java', 'kt', 'kts', 'scala', 'swift', 'm', 'mm', 'dart', 'lua', 'pl', 'pm', 't',
+    'r', 'jl', 'ex', 'exs', 'erl', 'hrl', 'hs', 'lhs', 'clj', 'cljs', 'cljc', 'edn',
+    'lisp', 'el', 'scm', 'ss', 'ml', 'mli', 'fs', 'fsi', 'fsx', 'vb', 'asm', 's',
+    'sh', 'bash', 'zsh', 'fish', 'ps1', 'psm1', 'bat', 'cmd', 'awk', 'sed', 'tcl',
+    'nim', 'zig', 'v', 'sol', 'groovy', 'gradle', 'cmake', 'mk', 'proto', 'thrift',
+    'avsc', 'hcl', 'tf', 'tfvars', 'nix', 'dhall', 'cue', 'glsl', 'vert', 'frag', 'wgsl',
+    // 标记 / 样式
+    'html', 'htm', 'xhtml', 'css', 'scss', 'sass', 'less', 'styl', 'svg',
+  ],
+  // 无扩展名但明确是文本的文件名（小写）。
+  TEXT_FILENAMES: [
+    'makefile', 'dockerfile', 'containerfile', 'gemfile', 'rakefile', 'procfile',
+    'vagrantfile', 'jenkinsfile', 'license', 'licence', 'readme', 'changelog', 'authors',
+    'notice', 'contributing', 'codeowners',
+  ],
   NON_TEXT_EXTENSIONS: [
     // 图片 / 设计稿
     'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'icns', 'cur', 'tif', 'tiff',

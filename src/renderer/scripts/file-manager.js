@@ -14,10 +14,13 @@
   const DEFAULT_FILE_ICON = constants.DEFAULT_FILE_ICON || 'file';
   // 完成提示（已下载 / 已上传 / 已定位 / 已复制）在状态栏保留多久后惰性清除。
   const STATUS_TTL_MS = constants.FILE_STATUS_TTL_MS || 30000;
-  // 双击打开方式：超过该体积、或属于非文本类型时用系统默认程序，否则用 VS Code。
-  const VSCODE_MAX_BYTES = constants.FILE_VSCODE_MAX_BYTES || 10 * 1024 * 1024;
-  // 「编辑文件」只对小于 2M 的文本文件提供（二进制类型不提供）。
-  const EDITOR_MAX_BYTES = constants.FILE_EDITOR_MAX_BYTES || 2 * 1024 * 1024;
+  // 双击落在该体积区间内的文件下载后用 VS Code 打开。
+  const VSCODE_MIN_BYTES = constants.FILE_VSCODE_MIN_BYTES || 8 * 1024 * 1024;
+  const VSCODE_MAX_BYTES = constants.FILE_VSCODE_MAX_BYTES || 128 * 1024 * 1024;
+  // 「编辑文件」只对小于等于 8M 且扩展名明确为文本的文件提供。
+  const EDITOR_MAX_BYTES = constants.FILE_EDITOR_MAX_BYTES || 8 * 1024 * 1024;
+  const TEXT_EXTENSIONS = new Set(constants.TEXT_EXTENSIONS || []);
+  const TEXT_FILENAMES = new Set(constants.TEXT_FILENAMES || []);
   const NON_TEXT_EXTENSIONS = new Set(constants.NON_TEXT_EXTENSIONS || []);
   const PLATFORM = window.shipsPlatform || '';
 
@@ -224,28 +227,39 @@
     return DEFAULT_FILE_ICON;
   }
 
-  /* 双击打开方式：体积超过 10M、或属于图片 / PDF / Word 等非文本类型时用系统默认程序
-     「打开」，否则用 VS Code 打开。 */
+  /* 取小写扩展名（不含点）；无扩展名 / 点文件返回空串。 */
   function entryExtension(entry) {
     const name = String((entry && entry.name) || '').toLowerCase();
     const dot = name.lastIndexOf('.');
     return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1) : '';
   }
 
-  /* 已知的无法按文本读取的二进制类型：禁用 VS Code / 内置编辑器。 */
+  /* 明确为文本：扩展名在白名单内，或文件名为常见无扩展名 / 点文件文本文件。 */
+  function isTextEntry(entry) {
+    const name = String((entry && entry.name) || '').toLowerCase();
+    if (TEXT_FILENAMES.has(name)) return true;
+    if (TEXT_EXTENSIONS.has(entryExtension(entry))) return true;
+    // 点文件（如 `.env` / `.gitignore`）没有扩展名，按去掉前导点后的名字匹配。
+    if (name.startsWith('.') && !name.slice(1).includes('.')) {
+      return TEXT_EXTENSIONS.has(name.slice(1));
+    }
+    return false;
+  }
+
+  /* 已知的无法按文本读取的二进制类型：禁用 VS Code 菜单项。 */
   function isBinaryEntry(entry) {
     return NON_TEXT_EXTENSIONS.has(entryExtension(entry));
   }
 
-  /* 可用内置编辑器打开：小于 2M 且不是二进制类型。 */
+  /* 可用内置编辑器打开：明确为文本，且体积不超过 8M。 */
   function isEditableTextEntry(entry) {
-    return !isBinaryEntry(entry) && (Number(entry && entry.size) || 0) < EDITOR_MAX_BYTES;
+    return isTextEntry(entry) && (Number(entry && entry.size) || 0) <= EDITOR_MAX_BYTES;
   }
 
-  function prefersNativeOpen(entry) {
+  /* 双击下载后用 VS Code 打开：体积落在 8M–128M 区间。 */
+  function isVSCodeSizeEntry(entry) {
     const size = Number(entry && entry.size) || 0;
-    if (size > VSCODE_MAX_BYTES) return true;
-    return isBinaryEntry(entry);
+    return size >= VSCODE_MIN_BYTES && size <= VSCODE_MAX_BYTES;
   }
 
   /* 系统文件管理器名称：macOS = Finder，Windows = 资源管理器，其它平台用通用文案。 */
@@ -826,8 +840,8 @@
           scrollTreeToSelected();
         });
 
-        // 双击：目录进入；小于 2M 的文本文件用内置编辑器打开；
-        // 大文件 / 图片 / PDF / Word 等非文本用系统默认程序打开；其余文本仍用 VS Code。
+        // 双击：目录进入；≤ 8M 的明确文本文件用内置编辑器打开；
+        // 8M–128M 的任意文件下载后用 VS Code 打开；其余用系统默认程序打开。
         row.addEventListener('dblclick', () => {
           clearCellCopyTimer();
           if (isDir) {
@@ -838,8 +852,8 @@
             openInEditor(path);
             return;
           }
-          if (prefersNativeOpen(entry)) openFiles([path]);
-          else openFilesVSCode([path]);
+          if (isVSCodeSizeEntry(entry)) openFilesVSCode([path]);
+          else openFiles([path]);
         });
 
         if (isDir) {
