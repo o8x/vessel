@@ -1093,7 +1093,7 @@
       }
     }
 
-    /* 上传一组本地路径（拖拽 / 目录右键「上传」共用）；逐个上传并更新进度。 */
+    /* 上传一组本地路径（拖拽 / Cmd+V 粘贴 / 目录右键「上传」共用）；逐个上传并更新进度。 */
     async function uploadLocalPaths(paths, targetDir) {
       if (!state.connected || !paths || !paths.length) return;
       const dir = targetDir || state.cwd;
@@ -1109,13 +1109,58 @@
       loadList(state.cwd);
     }
 
-    async function uploadFiles(fileList) {
-      const paths = [];
-      for (const file of fileList) {
-        const localPath = window.ships.getPathForFile(file);
-        if (localPath) paths.push(localPath);
+    /* file:// URL -> 本地绝对路径；非 file 协议返回空串。 */
+    function fileUrlToLocalPath(value) {
+      const text = String(value || '').trim();
+      if (!text.startsWith('file://')) return '';
+      try {
+        const url = new URL(text);
+        if (url.protocol !== 'file:') return '';
+        return decodeURIComponent(url.pathname);
+      } catch (err) {
+        return '';
       }
-      uploadLocalPaths(paths);
+    }
+
+    /* 从拖拽 / 粘贴的 DataTransfer 里取本地文件绝对路径（去重）。
+       Finder 复制文件时优先读 files，个别情况只有 text/uri-list 的 file:// 路径。 */
+    function collectLocalPaths(dataTransfer) {
+      if (!dataTransfer) return [];
+      const paths = [];
+      const push = (localPath) => {
+        if (localPath && !paths.includes(localPath)) paths.push(localPath);
+      };
+      const files = Array.from(dataTransfer.files || []);
+      if (!files.length && dataTransfer.items) {
+        for (const item of Array.from(dataTransfer.items)) {
+          if (item.kind !== 'file' || typeof item.getAsFile !== 'function') continue;
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+      for (const file of files) {
+        push(window.ships.getPathForFile ? window.ships.getPathForFile(file) : file.path);
+      }
+      if (!paths.length && typeof dataTransfer.getData === 'function') {
+        let uriList = '';
+        try {
+          uriList = dataTransfer.getData('text/uri-list');
+        } catch (err) {
+          uriList = '';
+        }
+        if (!uriList) {
+          try {
+            uriList = dataTransfer.getData('text/plain');
+          } catch (err) {
+            uriList = '';
+          }
+        }
+        for (const line of String(uriList || '').split(/\r?\n/)) {
+          const value = line.trim();
+          if (value && !value.startsWith('#')) push(fileUrlToLocalPath(value));
+        }
+      }
+      return paths;
     }
 
     /* 目录树节点右键「上传」：打开系统文件选择窗口，选中后上传到该目录。 */
@@ -1302,8 +1347,20 @@
       event.preventDefault();
       listEl.classList.remove('drag-over');
       if (!state.connected) return;
-      const files = Array.from(event.dataTransfer.files || []);
-      if (files.length) uploadFiles(files);
+      const paths = collectLocalPaths(event.dataTransfer);
+      if (paths.length) uploadLocalPaths(paths, state.cwd);
+    });
+
+    // Cmd / Ctrl + V：把剪贴板里的本地文件上传到当前目录（输入框 / 可编辑区域内不拦截）。
+    wrap.addEventListener('paste', (event) => {
+      const target = event.target || {};
+      const tag = String(target.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
+      if (!state.connected) return;
+      const paths = collectLocalPaths(event.clipboardData);
+      if (!paths.length) return;
+      event.preventDefault();
+      uploadLocalPaths(paths, state.cwd);
     });
 
     /* 右键菜单：文件行右键 → 下载（不再有行内下载按钮）。 */

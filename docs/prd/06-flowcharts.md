@@ -83,7 +83,7 @@ flowchart TD
   F --> G[点文件行 → 树滚动定位到其目录]
   F --> G2[双击目录行 → 进入该目录（单击只选中 / 复制单元格）]
   F --> G3[双击第一行 .. → 回到上一级目录（根目录除外）]
-  F --> H[拖拽 / 目录树右键「上传」 → sftp:upload（状态栏进度）]
+  F --> H[拖拽 / Cmd / Ctrl + V 粘贴 / 目录树右键「上传」 → sftp:upload（状态栏进度）]
   F --> I[右键文件行 → 下载 sftp:download（状态栏进度）]
   F --> I2[右键文件行 → 从 Finder 打开 sftp:open（下载后在文件管理器中定位）]
   F --> I3[右键文件行 → 从 VS Code 打开 sftp:open-vscode（下载后用 VS Code 打开）]
