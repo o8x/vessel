@@ -1449,6 +1449,7 @@ body.file-window .fm-tree-row {
 }
 .fm-head-cell {
   position: relative;
+  padding: 0 4px;
   white-space: nowrap;
 }
 /* 可排序列头：点击切换升 / 降序，右侧显示箭头。 */
@@ -1516,6 +1517,7 @@ body.file-window .fm-tree-row {
   display: flex;
   align-items: center;
   min-width: 0;
+  padding: 0 4px;
 }
 .fm-row [data-cell].cell-selected {
   background: var(--color-accent-soft);
