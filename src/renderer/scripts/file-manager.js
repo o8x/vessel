@@ -901,15 +901,26 @@
             state.selection.has(joinPath(state.cwd, item.name))
           );
           const items = [];
-          if (selectedEntries.length === 1 && isEditableTextEntry(selectedEntries[0])) {
-            items.push({ label: i18n.t('filesUi.editFile'), run: () => openInEditor(paths[0]) });
-          }
+          // 禁用项也显示（灰色不可点），不隐藏。
+          const singleEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
+          items.push({
+            label: i18n.t('filesUi.editFile'),
+            disabled: !singleEntry || !isEditableTextEntry(singleEntry),
+            run: () => openInEditor(paths[0]),
+          });
           items.push({ label: nativeOpenLabel(), run: () => openFiles(paths) });
-          if (selectedEntries.every((item) => !isBinaryEntry(item))) {
-            items.push({ label: i18n.t('filesUi.openVSCode'), run: () => openFilesVSCode(paths) });
-          }
-          if (selectedEntries.length && selectedEntries.every((item) => isWiresharkEntry(item))) {
-            items.push({ label: i18n.t('filesUi.openWireshark'), run: () => openFilesWireshark(paths) });
+          items.push({
+            label: i18n.t('filesUi.openVSCode'),
+            disabled: !selectedEntries.length || !selectedEntries.every((item) => !isBinaryEntry(item)),
+            run: () => openFilesVSCode(paths),
+          });
+          // pcap / pcapng 才显示 Wireshark 项；超过 4GB 时置灰不可点。
+          if (selectedEntries.length && selectedEntries.every((item) => WIRESHARK_EXTENSIONS.has(entryExtension(item)))) {
+            items.push({
+              label: i18n.t('filesUi.openWireshark'),
+              disabled: !selectedEntries.every((item) => isWiresharkEntry(item)),
+              run: () => openFilesWireshark(paths),
+            });
           }
           items.push(
             { label: i18n.t('filesUi.download'), run: () => downloadFiles(paths) },
@@ -1308,10 +1319,15 @@
       const menu = el('div', { class: 'fm-menu' });
       for (const item of items) {
         const btn = el('button', { class: 'fm-menu-item', type: 'button' }, item.label);
-        btn.addEventListener('click', () => {
-          closeContextMenu();
-          item.run();
-        });
+        if (item.disabled) {
+          btn.disabled = true;
+          btn.setAttribute('aria-disabled', 'true');
+        } else {
+          btn.addEventListener('click', () => {
+            closeContextMenu();
+            item.run();
+          });
+        }
         menu.appendChild(btn);
       }
       document.body.appendChild(menu);

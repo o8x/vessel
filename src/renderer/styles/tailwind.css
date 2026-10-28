@@ -1590,6 +1590,15 @@ body.file-window .fm-tree-row {
 .fm-menu-item:hover {
   background: var(--color-surface-2);
 }
+/* 禁用项：显示但置灰、不可点击。 */
+.fm-menu-item:disabled {
+  color: var(--color-fg-muted);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.fm-menu-item:disabled:hover {
+  background: transparent;
+}
 /* cd 历史：条目为远端路径，单行省略。 */
 .fm-history-menu {
   min-width: 200px;
