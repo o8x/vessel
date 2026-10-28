@@ -702,7 +702,7 @@
       const perm = el('span', { class: 'fm-cell-perm' }, '');
       const time = el('span', { class: 'fm-cell-time' }, '');
       row.append(icon, name, size, perm, time);
-      row.addEventListener('click', () => navigate(parent));
+      row.addEventListener('dblclick', () => navigate(parent));
       return row;
     }
 
