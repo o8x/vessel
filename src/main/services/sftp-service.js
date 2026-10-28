@@ -377,6 +377,22 @@ function download(id, remotePath, onProgress) {
   });
 }
 
+/* 编辑器「下载到本地」/「从 VS Code 打开」：把当前编辑内容写成本地文件（下载目录，
+   重名自动加 ` (n)`），不依赖远端下载。 */
+function saveLocalText(name, content) {
+  const base = path.basename(String(name || '').trim() || 'untitled.txt');
+  const localPath = uniqueLocalPath(downloadDir(), base);
+  const data = Buffer.from(String(content == null ? '' : content), 'utf8');
+  try {
+    fs.writeFileSync(localPath, data);
+  } catch (err) {
+    logger.error(`[sftp] save local copy failed (${localPath}): ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+  logger.file(`[sftp] saved local copy ${localPath} (${data.length} bytes)`);
+  return { ok: true, path: localPath, name: base };
+}
+
 function isDefaultIdentity(file) {
   const value = String(file || '').trim();
   if (!value) return false;
@@ -528,6 +544,7 @@ module.exports = {
   download,
   upload,
   transferCommand,
+  saveLocalText,
   reference,
   readText,
   writeText,

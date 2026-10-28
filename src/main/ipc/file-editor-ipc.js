@@ -75,13 +75,14 @@ function registerFileEditorIpc(ipcMain) {
   });
 
 
-  // 从 VS Code 打开：下载当前远端文件后用 VS Code 打开（编辑器会先保存未保存内容）。
-  ipcMain.handle(IPC.FILE_EDITOR_OPEN_VSCODE, async (event) => {
+  // 从 VS Code 打开：把编辑器当前内容写成下载目录里的本地文件，再用 VS Code 打开
+  //（不依赖再下载远端文件，也保证打开的是当前内容）。
+  ipcMain.handle(IPC.FILE_EDITOR_OPEN_VSCODE, async (event, payload) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
-    const result = await sftp.download(info.sessionId, info.path, (progress) =>
-      event.sender.send(IPC.SFTP_PROGRESS, Object.assign({ id: info.sessionId }, progress))
-    );
+    const content = payload && payload.content;
+    if (typeof content !== 'string') return { ok: false, error: 'bad-content' };
+    const result = sftp.saveLocalText((payload && payload.name) || info.name, content);
     if (!result || !result.ok) return result;
     const opened = await vscode.openPath(result.path);
     if (!opened || !opened.ok) {
@@ -90,13 +91,13 @@ function registerFileEditorIpc(ipcMain) {
     return result;
   });
 
-  // 下载到本地（设置的下载目录），与文件管理器的「下载到本地」一致。
-  ipcMain.handle(IPC.FILE_EDITOR_DOWNLOAD, (event) => {
+  // 下载到本地：把编辑器当前内容写成下载目录里的本地文件。
+  ipcMain.handle(IPC.FILE_EDITOR_DOWNLOAD, (event, payload) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
-    return sftp.download(info.sessionId, info.path, (progress) =>
-      event.sender.send(IPC.SFTP_PROGRESS, Object.assign({ id: info.sessionId }, progress))
-    );
+    const content = payload && payload.content;
+    if (typeof content !== 'string') return { ok: false, error: 'bad-content' };
+    return sftp.saveLocalText((payload && payload.name) || info.name, content);
   });
 
   // 文件管理器销毁时（分离 / 断开 / 关闭）关闭它打开的所有编辑器。

@@ -6,6 +6,7 @@
 
 (function bootstrapFileEditor() {
   const i18n = window.ShipsI18n;
+  const { Icons } = window.ShipsUI;
 
   i18n.extend({
     zh: {
@@ -280,7 +281,7 @@
     } else if (dom.pos) {
       dom.pos.textContent = '';
     }
-    document.title = `${state.name || 'Vessel Editor'}${state.dirty ? ' •' : ''} — Vessel Editor`;
+    document.title = `${state.dirty ? '* ' : ''}${state.name || 'Vessel Editor'} — Vessel Editor`;
   }
 
   function scheduleSize() {
@@ -300,11 +301,6 @@
   function syncDirty() {
     if (!state.cm) return;
     state.dirty = state.cm.getValue('\n') !== state.original;
-    if (state.dirty) {
-      if (state.statusKind !== 'is-error') setStatus(i18n.t('editor.unsaved'), 'is-dirty');
-    } else if (state.statusKind === 'is-dirty') {
-      setStatus('');
-    }
     renderStatus();
     scheduleSize();
   }
@@ -382,8 +378,7 @@
       state.original = state.cm.getValue('\n');
       state.sizeBytes = Number(result.bytes) || docByteLength();
       state.dirty = false;
-      const time = new Date().toLocaleTimeString();
-      setStatus(`${i18n.t('editor.saved')} ${time}`, 'is-success');
+      setStatus('');
       renderStatus();
       return true;
     }
@@ -441,27 +436,20 @@
       state.dirty = false;
       const info = await window.ships.fileEditor.info();
       if (info && info.ok) state.reference = info.reference || state.path;
-      const time = new Date().toLocaleTimeString();
-      setStatus(`${i18n.t('editor.saved')} ${time}`, 'is-success');
+      setStatus('');
     } else {
       setStatus(i18n.t('editor.saveFailed', { error: (result && result.error) || 'error' }), 'is-error');
     }
     renderStatus();
   }
 
-  async function ensureSaved() {
-    if (!state.dirty) return true;
-    return save();
-  }
-
   async function openInVSCode() {
     if (!state.cm || state.saving || state.downloading) return;
-    if (!(await ensureSaved())) return;
     state.downloading = true;
     setStatus(i18n.t('editor.downloading'));
     let result = null;
     try {
-      result = await window.ships.fileEditor.openVSCode();
+      result = await window.ships.fileEditor.openVSCode({ content: serialize(), name: state.name });
     } catch (err) {
       result = { ok: false, error: err.message };
     }
@@ -472,12 +460,11 @@
 
   async function downloadToLocal() {
     if (!state.cm || state.saving || state.downloading) return;
-    if (!(await ensureSaved())) return;
     state.downloading = true;
     setStatus(i18n.t('editor.downloading'));
     let result = null;
     try {
-      result = await window.ships.fileEditor.download();
+      result = await window.ships.fileEditor.download({ content: serialize(), name: state.name });
     } catch (err) {
       result = { ok: false, error: err.message };
     }
@@ -504,15 +491,22 @@
     setStatus('');
   }
 
+  function setIconButton(button, icon, tipKey) {
+    if (!button) return;
+    button.innerHTML = icon(15);
+    button.setAttribute('data-tip', i18n.t(tipKey));
+    button.setAttribute('aria-label', i18n.t(tipKey));
+  }
+
   function applyLocale() {
-    dom.save.textContent = i18n.t('editor.save');
-    dom.saveAs.textContent = i18n.t('editor.saveAs');
-    dom.openVSCode.textContent = i18n.t('editor.openVSCode');
-    dom.download.textContent = i18n.t('editor.download');
-    dom.reload.textContent = i18n.t('editor.reload');
-    dom.undo.textContent = i18n.t('editor.undo');
-    dom.redo.textContent = i18n.t('editor.redo');
-    dom.wrap.textContent = i18n.t(state.wrap ? 'editor.wrapOff' : 'editor.wrapOn');
+    setIconButton(dom.save, Icons.save, 'editor.save');
+    setIconButton(dom.saveAs, Icons.saveAs, 'editor.saveAs');
+    setIconButton(dom.openVSCode, Icons.code, 'editor.openVSCode');
+    setIconButton(dom.download, Icons.download, 'editor.download');
+    setIconButton(dom.reload, Icons.refresh, 'editor.reload');
+    setIconButton(dom.undo, Icons.undo, 'editor.undo');
+    setIconButton(dom.redo, Icons.redo, 'editor.redo');
+    setIconButton(dom.wrap, Icons.wrap, state.wrap ? 'editor.wrapOff' : 'editor.wrapOn');
     state.modeLabel = labelForMode(state.mode, state.name);
     renderStatus();
   }
@@ -527,7 +521,9 @@
   dom.wrap.addEventListener('click', () => {
     state.wrap = !state.wrap;
     if (state.cm) state.cm.setOption('lineWrapping', state.wrap);
-    dom.wrap.textContent = i18n.t(state.wrap ? 'editor.wrapOff' : 'editor.wrapOn');
+    const tipKey = state.wrap ? 'editor.wrapOff' : 'editor.wrapOn';
+    dom.wrap.setAttribute('data-tip', i18n.t(tipKey));
+    dom.wrap.setAttribute('aria-label', i18n.t(tipKey));
   });
 
   dom.modalCancel.addEventListener('click', closeModal);
@@ -564,13 +560,6 @@
     if (!state.dirty) return;
     event.preventDefault();
     event.returnValue = '';
-  });
-
-  window.ships.sftp.onProgress((payload) => {
-    if (!state.downloading || !payload || payload.direction !== 'download') return;
-    if (payload.name && state.name !== payload.name) return;
-    const percent = payload.total ? Math.min(100, Math.round((payload.transferred / payload.total) * 100)) : 0;
-    setStatus(`${i18n.t('editor.downloading')} ${percent}%`);
   });
 
   async function boot() {

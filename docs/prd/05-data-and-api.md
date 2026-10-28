@@ -95,8 +95,8 @@
 | `file-editor:read` | — | `{ ok, content, size, mtime, error?, code? }` | 读取当前远端文件文本（≤ 4MB，拒绝目录 / 含 NUL 的二进制内容）；只接受来自编辑器窗口的请求 |
 | `file-editor:save` | `{ content }` | `{ ok, path?, bytes?, error? }` | 覆盖写回当前远端文件（编辑器状态栏显示保存中 / 已保存）；只接受来自编辑器窗口的请求 |
 | `file-editor:save-as` | `{ path, content }` | `{ ok, path?, bytes?, error? }` | 另存为：`path` 必须为 `/` 开头的远端绝对路径，写入成功后该编辑器切换到新文件；只接受来自编辑器窗口的请求 |
-| `file-editor:open-vscode` | — | `{ ok, path?, name?, error? }` | 编辑器「从 VS Code 打开」：下载当前远端文件到下载目录后用 VS Code 打开（渲染层会先保存未保存修改）；只接受来自编辑器窗口的请求 |
-| `file-editor:download` | — | `{ ok, path?, name?, error? }` | 编辑器「下载到本地」：把当前远端文件下载到设置的下载目录（同名自动加 ` (n)`），过程中经 `sftp:progress` 回传进度；只接受来自编辑器窗口的请求 |
+| `file-editor:open-vscode` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「从 VS Code 打开」：把编辑器当前内容写成本地文件（下载目录，重名自动加 ` (n)`）后用 VS Code 打开；不修改远端文件；只接受来自编辑器窗口的请求 |
+| `file-editor:download` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「下载到本地」：把编辑器当前内容写成本地文件到设置的下载目录（同名自动加 ` (n)`）；只接受来自编辑器窗口的请求 |
 | `file-editor:close-all` | — | `{ ok, closed }` | 关闭发起窗口打开的所有编辑器窗口（文件管理器销毁 / 断开 / 切换目标时调用）；只接受终端窗口 / 独立文件窗口的请求 |
 | `games:scan` | — | `{ ok, workDir, resolvedWorkDir, isDefault, engines }` | 扫描游戏工作目录；`engines[].games[]` 含 `{ id, name, engine, label, core, romRelativePath, size, mtime, played, coverUrl, romUrl }`（`played` 表示该游戏是否启动过）；支持 `roms/<engine>/<文件夹>/xxx.rom`（单 ROM 子目录以文件夹名为游戏名；多 ROM 子目录生成 `<引擎> - <文件夹>` 独立分类），扩展名匹配不区分大小写；已启动过的游戏会以 `id: recent` 的「最近启动」分类置顶（按 `lastPlayedAt` 倒序最多 8 个）；只接受主窗口 / 设置窗口请求 |
 | `games:open` | `{ gameId }` | `{ ok, error? }` | 打开 / 复用游戏窗口并加载游戏，同时更新 `meta.json` 的 `lastPlayedAt`；只接受主窗口请求 |

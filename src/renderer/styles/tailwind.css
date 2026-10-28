@@ -2529,6 +2529,17 @@ body.editor-window {
 .editor-btn.primary:hover {
   filter: brightness(1.05);
 }
+.editor-toolbar-btn {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+}
+.editor-toolbar-btn.primary {
+  color: var(--color-accent);
+}
+.editor-toolbar-btn.primary:hover {
+  background: var(--color-accent-soft);
+}
 .editor-toolbar-spacer {
   flex: 1 1 auto;
 }

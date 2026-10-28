@@ -120,8 +120,8 @@ const api = {
     read: () => ipcRenderer.invoke(IPC.FILE_EDITOR_READ),
     save: (content) => ipcRenderer.invoke(IPC.FILE_EDITOR_SAVE, { content }),
     saveAs: (path, content) => ipcRenderer.invoke(IPC.FILE_EDITOR_SAVE_AS, { path, content }),
-    openVSCode: () => ipcRenderer.invoke(IPC.FILE_EDITOR_OPEN_VSCODE),
-    download: () => ipcRenderer.invoke(IPC.FILE_EDITOR_DOWNLOAD),
+    openVSCode: (payload) => ipcRenderer.invoke(IPC.FILE_EDITOR_OPEN_VSCODE, payload),
+    download: (payload) => ipcRenderer.invoke(IPC.FILE_EDITOR_DOWNLOAD, payload),
     closeAll: () => ipcRenderer.invoke(IPC.FILE_EDITOR_CLOSE_ALL),
   },
   fileWindow: {
