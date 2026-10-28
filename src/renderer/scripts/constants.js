@@ -48,7 +48,7 @@ window.ShipsConstants = {
     'nim', 'zig', 'v', 'sol', 'groovy', 'gradle', 'cmake', 'mk', 'proto', 'thrift',
     'avsc', 'hcl', 'tf', 'tfvars', 'nix', 'dhall', 'cue', 'glsl', 'vert', 'frag', 'wgsl',
     // 标记 / 样式
-    'html', 'htm', 'xhtml', 'css', 'scss', 'sass', 'less', 'styl', 'svg',
+    'html', 'htm', 'xhtml', 'css', 'scss', 'sass', 'less', 'styl',
   ],
   // 无扩展名但明确是文本的文件名（小写）。
   TEXT_FILENAMES: [
@@ -73,11 +73,15 @@ window.ShipsConstants = {
     'exe', 'dll', 'so', 'dylib', 'bin', 'app', 'pkg', 'deb', 'rpm', 'msi', 'msix', 'appx',
     'apk', 'xapk', 'ipa', 'jar', 'war', 'ear', 'class', 'dex', 'pyc', 'pyo', 'o', 'a', 'lib',
     'obj', 'ko', 'wasm', 'crx', 'xpi', 'vsix',
-    // 数据 / 数据库 / 3D
-    'db', 'sqlite', 'sqlite3', 'mdb', 'dat', 'blend', '3ds', 'stl', 'glb', 'gltf', 'fbx',
+    // 数据 / 数据库 / 抓包 / 3D
+    'db', 'sqlite', 'sqlite3', 'mdb', 'dat', 'pcap', 'pcapng',
+    'blend', '3ds', 'stl', 'glb', 'gltf', 'fbx',
     // 字体
     'ttf', 'ttc', 'otf', 'woff', 'woff2', 'eot',
   ],
+  // 右键「从 Wireshark 打开」：仅 pcap / pcapng 且体积不超过 4GB。
+  WIRESHARK_EXTENSIONS: ['pcap', 'pcapng'],
+  WIRESHARK_MAX_BYTES: 4 * 1024 * 1024 * 1024,
   DEBOUNCE_MS: 120,
   // 游戏列表分批渲染：每批 tile 数量（几千个 ROM 时避免一次性建满 DOM）。
   GAME_TILE_CHUNK_SIZE: 120,

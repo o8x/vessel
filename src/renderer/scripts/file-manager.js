@@ -22,6 +22,8 @@
   const TEXT_EXTENSIONS = new Set(constants.TEXT_EXTENSIONS || []);
   const TEXT_FILENAMES = new Set(constants.TEXT_FILENAMES || []);
   const NON_TEXT_EXTENSIONS = new Set(constants.NON_TEXT_EXTENSIONS || []);
+  const WIRESHARK_EXTENSIONS = new Set(constants.WIRESHARK_EXTENSIONS || []);
+  const WIRESHARK_MAX_BYTES = constants.WIRESHARK_MAX_BYTES || 4 * 1024 * 1024 * 1024;
   const PLATFORM = window.shipsPlatform || '';
 
   const DEFAULT_LAYOUT = {
@@ -57,6 +59,7 @@
         openExplorer: '在资源管理器中显示',
         openFileManager: '从文件管理器打开',
         openVSCode: '从 VS Code 打开',
+        openWireshark: '从 Wireshark 打开',
         editFile: '编辑文件',
         copyPath: '复制路径',
         copyReference: '复制引用',
@@ -80,6 +83,7 @@
         downloadFailed: '下载失败：{error}',
         opened: '已在文件管理器中定位 {path}',
         openedVSCode: '已用 VS Code 打开 {path}',
+        openedWireshark: '已用 Wireshark 打开 {path}',
         uploading: '正在上传 {name}…',
         uploaded: '已上传 {name}',
         uploadFailed: '上传失败：{error}',
@@ -112,6 +116,7 @@
         openExplorer: 'Show in Explorer',
         openFileManager: 'Open from file manager',
         openVSCode: 'Open from VS Code',
+        openWireshark: 'Open from Wireshark',
         editFile: 'Edit file',
         copyPath: 'Copy path',
         copyReference: 'Copy reference',
@@ -135,6 +140,7 @@
         downloadFailed: 'Download failed: {error}',
         opened: 'Revealed in Finder: {path}',
         openedVSCode: 'Opened in VS Code: {path}',
+        openedWireshark: 'Opened in Wireshark: {path}',
         uploading: 'Uploading {name}…',
         uploaded: 'Uploaded {name}',
         uploadFailed: 'Upload failed: {error}',
@@ -251,15 +257,25 @@
     return NON_TEXT_EXTENSIONS.has(entryExtension(entry));
   }
 
-  /* 可用内置编辑器打开：明确为文本，且体积不超过 8M。 */
+  /* 可用内置编辑器打开：明确为文本、非已知二进制类型，且体积不超过 8M。 */
   function isEditableTextEntry(entry) {
-    return isTextEntry(entry) && (Number(entry && entry.size) || 0) <= EDITOR_MAX_BYTES;
+    return (
+      !isBinaryEntry(entry) &&
+      isTextEntry(entry) &&
+      (Number(entry && entry.size) || 0) <= EDITOR_MAX_BYTES
+    );
   }
 
   /* 双击下载后用 VS Code 打开：体积落在 8M–128M 区间。 */
   function isVSCodeSizeEntry(entry) {
     const size = Number(entry && entry.size) || 0;
     return size >= VSCODE_MIN_BYTES && size <= VSCODE_MAX_BYTES;
+  }
+
+  /* 可用 Wireshark 打开：pcap / pcapng 且不超过 4GB。 */
+  function isWiresharkEntry(entry) {
+    if (!WIRESHARK_EXTENSIONS.has(entryExtension(entry))) return false;
+    return (Number(entry && entry.size) || 0) <= WIRESHARK_MAX_BYTES;
   }
 
   /* 系统文件管理器名称：macOS = Finder，Windows = 资源管理器，其它平台用通用文案。 */
@@ -840,12 +856,17 @@
           scrollTreeToSelected();
         });
 
-        // 双击：目录进入；≤ 8M 的明确文本文件用内置编辑器打开；
-        // 8M–128M 的任意文件下载后用 VS Code 打开；其余用系统默认程序打开。
+        // 双击：目录进入；已知二进制 / 非文本类型（NON_TEXT_EXTENSIONS）不论大小都
+        // 下载并在 Finder 中定位；≤ 8M 的明确文本文件用内置编辑器打开；
+        // 8M–128M 的文件下载后用 VS Code 打开；其余用系统默认程序（下载 + 定位）。
         row.addEventListener('dblclick', () => {
           clearCellCopyTimer();
           if (isDir) {
             navigate(path);
+            return;
+          }
+          if (isBinaryEntry(entry)) {
+            openFiles([path]);
             return;
           }
           if (isEditableTextEntry(entry)) {
@@ -886,6 +907,9 @@
           items.push({ label: nativeOpenLabel(), run: () => openFiles(paths) });
           if (selectedEntries.every((item) => !isBinaryEntry(item))) {
             items.push({ label: i18n.t('filesUi.openVSCode'), run: () => openFilesVSCode(paths) });
+          }
+          if (selectedEntries.length && selectedEntries.every((item) => isWiresharkEntry(item))) {
+            items.push({ label: i18n.t('filesUi.openWireshark'), run: () => openFilesWireshark(paths) });
           }
           items.push(
             { label: i18n.t('filesUi.download'), run: () => downloadFiles(paths) },
@@ -1057,6 +1081,19 @@
         const result = await window.ships.sftp.openVSCode(state.id, path);
         setProgress(null);
         if (result && result.ok) setStatus(i18n.t('filesUi.openedVSCode', { path: result.path }));
+        else setStatus(i18n.t('filesUi.downloadFailed', { error: (result && result.error) || 'error' }), true);
+      }
+    }
+
+    /* 右键「用 Wireshark 打开」：逐个下载后用 Wireshark 打开。 */
+    async function openFilesWireshark(paths) {
+      for (const path of (paths || []).filter(Boolean)) {
+        const name = baseName(path);
+        setProgress({ name, transferred: 0, total: 0, direction: 'download' });
+        setStatus(i18n.t('filesUi.downloading', { name }), false);
+        const result = await window.ships.sftp.openWireshark(state.id, path);
+        setProgress(null);
+        if (result && result.ok) setStatus(i18n.t('filesUi.openedWireshark', { path: result.path }));
         else setStatus(i18n.t('filesUi.downloadFailed', { error: (result && result.error) || 'error' }), true);
       }
     }

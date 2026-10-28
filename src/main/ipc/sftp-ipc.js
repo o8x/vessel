@@ -9,6 +9,7 @@ const { IPC } = require('../../shared/constants');
 const sftp = require('../services/sftp-service');
 const cdHistory = require('../services/cd-history-service');
 const vscode = require('../services/vscode-service');
+const wireshark = require('../services/wireshark-service');
 const wm = require('../window-manager');
 
 function isAllowedSender(event) {
@@ -64,6 +65,18 @@ function registerSftpIpc(ipcMain) {
     if (!result || !result.ok || !result.path) return result;
     const opened = await vscode.openPath(result.path);
     if (!opened || !opened.ok) return { ok: false, error: (opened && opened.error) || 'vscode-failed', path: result.path };
+    return result;
+  });
+
+  // 右键「用 Wireshark 打开」：先下载，完成后用 Wireshark 打开抓包文件。
+  ipcMain.handle(IPC.SFTP_OPEN_WIRESHARK, async (event, payload) => {
+    if (!isAllowedSender(event)) return { ok: false, error: 'forbidden' };
+    const result = await downloadToLocal(event, payload);
+    if (!result || !result.ok || !result.path) return result;
+    const opened = await wireshark.openPath(result.path);
+    if (!opened || !opened.ok) {
+      return { ok: false, error: (opened && opened.error) || 'wireshark-failed', path: result.path };
+    }
     return result;
   });
 

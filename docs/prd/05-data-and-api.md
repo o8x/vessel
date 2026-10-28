@@ -77,6 +77,7 @@
 | `sftp:download` | `{ id, path }` | `{ ok, path?, name?, error? }` | 下载远端文件到设置的下载目录（重名自动加 ` (n)`），返回本地绝对路径；过程中经 `sftp:progress` 回传进度 |
 | `sftp:open` | `{ id, path }` | `{ ok, path?, name?, error? }` | 右键「从 Finder 打开」（Windows 文案为「在资源管理器中显示」）：先下载（同 `sftp:download`，含进度回传），成功后由主进程 `shell.showItemInFolder` 在系统文件管理器中定位该文件；只接受来自终端窗口或独立文件窗口的请求 |
 | `sftp:open-vscode` | `{ id, path }` | `{ ok, path?, name?, error? }` | 右键「从 VS Code 打开」：先下载（同 `sftp:download`，含进度回传），成功后由主进程用 **Visual Studio Code** 打开该文件（优先 `code` CLI，否则 `open -b com.microsoft.VSCode`）；打开失败返回 `{ ok: false, error }`；只接受来自终端窗口或独立文件窗口的请求 |
+| `sftp:open-wireshark` | `{ id, path }` | `{ ok, path?, name?, error? }` | 右键「从 Wireshark 打开」（仅 `.pcap` / `.pcapng` 且体积 ≤ 4GB 时菜单可见）：先下载（同 `sftp:download`，含进度回传），成功后由主进程用 **Wireshark** 打开该文件（优先 `wireshark` CLI，否则 `open -b org.wireshark.Wireshark`）；打开失败返回 `{ ok: false, error }`；只接受来自终端窗口或独立文件窗口的请求 |
 | `sftp:upload` | `{ id, localPath, remoteDir }` | `{ ok, name?, path?, error? }` | 把本地文件上传到远端目录（`remoteDir` 省略 / `~` 取家目录），同名覆盖；过程中经 `sftp:progress` 回传进度 |
 | `sftp:close` | `{ id }` | `{ ok }` | 关闭指定 SFTP 会话（切换 ssh / 窗口销毁时调用） |
 | `sftp:transfer-command` | `{ id, paths, recursive? }` | `{ ok, command?, error? }` | 生成把远端文件 / 目录传回本地下载目录的 `scp` 命令（`paths` 为数组，支持多选 → 多个源；目录加 `-r`，端口 22 / 默认私钥省略，远端路径加引号），**并写入系统剪贴板**；界面已移除「复制传输命令」菜单，通道仅为向后兼容保留；只接受终端窗口 / 独立文件窗口的请求 |
