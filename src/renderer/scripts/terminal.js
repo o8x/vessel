@@ -975,6 +975,96 @@
     });
   }
 
+  /* 拖放本地文件 / 文件夹到终端：取绝对路径（必要时 shell 转义）后插入光标处。
+     Electron 44 已移除 File.path，改由 preload 的 webUtils.getPathForFile 获取。 */
+  function fileUrlToLocalPath(value) {
+    const text = String(value || '').trim();
+    if (!text.startsWith('file://')) return '';
+    try {
+      const url = new URL(text);
+      if (url.protocol !== 'file:') return '';
+      return decodeURIComponent(url.pathname);
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function collectLocalPaths(dataTransfer) {
+    if (!dataTransfer) return [];
+    const paths = [];
+    const push = (localPath) => {
+      if (localPath && !paths.includes(localPath)) paths.push(localPath);
+    };
+    const files = Array.from(dataTransfer.files || []);
+    if (!files.length && dataTransfer.items) {
+      for (const item of Array.from(dataTransfer.items)) {
+        if (item.kind !== 'file' || typeof item.getAsFile !== 'function') continue;
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    for (const file of files) {
+      push(window.ships.getPathForFile ? window.ships.getPathForFile(file) : file.path);
+    }
+    if (!paths.length && typeof dataTransfer.getData === 'function') {
+      let uriList = '';
+      try {
+        uriList = dataTransfer.getData('text/uri-list');
+      } catch (err) {
+        uriList = '';
+      }
+      if (!uriList) {
+        try {
+          uriList = dataTransfer.getData('text/plain');
+        } catch (err) {
+          uriList = '';
+        }
+      }
+      for (const line of String(uriList || '').split(/\r?\n/)) {
+        const value = line.trim();
+        if (value && !value.startsWith('#')) push(fileUrlToLocalPath(value));
+      }
+    }
+    return paths;
+  }
+
+  function insertDroppedPaths(dataTransfer) {
+    if (!term || ballMode) return false;
+    const paths = collectLocalPaths(dataTransfer);
+    if (!paths.length) return false;
+    term.paste(paths.map(shellQuote).join(' '));
+    term.focus();
+    return true;
+  }
+
+  /* 拖拽文件 / 文件夹到窗口任意位置 → 插入路径；同时加一圈强调色描边反馈。 */
+  let dropDepth = 0;
+  const hasFileDrag = (event) =>
+    Boolean(event.dataTransfer && Array.from(event.dataTransfer.types || []).includes('Files'));
+  document.addEventListener('dragenter', (event) => {
+    if (!hasFileDrag(event)) return;
+    event.preventDefault();
+    dropDepth += 1;
+    if (shellEl && !ballMode) shellEl.classList.add('term-drop-target');
+  });
+  document.addEventListener('dragover', (event) => {
+    if (!hasFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+  document.addEventListener('dragleave', (event) => {
+    if (!hasFileDrag(event)) return;
+    dropDepth = Math.max(0, dropDepth - 1);
+    if (!dropDepth && shellEl) shellEl.classList.remove('term-drop-target');
+  });
+  document.addEventListener('drop', (event) => {
+    if (!hasFileDrag(event)) return;
+    event.preventDefault();
+    dropDepth = 0;
+    if (shellEl) shellEl.classList.remove('term-drop-target');
+    insertDroppedPaths(event.dataTransfer);
+  });
+
   function sshMenuItems() {
     if (!sshHosts.length) return [{ label: i18n.t('terminalWin.menuNoHosts'), disabled: true }];
     const { grouped, ungrouped, showHeaders } = groupSshHosts(sshHosts);

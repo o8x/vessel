@@ -43,7 +43,7 @@ let mainWindow = null;
 let settingsWindow = null;
 // 设置 → 终端 → 字体：非模态子窗口（挂在设置窗口上）。
 let fontPickerWindow = null;
-// 置顶终端窗口可以有多个（每次点主面板终端按钮都新开一个，落在当前桌面）。
+// 悬浮终端窗口可以有多个（每次点主面板终端按钮都新开一个，落在当前桌面）。
 const terminalWindows = new Set();
 let lastTerminalWindow = null;
 let fileWindow = null;
@@ -646,8 +646,7 @@ function exitBallMode(win, focus) {
     win.__exitingBall = false;
     if (typeof win.setResizable === 'function') win.setResizable(true);
     win.setMinimumSize(TERMINAL_WINDOW.minWidth, TERMINAL_WINDOW.minHeight);
-    if (terminalAlwaysOnTop()) win.setAlwaysOnTop(true, 'screen-saver');
-    else win.setAlwaysOnTop(false);
+    win.setAlwaysOnTop(false);
     win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true });
     win.webContents.send(IPC.TERMINAL_BALL, { active: false, size, phase: 'settle' });
     saveTerminalGeometry(win);
@@ -680,20 +679,6 @@ function stopBallDrag() {
     clearInterval(ballDragTimer);
     ballDragTimer = null;
   }
-}
-
-/* 终端窗口的置顶开关（头部图钉按钮 / settings.json 的 terminalAlwaysOnTop）。 */
-function terminalAlwaysOnTop() {
-  return settings.get('terminalAlwaysOnTop') !== false;
-}
-
-function applyTerminalAlwaysOnTop() {
-  const on = terminalAlwaysOnTop();
-  for (const win of terminalWindowsList()) {
-    if (on) win.setAlwaysOnTop(true, 'screen-saver');
-    else win.setAlwaysOnTop(false);
-  }
-  return on;
 }
 
 function getFocusedTerminalWindow() {
@@ -876,7 +861,7 @@ function createWindowWindow() {
     minimizable: true,
     maximizable: false,
     fullscreenable: false,
-    // 普通标准窗口层级：不常驻置顶（置顶只属于终端 / 文件 / 游戏窗口）。
+    // 普通标准窗口层级：不常驻置顶（置顶只属于文件 / 游戏 / 更新窗口）。
     // 固定在自己的桌面，切换桌面时不跟随。
     alwaysOnTop: false,
     // 玻璃开启时窗口透明（vibrancy 材质 / 原生玻璃视图透出），否则用主题底色。
@@ -1165,7 +1150,7 @@ function openTerminalWindow(options) {
     hasShadow: false,
     // 圆角由 #term-shell 的 CSS 绘制；关掉系统圆角，否则系统会把窗口内容（含 CSS 边框）在四角裁掉一段。
     roundedCorners: false,
-    // macOS：让「悬浮球」在其它应用（含全屏应用）之上时，**第一次点击**就直接落到窗口内容，
+    // macOS：让悬浮球 / 终端窗口在**第一次点击**时直接落到窗口内容，
     // 而不是先激活应用、需要点两次才能展开。
     acceptFirstMouse: true,
     show: false,
@@ -1173,7 +1158,7 @@ function openTerminalWindow(options) {
     minimizable: true,
     maximizable: true,
     fullscreenable: false,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     webPreferences: {
       preload: path.join(PRELOAD_DIR, 'main-preload.js'),
       contextIsolation: true,
@@ -1210,10 +1195,7 @@ function openTerminalWindow(options) {
     win.webContents.setZoomLevel(0);
     win.webContents.send(IPC.TERMINAL_ZOOM, zoomDirection === 'in' ? 'in' : 'out');
   });
-  if (terminalAlwaysOnTop()) win.setAlwaysOnTop(true, 'screen-saver');
-  else win.setAlwaysOnTop(false);
-  // Steam-like: pinned on top + may float above a full-screen app, but must NOT join
-  // every space — it stays on the desktop it was opened on.
+  // 普通窗口层级：不常驻置顶；仍绑定打开时所在桌面、不跨桌面跟随。
   win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true });
   win.loadFile(path.join(RENDERER_DIR, 'terminal.html'), { query: ballIcon ? { ballIcon } : {} });
   win.on('focus', () => {
@@ -1294,7 +1276,7 @@ function getTerminalWindow() {
 }
 
 /* ------------------------------- 独立文件窗口 -------------------------------
-   与终端窗口同为悬浮 panel：置顶、可浮在全屏之上但不跟随桌面切换。只放文件
+   与终端窗口同为悬浮 panel：可浮在全屏之上但不跟随桌面切换、不常驻置顶。只放文件
    管理（无终端），连接独立于终端窗口（不随 ssh 关闭而关闭）。 */
 
 let fileWindowState = readJson(FILE_WINDOW_FILE, null);
@@ -1987,7 +1969,6 @@ settings.on('changed', (_data, keys) => {
   if (keys.includes('terminalWindowWidth') || keys.includes('terminalWindowHeight')) {
     applyTerminalWindowSize();
   }
-  if (keys.includes('terminalAlwaysOnTop')) applyTerminalAlwaysOnTop();
   if (keys.includes('fileWindowAlwaysOnTop')) applyFileWindowAlwaysOnTop();
 });
 

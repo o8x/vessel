@@ -12,7 +12,7 @@
         mainWindowShortcut: '主窗口',
         mainWindowShortcutHint: '快速按两下组合键显示 / 带到前台主窗口',
         terminalShortcut: '终端',
-        terminalShortcutHint: '按一下组合键打开 / 收起置顶终端',
+        terminalShortcutHint: '按一下组合键打开 / 收起终端',
         shortcutEmpty: '未设置（点击后按组合键）',
         shortcutPress: '请按下组合键…',
         shortcutNeedModifier: '至少要含 Command / Control / Alt 之一',

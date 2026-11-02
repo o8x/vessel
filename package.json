@@ -49,7 +49,7 @@
       "height": 768,
       "minWidth": 350,
       "minHeight": 200,
-      "alwaysOnTop": true,
+      "alwaysOnTop": false,
       "scrollback": 10000,
       "opacity": 5,
       "hotkey": "CommandOrControl+Shift+Z",

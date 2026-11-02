@@ -15,7 +15,7 @@
 
 - **主进程**（`src/main/`）：创建托盘与窗口、读写本地数据、解析 `~/.ssh/config`、执行 iTerm 连接与 SSH 探测、注册 IPC。
 - **预加载脚本**（`src/preload/`）：在 `contextIsolation: true`、`nodeIntegration: false`、`sandbox: false` 下运行，用 `contextBridge` 暴露白名单 API（主面板用 `main-preload.js`，设置窗口用 `settings-preload.js`）。
-- **渲染进程**（`src/renderer/`）：多个页面 —— 托盘主面板 `index.html`、设置窗口 `settings.html`、置顶终端窗口 `terminal.html`、独立文件窗口 `file-window.html`、游戏窗口 `game.html`（EmulatorJS）、更新窗口 `update.html`（下载进度 + 应用内提示框）；不含 Node 能力，仅通过 `window.ships`（能力）、`window.shipsIcons`（内部 SVG 图标）与 `window.shipsFlags`（国旗 SVG）与主进程 / 预加载通信（更新窗口用独立预加载脚本，只暴露更新相关能力）。
+- **渲染进程**（`src/renderer/`）：多个页面 —— 托盘主面板 `index.html`、设置窗口 `settings.html`、悬浮终端窗口 `terminal.html`、独立文件窗口 `file-window.html`、游戏窗口 `game.html`（EmulatorJS）、更新窗口 `update.html`（下载进度 + 应用内提示框）；不含 Node 能力，仅通过 `window.ships`（能力）、`window.shipsIcons`（内部 SVG 图标）与 `window.shipsFlags`（国旗 SVG）与主进程 / 预加载通信（更新窗口用独立预加载脚本，只暴露更新相关能力）。
 - **无 Webview**：不内嵌远程 Web，无 guest 进程；游戏窗口使用 `game://` 自定义只读协议加载本地页面 / EmulatorJS / ROM。
 
 **项目结构**
@@ -54,7 +54,7 @@ Vessel/
     ├── main/
     │   ├── main.js              # 应用入口：单实例、Dock 隐藏、注册 IPC、创建托盘
     │   ├── tray.js              # 托盘图标与右键菜单
-    │   ├── window-manager.js    # 主面板 / 设置窗口 / 置顶终端窗口的创建、定位、几何记忆、显隐、广播
+    │   ├── window-manager.js    # 主面板 / 设置窗口 / 悬浮终端窗口的创建、定位、几何记忆、显隐、广播
     │   ├── ipc/                 # IPC 处理器（app / settings / window / shortcut / ssh / geo / clipboard / hash / nutrient / twofa / net-test / terminal / sftp / file-window / game / update）
     │   ├── scripts/             # pty-bridge.py（PTY 桥接，交互终端用）/ space-bridge.py（经 SkyLight 私有 API 读取实时 Space；两者打包时经 build.asarUnpack 解包到 app.asar.unpacked）
     │   ├── services/            # settings / ssh-config / ssh / iterm / terminal / sftp（文件管理 SFTP 会话）/ layout（文件管理布局）/ cd-history（cd 历史）/ vscode（用 VS Code 打开本地文件）/ wireshark（用 Wireshark 打开 pcap 抓包文件）/ space（经 space-bridge.py 读取 WindowServer 实时 Space，失败回退解析 com.apple.spaces）/ hotkey / geo / clipboard / hash / nutrient（营养成分 / TDEE 记录）/ local-network（启动时请求一次本地网络权限并保持 socket 30 秒；成功 / 失败均记日志）/ proxy（可选的系统代理 / PAC 解析、SOCKS5 / HTTP CONNECT 隧道）/ font（系统字体列表）/ totp（2FA 动态验证码，密钥加密存储）/ game（游戏工作目录扫描 / 封面 / 存档 / game:// 协议）/ updater（自动更新）服务
@@ -63,12 +63,12 @@ Vessel/
     └── renderer/
         ├── index.html           # 托盘主面板
         ├── settings.html        # 设置窗口
-        ├── terminal.html        # 置顶终端窗口（含内嵌文件面板）
+        ├── terminal.html        # 悬浮终端窗口（含内嵌文件面板）
         ├── file-window.html     # 独立文件窗口
         ├── game.html            # 游戏窗口（EmulatorJS + 自绘控制区）
         ├── update.html          # 自动更新窗口：应用内提示框 + 下载进度 / 取消 / 重启
         ├── font-picker.html     # 字体选择子窗口（非模态，挂在设置窗口上）
-        ├── scripts/             # theme / i18n / ui / registry / tool-order / app / settings / game（游戏窗口）/ terminal（置顶终端）/ terminal-files（内嵌面板宿主）/ file-manager（文件管理 UI）/ file-window（独立文件窗口）/ update（更新窗口：提示框 + 下载）/ font-picker-window（字体选择子窗口）
+        ├── scripts/             # theme / i18n / ui / registry / tool-order / app / settings / game（游戏窗口）/ terminal（悬浮终端）/ terminal-files（内嵌面板宿主）/ file-manager（文件管理 UI）/ file-window（独立文件窗口）/ update（更新窗口：提示框 + 下载）/ font-picker-window（字体选择子窗口）
         │   ├── tools/           # 每个工具一个文件，注册进 ShipsToolRegistry
         │   └── settings/        # 设置分区，注册进 ShipsSettingsRegistry
         └── styles/              # constants.css（设计变量）+ tailwind.css（入口）

@@ -209,14 +209,14 @@ const MAIN_WINDOW = Object.assign(
   appConfig.mainWindow || {}
 );
 
-// Always-on-top terminal window (floats above full-screen apps, Steam-style).
+// Floating terminal window (normal window level, not always-on-top).
 const TERMINAL_WINDOW = Object.assign(
   {
     width: 1024,
     height: 768,
     minWidth: 350,
     minHeight: 200,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     scrollback: 10000,
     // 终端窗口背景透明度：0 = 不透明，100 = 完全透明。
     opacity: 5,
@@ -337,7 +337,8 @@ const DEFAULT_SETTINGS = {
   terminalOpacity: Number.isFinite(TERMINAL_WINDOW.opacity) ? TERMINAL_WINDOW.opacity : 5,
   terminalWindowWidth: TERMINAL_WINDOW.width,
   terminalWindowHeight: TERMINAL_WINDOW.height,
-  terminalAlwaysOnTop: TERMINAL_WINDOW.alwaysOnTop !== false,
+  // 终端窗口不置顶（历史字段保留以兼容旧设置文件；启动时会把遗留的 true 归一为 false）。
+  terminalAlwaysOnTop: false,
   // 终端窗口关闭按钮的行为：'hide' 只隐藏窗口（会话保留），'destroy' 直接销毁（结束会话）
   terminalCloseAction: TERMINAL_WINDOW.closeAction === 'hide' ? 'hide' : 'destroy',
   // 全局快捷键（Electron accelerator，空字符串 = 不注册）：主窗口双击 / 终端单击

@@ -143,13 +143,8 @@ function registerTerminalIpc(ipcMain) {
     return { ok: true };
   });
 
-  /* Header pin button: toggle / persist always-on-top for the terminal window.
-     window-manager applies the new value through its settings listener. */
-  ipcMain.handle(IPC.TERMINAL_SET_TOP, (_event, payload) => {
-    const value = Boolean(payload && payload.value);
-    settings.set({ terminalAlwaysOnTop: value });
-    return { ok: true, alwaysOnTop: value };
-  });
+  /* 终端窗口不再置顶；保留该通道以兼容旧调用，恒返回 false（不写设置）。 */
+  ipcMain.handle(IPC.TERMINAL_SET_TOP, () => ({ ok: true, alwaysOnTop: false }));
 
   /* 按渲染层实测的余量精确对齐高度（拖动结束后 / 首次打开 / 改字号时各一次）：
      拖动期间 window-manager 只会把它挂起（动尺寸会打乱 macOS 的拖拽跟踪），松手后再执行。

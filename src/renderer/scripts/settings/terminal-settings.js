@@ -8,7 +8,7 @@
     zh: {
       terminalSettings: {
         title: '终端',
-        subtitle: '配置置顶终端窗口（设置 → 网络测试 里的终端同样生效）',
+        subtitle: '配置悬浮终端窗口（设置 → 网络测试 里的终端同样生效）',
         shell: '默认 shell',
         shellHint: '留空使用系统默认（$SHELL）；例如 /bin/zsh',
         shellPlaceholder: '如 /bin/zsh',
@@ -30,7 +30,7 @@
         downloadDirHint: '终端窗口文件面板下载文件的保存位置，默认 ~/Downloads（重名自动加序号）',
         chooseDir: '选择目录',
         builtinSsh: 'SSH 使用内置终端连接',
-        builtinSshHint: '开 = 在置顶终端执行，关 = 使用 iTerm',
+        builtinSshHint: '开 = 在悬浮终端执行，关 = 使用 iTerm',
         closeAction: '关闭按钮行为',
         closeActionHint: '点终端窗口左上角关闭按钮（或 Cmd-W）时：隐藏窗口保留会话，或直接销毁结束会话；在终端里输入 exit 结束 shell 时始终销毁窗口',
         closeActionHide: '隐藏窗口',
@@ -60,7 +60,7 @@
     en: {
       terminalSettings: {
         title: 'Terminal',
-        subtitle: 'Configure the always-on-top terminal (the settings network test uses it too)',
+        subtitle: 'Configure the floating terminal (the settings network test uses it too)',
         shell: 'Default shell',
         shellHint: 'Empty = system default ($SHELL); e.g. /bin/zsh',
         shellPlaceholder: 'e.g. /bin/zsh',

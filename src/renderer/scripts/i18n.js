@@ -6,7 +6,7 @@ window.ShipsI18n = (function createI18n() {
       appName: 'Vessel',
       settings: '设置',
       networkTest: '网络测试',
-      terminal: '终端（置顶）',
+      terminal: '终端',
       fileManager: '文件管理',
       developerMode: '开发者模式',
       themeSystem: '外观：跟随系统',

@@ -12,7 +12,7 @@
 - **布局适配**：顶部栏 `#tabbar` 左侧留出 **80px** 给系统红绿灯；**整条顶部栏可拖动窗口**——`#tabbar` / `#tablist` 均为 `-webkit-app-region: drag`（TAB 区虽铺满右侧，但其空白处也可拖动），仅真正的 **TAB 按钮**（`#tablist .tab`）为 `no-drag` 保证可点击；内容区加宽（`padding: 16px 20px`），工具内容 `#content > .tool-body` 用 `repeat(auto-fit, minmax(320px, 1fr))` 网格（固定 640 宽下为单列，窗口更宽时自动分栏）；编码转换把 `.tool-body` 改成 `flex` 纵向单列时**显式重置 `align-items: stretch`**（不继承网格的 `start`），否则各分区按内容宽度收缩、输入框无法铺满；`#panel` **无外层圆角**（`border-radius:0`）。
 - 结构：顶部栏（高 46px）：TAB 图标区右对齐、超出可横向滚动（图标 24×24px、按钮 40×40px、间距 8px）→ **固定工具标题区** `#tool-head-host`（不随内容滚动）→ 内容区（可滚动）→ 底部栏（高 34px）。
 - TAB 工具顺序由单一文件 `src/renderer/scripts/tool-order.js` 的 `window.ShipsToolOrder` 数组决定（改数组即改顺序；未列出的工具按注册顺序追加到末尾）。
-- 底部栏：左侧依次为 **App 彩色图标 + 名称**（16px 图标 / 12px 名称，固定不压缩）与版本号（`vX.Y.Z`；开发者模式开启时其右侧加一枚「开发者模式」标记）、右侧依次为**终端**（`terminal`，每次新开一扇置顶终端窗口，§3.9）、**文件管理**（`folder`，打开独立文件窗口且不选中任何连接，§3.9-11）、**网络测试**（`wifi`，打开设置 → 网络测试分区）、**外观**（`monitor`/`sun`/`moon`，循环切换跟随系统 / 浅色 / 深色）与设置按钮（齿轮），五个图标按钮均为 24×24px、**间距 12px**。
+- 底部栏：左侧依次为 **App 彩色图标 + 名称**（16px 图标 / 12px 名称，固定不压缩）与版本号（`vX.Y.Z`；开发者模式开启时其右侧加一枚「开发者模式」标记）、右侧依次为**终端**（`terminal`，每次新开一扇悬浮终端窗口，§3.9）、**文件管理**（`folder`，打开独立文件窗口且不选中任何连接，§3.9-11）、**网络测试**（`wifi`，打开设置 → 网络测试分区）、**外观**（`monitor`/`sun`/`moon`，循环切换跟随系统 / 浅色 / 深色）与设置按钮（齿轮），五个图标按钮均为 24×24px、**间距 12px**。
 - `Escape` 与系统关闭按钮均隐藏窗口（应用常驻托盘）。
 - **Liquid Glass（设置项 `Liquid Glass`，键 `settings.vibrancy`，仅 macOS）**：粒度分三档，由 `window-manager.js` 的 `glassMode()` 判定：
   - **`liquid`（macOS 26+，优先）**：用 `electron-liquid-glass` 在窗口内容后插入原生 `NSGlassEffectView`（Liquid Glass）。窗口 `transparent: true`、**不设 `vibrancy`**，内容加载后 `liquidGlass.addView(win.getNativeWindowHandle(), { cornerRadius: MAIN_WINDOW.cornerRadius })`（默认 10px）由玻璃自带圆角；**不叠加 tint，保持高透**。
@@ -43,14 +43,14 @@
 - 结构：`[系统图标] [user@host(:port)]` + 别名小字 → 右侧 `[目录] [连接]`（探测已移至设置）。
 - 未探测时显示通用主机图标；探测完成后直接替换为对应系统品牌图标（如 `ubuntu.svg`、`windows.svg`）。
 - 端口为 22 时省略；通配符主机不展示。
-- **交互**：点击右侧「连接」按钮，或**双击条目**（按钮区域除外）均执行连接（默认在置顶终端窗口里 `ssh`，见 §3.4；可设为 iTerm）；点击 `folder` 图标**打开独立文件窗口并自动连接该主机**（`file-window:open`，见 §3.9-11）；打开面板时自动刷新列表。
+- **交互**：点击右侧「连接」按钮，或**双击条目**（按钮区域除外）均执行连接（默认在悬浮终端窗口里 `ssh`，见 §3.4；可设为 iTerm）；点击 `folder` 图标**打开独立文件窗口并自动连接该主机**（`file-window:open`，见 §3.9-11）；打开面板时自动刷新列表。
 
 ---
 
-### 8.5 置顶终端窗口
+### 8.5 悬浮终端窗口
 
 - 尺寸与位置：默认 **1024 × 768**（`vessel.terminalWindow.width/height`，可在 **设置 → 终端 → 窗口大小** 调整，存 `settings.json` 的 `terminalWindowWidth` / `terminalWindowHeight`），可缩放、最小 `minWidth × minHeight` = 350×200；改设置立即生效，手动拖动窗口写回设置。**背景透明度**：设置 → 终端 →「透明度」滑块（`settings.terminalOpacity`，0–100，0 = 不透明、100 = 完全透明，默认 5%，来自 `vessel.terminalWindow.opacity`），拖动实时生效；`terminal.js` 把它换算成 `#term-shell` 的 `--term-bg-alpha`，仅让窗口底色透明（xterm 主题背景透明、`.xterm-viewport` 背景透明），文字 / 图标保持不透明。**窗口为无边框 + 透明**（`frame:false` + `transparent:true` + `hasShadow:false`）：窗口底色 / 圆角 / 描边由渲染层 `#term-shell`（`--term-bg` / `--radius-window`）绘制（白天纯白 `#ffffff`，暗色 `#0e1116`），便于「悬浮球」模式呈现圆形（见 §3.9-12）；开启「终端暗色模式」时该窗口主题变量整体改为暗色（与全局主题无关，见 §3.9-12）。**屏幕 / 位置 / 尺寸会自动记忆**（`terminal-window.json`）：同屏重开沿用记忆（越界夹回工作区），换屏 / 拔屏 / 无记录则用默认尺寸在当前屏幕居中，详见 §3.9。悬浮球尺寸 `BALL_SIZE` 默认 **90px**（`package.json` 的 `vessel.terminalWindow.ballSize`）。
-- 层级：`alwaysOnTop` + `setAlwaysOnTop(true, 'screen-saver')`（由终端窗口自己的图钉开关控制，与主面板无关）；`setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true })` —— 带全屏辅助（可浮在全屏应用之上）但**不加入所有桌面**（切换桌面时窗口留在原桌面，详见 §3.9）。
+- 层级：**普通窗口层级、不常驻置顶**（`vessel.terminalWindow.alwaysOnTop` 缺省 `false`；`settings.terminalAlwaysOnTop` 默认 `false`，启动时把旧版本遗留的 `true` 归一为 `false`）；`setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true })` —— **不加入所有桌面**（切换桌面时窗口留在原桌面，详见 §3.9）。头栏「固定」按钮只控制失焦是否缩成悬浮球，不是置顶开关。
 - 头部：自绘头栏 `#term-header`（高度随字号在 **16–32px** 之间）。左侧**自绘小红绿灯** ×3 + **红绿灯右侧的「固定」按钮**（`pin`/`pin-off`，开启后本窗口失焦不缩成悬浮球，见 §3.9-12）、**左右 padding 各 10px** —— **红绿灯尺寸随头栏字号缩放**（字号×0.75 圆点 / ×0.5 符号，12px→9px/6px），系统红绿灯已隐藏，点击关闭 / **最小化（= 缩成悬浮球）** / 缩放；**不显示任何标题文字**；右侧图标区：**SSH 主机下拉**（宽度 / 高度 / 字号随头栏缩放，条目 `用户名@主机地址`，选中即在当前终端执行 `ssh …`，见 §3.9-2）+ 四枚 18×18px 图标按钮（符号 12px）：**文件**（`folder`，无 ssh 目标时禁用、连接中图标旋转、面板展开时强调色，见 §3.9-10）、**iTerm 交接**、**行号**（`eye`/`eye-off`）、**窗口分裂**（`split`，点击新开一扇终端窗口，同主面板终端按钮）；**无置顶按钮**）；**头栏字号 = clamp(10–20px, 终端字号)，高度 = clamp(16–32px, 头栏字号 × 1.6)**（见 §3.9-2），头部为拖拽区、红绿灯与图标区为 `no-drag`，头栏不挂 `data-tip`。
 - 主体：xterm.js 终端铺满剩余区域（外层 `#term-host` 负责 6.5 / 13px 留白，xterm 挂在无内边距的 `#term-fit` 上，保证 `FitAddon` 按真实可用区算行数 —— 最后一行完整可见、页面不可滚动，见 §3.9），滚动缓冲 **10000 行**、**不显示滚动条**（滚轮 / 触控板滚动缓冲区，防跳变见 §3.9）。
 - 内嵌文件面板（`#file-panel` + `#term-divider`，见 §3.9-10、§8.6）：默认隐藏，由头部文件夹按钮显隐；面板与终端间是 **6px 可拖动分隔线**（中间一条 1px 线，`:hover` 变强调色加粗；**面板自身不画上边框，所以只有这一条线**），面板高度 = `file-layout.json` 的 `panelHeight`（默认 260px、最小 120px，向上拖 = 终端变小），**字体跟随终端字号**（`--file-font-size`）。面板内容由 `scripts/file-manager.js` 构建（见 §8.6），左目录树初始宽 300px、列宽与面板高度均可拖动并持久化。

@@ -109,6 +109,11 @@ class SettingsService extends EventEmitter {
       this.data.fileWindowAlwaysOnTop = false;
       changed = true;
     }
+    // 终端窗口不再置顶（图钉按钮只控制失焦是否缩成悬浮球）；旧版本遗留的 true 归一为 false。
+    if (this.data.terminalAlwaysOnTop === true) {
+      this.data.terminalAlwaysOnTop = false;
+      changed = true;
+    }
     // 悬浮模式已整体移除：清理旧版本遗留的 floatMode / pinWindow，避免继续写回设置文件。
     for (const key of ['floatMode', 'pinWindow']) {
       if (Object.prototype.hasOwnProperty.call(this.data, key)) {

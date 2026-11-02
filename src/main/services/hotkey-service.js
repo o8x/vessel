@@ -1,6 +1,6 @@
 'use strict';
 
-// 全局快捷键（设置 → 快捷键）：主窗口与置顶终端各绑定一个 accelerator。
+// 全局快捷键（设置 → 快捷键）：主窗口与悬浮终端各绑定一个 accelerator。
 // - 终端：按一下触发 toggleTerminalWindow。
 // - 主窗口：快速按两下触发 toggleMainWindow。
 // 两者默认使用同一个组合键（CommandOrControl+Shift+Z）：此时单击 = 终端，
