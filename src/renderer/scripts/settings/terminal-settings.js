@@ -8,7 +8,7 @@
     zh: {
       terminalSettings: {
         title: '终端',
-        subtitle: '配置悬浮终端窗口（设置 → 网络测试 里的终端同样生效）',
+        subtitle: '配置悬浮终端窗口',
         shell: '默认 shell',
         shellHint: '留空使用系统默认（$SHELL）；例如 /bin/zsh',
         shellPlaceholder: '如 /bin/zsh',
@@ -60,7 +60,7 @@
     en: {
       terminalSettings: {
         title: 'Terminal',
-        subtitle: 'Configure the floating terminal (the settings network test uses it too)',
+        subtitle: 'Configure the floating terminal',
         shell: 'Default shell',
         shellHint: 'Empty = system default ($SHELL); e.g. /bin/zsh',
         shellPlaceholder: 'e.g. /bin/zsh',

@@ -15,7 +15,6 @@
     dev: document.getElementById('footer-dev'),
     terminal: document.getElementById('btn-terminal'),
     files: document.getElementById('btn-files'),
-    networkTest: document.getElementById('btn-network-test'),
     theme: document.getElementById('btn-theme'),
     settings: document.getElementById('btn-settings'),
   };
@@ -211,8 +210,6 @@
     renderDevBadge();
     dom.settings.innerHTML = Icons.gear(18);
     dom.settings.setAttribute('data-tip', i18n.t('settings'));
-    dom.networkTest.innerHTML = Icons.wifi(15);
-    dom.networkTest.setAttribute('data-tip', i18n.t('networkTest'));
     dom.terminal.innerHTML = Icons.terminal(15);
     dom.terminal.setAttribute('data-tip', i18n.t('terminal'));
     dom.files.innerHTML = Icons.folder(15);
@@ -267,7 +264,6 @@
     else dom.content.innerHTML = emptyState(i18n.t('emptyTools'));
 
     dom.settings.addEventListener('click', () => window.ships.openSettings());
-    dom.networkTest.addEventListener('click', () => window.ships.openSettings('network'));
     dom.terminal.addEventListener('click', () => window.ships.openTerminal());
     // 打开独立文件管理窗口，不选中任何连接（target 传空串）。
     dom.files.addEventListener('click', () => window.ships.fileWindow.open(''));

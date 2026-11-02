@@ -73,8 +73,6 @@ const IPC = {
   TOTP_REMOVE: 'totp:remove',
   TOTP_CODES: 'totp:codes',
 
-  NET_TEST_COMMAND: 'net-test:command',
-
   TERMINAL_OPEN: 'terminal:open',
   TERMINAL_START: 'terminal:start',
   TERMINAL_INPUT: 'terminal:input',

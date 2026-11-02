@@ -37,7 +37,6 @@ const { registerGeoIpc } = require('./ipc/geo-ipc');
 const { registerClipboardIpc } = require('./ipc/clipboard-ipc');
 const { registerHashIpc } = require('./ipc/hash-ipc');
 const { registerTotpIpc } = require('./ipc/twofa-ipc');
-const { registerNetTestIpc } = require('./ipc/net-test-ipc');
 const { registerNutrientIpc } = require('./ipc/nutrient-ipc');
 const { registerTerminalIpc } = require('./ipc/terminal-ipc');
 const { registerShortcutIpc } = require('./ipc/shortcut-ipc');
@@ -78,7 +77,6 @@ function onReady() {
   registerClipboardIpc(ipcMain);
   registerHashIpc(ipcMain);
   registerTotpIpc(ipcMain);
-  registerNetTestIpc(ipcMain);
   registerNutrientIpc(ipcMain);
   registerTerminalIpc(ipcMain);
   registerShortcutIpc(ipcMain);

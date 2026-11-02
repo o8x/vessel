@@ -54,9 +54,6 @@ const api = {
   shortcuts: {
     setHotkey: (target, hotkey) => ipcRenderer.invoke(IPC.SHORTCUT_SET, { target, hotkey }),
   },
-  netTest: {
-    command: (payload) => ipcRenderer.invoke(IPC.NET_TEST_COMMAND, payload),
-  },
   sshConfig: {
     read: () => ipcRenderer.invoke(IPC.SSH_CONFIG_READ),
     upsert: (host) => ipcRenderer.invoke(IPC.SSH_CONFIG_UPSERT, host),

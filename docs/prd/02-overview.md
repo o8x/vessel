@@ -28,7 +28,7 @@ Vessel/
 ├── README.md                    # 英文说明（应用图标 + 简短概述，默认语言）
 ├── README.zh-CN.md              # 中文说明（同内容，与 README.md 顶部互相切换）
 ├── docs/PRD.md                  # PRD 索引（项目表 / 阅读指南 / 维护规则）
-├── docs/prd/                    # 按一级章节拆分的 PRD 章节文件（02-overview.md … 12-other.md）
+├── docs/prd/                    # 按一级章节拆分的 PRD 章节文件（02-overview.md … 12-games.md）
 ├── assets/
 │   ├── icons/                   # 应用内部使用的 SVG 图标（kebab-case，统一由预加载读取）
 │   ├── imgs/                    # 位图资源：应用图标 / 托盘 / 打包
@@ -55,10 +55,10 @@ Vessel/
     │   ├── main.js              # 应用入口：单实例、Dock 隐藏、注册 IPC、创建托盘
     │   ├── tray.js              # 托盘图标与右键菜单
     │   ├── window-manager.js    # 主面板 / 设置窗口 / 悬浮终端窗口的创建、定位、几何记忆、显隐、广播
-    │   ├── ipc/                 # IPC 处理器（app / settings / window / shortcut / ssh / geo / clipboard / hash / nutrient / twofa / net-test / terminal / sftp / file-window / game / update）
+    │   ├── ipc/                 # IPC 处理器（app / settings / window / shortcut / ssh / geo / clipboard / hash / nutrient / twofa / terminal / sftp / file-window / game / update）
     │   ├── scripts/             # pty-bridge.py（PTY 桥接，交互终端用）/ space-bridge.py（经 SkyLight 私有 API 读取实时 Space；两者打包时经 build.asarUnpack 解包到 app.asar.unpacked）
     │   ├── services/            # settings / ssh-config / ssh / iterm / terminal / sftp（文件管理 SFTP 会话）/ layout（文件管理布局）/ cd-history（cd 历史）/ vscode（用 VS Code 打开本地文件）/ wireshark（用 Wireshark 打开 pcap 抓包文件）/ space（经 space-bridge.py 读取 WindowServer 实时 Space，失败回退解析 com.apple.spaces）/ hotkey / geo / clipboard / hash / nutrient（营养成分 / TDEE 记录）/ local-network（启动时请求一次本地网络权限并保持 socket 30 秒；成功 / 失败均记日志）/ proxy（可选的系统代理 / PAC 解析、SOCKS5 / HTTP CONNECT 隧道）/ font（系统字体列表）/ totp（2FA 动态验证码，密钥加密存储）/ game（游戏工作目录扫描 / 封面 / 存档 / game:// 协议）/ updater（自动更新）服务
-    │   └── utils/               # logger / json-store / paths / utf8（UTF-8 保真解码 + 非法字节转义）/ net-test（网络测试命令与校验）/ window-geometry（终端窗口几何记忆的纯计算）
+    │   └── utils/               # logger / json-store / paths / utf8（UTF-8 保真解码 + 非法字节转义）/ window-geometry（终端窗口几何记忆的纯计算）
     ├── preload/                 # main-preload.js / settings-preload.js / update-preload.js（更新窗口，仅暴露更新能力）/ icons.js（assets/icons/*.svg）/ flags.js（assets/flags/*.svg）
     └── renderer/
         ├── index.html           # 托盘主面板
