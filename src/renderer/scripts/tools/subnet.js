@@ -33,6 +33,7 @@
         splitNewPrefix: '新前缀',
         splitSize: '子网大小',
         splitList: '子网列表',
+        splitIndex: '子网 {n}',
         splitError: '需为大于 0 的 2 的幂，且不超过当前前缀可划分的子网数',
         splitMore: '仅显示前 8 个',
         kindIpv4: '识别为 IPv4',
@@ -83,6 +84,7 @@
         splitNewPrefix: 'New prefix',
         splitSize: 'Subnet size',
         splitList: 'Subnet list',
+        splitIndex: 'Subnet {n}',
         splitError: 'Must be a power of 2 greater than 0 and not exceed divisible subnets of the current prefix',
         splitMore: 'Showing first 8 only',
         kindIpv4: 'Detected IPv4',
@@ -419,9 +421,11 @@
     const splitRows = {
       newPrefix: resultRow(i18n.t('subnet.splitNewPrefix')),
       size: resultRow(i18n.t('subnet.splitSize')),
-      list: resultRow(i18n.t('subnet.splitList'), { mono: false }),
     };
     for (const key of Object.keys(splitRows)) splitSection.appendChild(splitRows[key].root);
+    const splitListTitle = el('div', { class: 'text-[10px] uppercase tracking-wide text-fg-muted' }, i18n.t('subnet.splitList'));
+    const splitList = el('div', { class: 'flex flex-col gap-card' });
+    splitSection.append(splitListTitle, splitList);
     const splitHint = el('div', { class: 'text-[11px] text-fg-muted' });
     splitSection.appendChild(splitHint);
 
@@ -485,7 +489,10 @@
 
     function clearSplit() {
       for (const key of Object.keys(splitRows)) splitRows[key].set(null);
+      splitList.innerHTML = '';
+      splitListTitle.classList.add('hidden');
       splitHint.textContent = '';
+      splitHint.style.color = '';
     }
 
     function setBase(value, hex, binary) {
@@ -512,7 +519,13 @@
           ? `2^${result.size.toString(2).length - 1}`
           : result.size.toLocaleString()
       );
-      splitRows.list.set(result.list.join('\n'));
+      splitList.innerHTML = '';
+      result.list.forEach((cidr, index) => {
+        const row = resultRow(i18n.t('subnet.splitIndex', { n: index + 1 }));
+        row.set(cidr);
+        splitList.appendChild(row.root);
+      });
+      splitListTitle.classList.remove('hidden');
     }
 
     function updateV6(parsed) {
