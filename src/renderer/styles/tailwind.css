@@ -1928,6 +1928,11 @@ body.file-window .fm-tree-row {
   gap: var(--space-card-gap);
   margin-bottom: var(--space-card-gap);
 }
+/* .section 的 display 在构建产物中位于 .hidden 之后且同优先级，
+   需显式提高优先级，才能让 hidden 类真正隐藏整个分区。 */
+.section.hidden {
+  display: none;
+}
 /* 编码转换有 6 个连续输入框，使用更紧凑的字段间距。 */
 .section.encode-fields,
 .section.radix-fields {

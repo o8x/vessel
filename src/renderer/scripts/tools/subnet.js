@@ -175,7 +175,7 @@
 
   function formatIPv6(value, compress) {
     const groups = groupsOf6(value);
-    if (!compress) return groups.join(':');
+    if (!compress) return groups.map((group) => group.padStart(4, '0')).join(':');
     let bestStart = -1;
     let bestLen = 0;
     let curStart = -1;
@@ -568,6 +568,9 @@
         setBase(parsed.value.toString(), `0x${parsed.value.toString(16).toUpperCase()}`, parsed.value.toString(2).padStart(128, '0'));
         calcSection.classList.add('hidden');
         geoSection.classList.add('hidden');
+        geoToken += 1;
+        setGeoLinks('');
+        geoRow.set(null);
         updateV6(parsed);
         updateSplit(parsed);
         return;
