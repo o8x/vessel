@@ -2204,6 +2204,97 @@ body.file-window .fm-tree-row {
   gap: 8px;
   -webkit-app-region: no-drag;
 }
+/* 更新日志：占满窗口剩余高度，可滚动查看「当前版本 → 最新版」之间的变化。 */
+.update-changelog {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  user-select: text;
+}
+.update-changelog::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+}
+.update-changelog::-webkit-scrollbar-thumb {
+  background: var(--color-surface-3);
+  border-radius: 999px;
+}
+.update-changelog-body {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-fg);
+  word-break: break-word;
+}
+.update-changelog-body > :first-child {
+  margin-top: 0;
+}
+.update-changelog-body > :last-child {
+  margin-bottom: 0;
+}
+.update-changelog-body h1,
+.update-changelog-body h2,
+.update-changelog-body h3 {
+  margin: 14px 0 6px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.update-changelog-body h1 {
+  font-size: 15px;
+}
+.update-changelog-body h2 {
+  font-size: 14px;
+}
+.update-changelog-body h3 {
+  font-size: 12px;
+  color: var(--color-fg-muted);
+}
+.update-changelog-body p,
+.update-changelog-body ul,
+.update-changelog-body ol {
+  margin: 6px 0;
+}
+.update-changelog-body ul,
+.update-changelog-body ol {
+  padding-left: 18px;
+}
+.update-changelog-body li {
+  margin: 3px 0;
+}
+.update-changelog-body a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+.update-changelog-body a:hover {
+  text-decoration: underline;
+}
+.update-changelog-body code {
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.update-changelog-body pre {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-card);
+  background: var(--color-surface-2);
+  overflow-x: auto;
+}
+.update-changelog-body pre code {
+  padding: 0;
+  background: none;
+}
+.update-changelog-body blockquote {
+  margin: 6px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--color-border-strong);
+  color: var(--color-fg-muted);
+}
 
 /* ------------------------------- 游戏工具 -------------------------------- */
 .game-head-actions {

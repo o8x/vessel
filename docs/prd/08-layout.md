@@ -70,10 +70,11 @@
 
 ### 8.7 更新窗口（应用内提示框 / 下载）
 
-- 尺寸 **380 × 150**（`package.json` 的 `vessel.updateWindow` → `constants.js` 的 `UPDATE_WINDOW`）；**标准窗口 + `titleBarStyle: 'hiddenInset'`**（真正的系统红绿灯，`trafficLightPosition {14,13}`）、不可缩放、**不可关闭**（`closable: false`，系统关闭按钮禁用、Cmd-W 无效，仅应用退出 / `quitAndInstall` / 提示框处理完毕后由主进程关闭时放行；`close` 事件另有 `preventDefault` 兜底）、置顶（`alwaysOnTop`）并**居中**显示。**可最小化**（`minimizable: true`，系统黄灯生效）；**缩放禁用**（`maximizable: false`）。
-- **应用内提示框（替代系统弹窗）**：同一窗口承载所有更新提示 —— 标题（`#update-title`）+ 消息（`#update-message`）+ 按钮（`#update-prompt-actions`），隐藏进度条 / 状态行 / 取消 / 安装按钮。按钮文案与顺序由主进程按当前语言下发（`update:prompt`），首项 / `defaultId` 用强调色；点击或按 `Esc` 经 `update:choice` 回传，主进程据此继续（如下载）或关闭窗口。
+- 尺寸 **640 × 480 固定**（`package.json` 的 `vessel.updateWindow` → `constants.js` 的 `UPDATE_WINDOW`），**不可缩放**；**标准窗口 + `titleBarStyle: 'hiddenInset'`**（真正的系统红绿灯，`trafficLightPosition {14,13}`）、**不可关闭**（`closable: false`，系统关闭按钮禁用、Cmd-W 无效，仅应用退出 / `quitAndInstall` / 提示框处理完毕后由主进程关闭时放行；`close` 事件另有 `preventDefault` 兜底）、置顶（`alwaysOnTop`）并**居中**显示。**可最小化**（`minimizable: true`，系统黄灯生效）。
+- **应用内提示框（替代系统弹窗）**：同一窗口承载所有更新提示 —— 标题（`#update-title`）+ 消息（`#update-message`）+ 按钮（`#update-prompt-actions`），隐藏进度条 / 状态行 / 取消 / 安装按钮。按钮文案与顺序由主进程按当前语言下发（`update:prompt`），首项 / `defaultId` 用强调色；点击或按 `Esc` 经 `update:choice` 回传，主进程据此继续（如下载）或关闭窗口。发现新版本的提示同时展示更新日志。
+- **更新日志区域**：底部 `#update-changelog`（`flex: 1`、`overflow-y: auto`、可选中文本）用 `marked` 渲染「当前版本 → 最新版」之间的 Markdown（数据来自状态 / 提示对象的 `changelog` 字段）；无内容时隐藏。
 - **标题与红绿灯同一行**：`.update-titlebar`（高 40px、`padding-left: 74px` 避开红绿灯、整行为拖动区）内放标题 `#update-title`。
-- 结构（`update.html`）：红绿灯 → 标题（下载中「正在下载更新 vX」/ 完成「下载完成 vX」）→ 提示框模式显示**消息 + 自定义按钮**；下载模式显示 **进度条** `update-progress`（宽 = `percent`）→ 状态行（`已下载 / 总量 · 速度`；完成时 macOS 显示「N 秒后自动退出并打开安装器」、Windows 显示「N 秒后自动重启更新」）→ 底部按钮「取消」与**安装按钮**（macOS =「**退出并安装**」/ Windows =「**重启更新**」，文案随状态里的 `mode` 切换；下载期间禁用；**一旦触发安装——点按钮或倒计时到 0——「取消」与安装按钮一并禁用**；两者紧贴状态行、无多余留白）。整窗为拖拽区、红绿灯与按钮为 `no-drag`。
+- 结构（`update.html`）：红绿灯 → 标题（下载中「正在下载更新 vX」/ 完成「下载完成 vX」）→ 提示框模式显示**消息 + 自定义按钮**；下载模式显示 **进度条** `update-progress`（宽 = `percent`）→ 状态行（`已下载 / 总量 · 速度`；完成时 macOS 显示「N 秒后自动退出并打开安装器」、Windows 显示「N 秒后自动重启更新」）→ 底部按钮「取消」与**安装按钮**（macOS =「**退出并安装**」/ Windows =「**重启更新**」，文案随状态里的 `mode` 切换；下载期间禁用；**一旦触发安装——点按钮或倒计时到 0——「取消」与安装按钮一并禁用**；两者紧贴状态行、无多余留白）→ **更新日志区域**。整窗为拖拽区、红绿灯与按钮为 `no-drag`。
 - 行为见 §6.6 / §7：进度实时回填；下载完成后安装按钮可用并显示 60 秒倒计时。**macOS**：点安装 / 倒计时到 0 → `open` 打开 PKG 系统安装器后退出本程序；安装完成由 PKG postinstall 自动启动 Vessel。**Windows**：调用 `quitAndInstall()`，6 秒未退出则 `app.relaunch()` + `app.quit()` 兜底。
 
 ---

@@ -25,3 +25,11 @@ source repository of this project.
 - Version: 5.65.21 (pinned in `package.json`)
 - Bundled path: `node_modules/codemirror/`
 - Modifications: none (unmodified upstream distribution)
+
+## marked
+
+- License: MIT
+- Source: <https://github.com/markedjs/marked>
+- Version: 18.1.3 (pinned in `package.json`)
+- Bundled path: `node_modules/marked/`
+- Modifications: none (unmodified upstream distribution)

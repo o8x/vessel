@@ -50,11 +50,47 @@
     status: document.getElementById('update-status'),
     actions: document.getElementById('update-actions'),
     promptActions: document.getElementById('update-prompt-actions'),
+    changelog: document.getElementById('update-changelog'),
+    changelogBody: document.getElementById('update-changelog-body'),
     cancel: document.getElementById('update-cancel'),
     install: document.getElementById('update-install'),
   };
 
   let activePrompt = null;
+  let renderedChangelog = null;
+
+  const markdown = window.marked;
+  if (markdown && typeof markdown.setOptions === 'function') {
+    markdown.setOptions({ gfm: true, breaks: false });
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /* 更新日志：渲染「当前版本 → 最新版」之间的 Markdown；没有内容时隐藏整个区域。 */
+  function renderChangelog(source) {
+    if (!dom.changelog || !dom.changelogBody) return;
+    const text = String(source || '').trim();
+    if (text === renderedChangelog) return;
+    renderedChangelog = text;
+    if (!text) {
+      dom.changelogBody.replaceChildren();
+      dom.changelog.style.display = 'none';
+      return;
+    }
+    const html =
+      markdown && typeof markdown.parse === 'function'
+        ? markdown.parse(text)
+        : `<pre>${escapeHtml(text)}</pre>`;
+    dom.changelogBody.innerHTML = html;
+    dom.changelog.style.display = '';
+    dom.changelog.scrollTop = 0;
+  }
 
   function setShown(node, shown) {
     if (node) node.style.display = shown ? '' : 'none';
@@ -80,6 +116,8 @@
     setShown(dom.promptActions, true);
     dom.title.textContent = prompt.title || '';
     dom.message.textContent = prompt.message || '';
+    if (prompt.changelog) current = merge({ changelog: prompt.changelog });
+    renderChangelog(prompt.changelog);
     dom.promptActions.replaceChildren();
     const defaultId = Number.isInteger(prompt.defaultId) ? prompt.defaultId : 0;
     (prompt.buttons || []).forEach((label, index) => {
@@ -141,6 +179,7 @@
 
   function render(state) {
     if (!state || activePrompt) return;
+    renderChangelog(state.changelog);
     const version = state.version ? ` v${state.version}` : '';
     // macOS（pkg）= 退出并打开系统安装器；Windows（auto）= 重启并安装。
     dom.install.textContent = i18n.t(state.mode === 'pkg' ? 'updateWin.installPkg' : 'updateWin.install');
@@ -178,6 +217,7 @@
     bytesPerSecond: 0,
     countdown: 0,
     restarting: false,
+    changelog: '',
   };
 
   window.ships.update.onPrompt((prompt) => {

@@ -264,17 +264,20 @@ const GAME_WINDOW = Object.assign(
   appConfig.gameWindow || {}
 );
 
-// 更新下载窗口：小、不可关闭、置顶的前台窗口（仅进度 / 取消 / 重启安装）。
+// 更新下载窗口：小、不可关闭、置顶的前台窗口（进度 / 取消 / 重启安装 + 更新日志）。
 const UPDATE_WINDOW = Object.assign(
   {
-    width: 380,
-    height: 150,
+    width: 640,
+    height: 480,
   },
   appConfig.updateWindow || {}
 );
 
 // 更新下载完成后自动重启安装的倒计时（秒）。
 const UPDATE_COUNTDOWN_SECONDS = 60;
+
+// 更新日志（CHANGELOG.md）抓取超时（ms）：超时即放弃，用 Release 说明兜底，避免拖慢更新提示。
+const UPDATE_CHANGELOG_TIMEOUT_MS = 8000;
 
 // 同一个全局快捷键同时绑定主窗口（双击）与终端（单击）时，用于区分单 / 双击的等待时间。
 const SHORTCUT_DOUBLE_TAP_MS = 260;
@@ -387,6 +390,7 @@ module.exports = {
   GAME_WINDOW,
   UPDATE_WINDOW,
   UPDATE_COUNTDOWN_SECONDS,
+  UPDATE_CHANGELOG_TIMEOUT_MS,
   SHORTCUT_DOUBLE_TAP_MS,
   CENTER_SNAP,
   SPACE_CONFIRM_DELAY_MS,

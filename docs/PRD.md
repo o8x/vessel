@@ -4,7 +4,7 @@
 | --- | --- |
 | 产品名称 | Vessel |
 | 产品定位 | 面向开发者的 macOS 菜单栏（Tray）工具箱，点击托盘图标在下方展开轻量面板 |
-| 技术栈 | Electron 44（主进程）+ Tailwind CSS 3（界面样式）+ 原生 JavaScript（渲染层，无打包器）+ ssh2（SSH 探测）+ qrcode-generator（二维码生成）+ bwip-js（Data Matrix 生成）+ electron-liquid-glass（macOS 26+ 原生 Liquid Glass，可选）+ electron-updater（自动更新）+ @xterm/xterm 与 @xterm/addon-fit（设置页内嵌终端）+ python3（PTY 桥接脚本）+ 本地 geoip.json（IP 归属地）+ EmulatorJS 4.2.3（离线内置，游戏工具） |
+| 技术栈 | Electron 44（主进程）+ Tailwind CSS 3（界面样式）+ 原生 JavaScript（渲染层，无打包器）+ ssh2（SSH 探测）+ qrcode-generator（二维码生成）+ bwip-js（Data Matrix 生成）+ electron-liquid-glass（macOS 26+ 原生 Liquid Glass，可选）+ electron-updater（自动更新）+ marked（更新日志 Markdown 渲染）+ @xterm/xterm 与 @xterm/addon-fit（设置页内嵌终端）+ python3（PTY 桥接脚本）+ 本地 geoip.json（IP 归属地）+ EmulatorJS 4.2.3（离线内置，游戏工具） |
 | 支持平台 | macOS（arm64 / x64；当前主要面向 arm64） |
 | 开源许可 | **GPL-3.0-only**（见仓库根目录 `LICENSE`；第三方组件见 `THIRD_PARTY_NOTICES.md`） |
 | 当前版本 | 6.1.1 |

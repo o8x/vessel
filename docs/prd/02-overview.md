@@ -15,7 +15,7 @@
 
 - **主进程**（`src/main/`）：创建托盘与窗口、读写本地数据、解析 `~/.ssh/config`、执行 iTerm 连接与 SSH 探测、注册 IPC。
 - **预加载脚本**（`src/preload/`）：在 `contextIsolation: true`、`nodeIntegration: false`、`sandbox: false` 下运行，用 `contextBridge` 暴露白名单 API（主面板用 `main-preload.js`，设置窗口用 `settings-preload.js`）。
-- **渲染进程**（`src/renderer/`）：多个页面 —— 托盘主面板 `index.html`、设置窗口 `settings.html`、悬浮终端窗口 `terminal.html`、独立文件窗口 `file-window.html`、游戏窗口 `game.html`（EmulatorJS）、更新窗口 `update.html`（下载进度 + 应用内提示框）；不含 Node 能力，仅通过 `window.ships`（能力）、`window.shipsIcons`（内部 SVG 图标）与 `window.shipsFlags`（国旗 SVG）与主进程 / 预加载通信（更新窗口用独立预加载脚本，只暴露更新相关能力）。
+- **渲染进程**（`src/renderer/`）：多个页面 —— 托盘主面板 `index.html`、设置窗口 `settings.html`、悬浮终端窗口 `terminal.html`、独立文件窗口 `file-window.html`、游戏窗口 `game.html`（EmulatorJS）、更新窗口 `update.html`（下载进度 + 应用内提示框 + 更新日志）；不含 Node 能力，仅通过 `window.ships`（能力）、`window.shipsIcons`（内部 SVG 图标）与 `window.shipsFlags`（国旗 SVG）与主进程 / 预加载通信（更新窗口用独立预加载脚本，只暴露更新相关能力）。
 - **无 Webview**：不内嵌远程 Web，无 guest 进程；游戏窗口使用 `game://` 自定义只读协议加载本地页面 / EmulatorJS / ROM。
 
 **项目结构**
@@ -66,7 +66,7 @@ Vessel/
         ├── terminal.html        # 悬浮终端窗口（含内嵌文件面板）
         ├── file-window.html     # 独立文件窗口
         ├── game.html            # 游戏窗口（EmulatorJS + 自绘控制区）
-        ├── update.html          # 自动更新窗口：应用内提示框 + 下载进度 / 取消 / 重启
+        ├── update.html          # 自动更新窗口：应用内提示框 + 下载进度 / 取消 / 重启 + 更新日志
         ├── font-picker.html     # 字体选择子窗口（非模态，挂在设置窗口上）
         ├── scripts/             # theme / i18n / ui / registry / tool-order / app / settings / game（游戏窗口）/ terminal（悬浮终端）/ terminal-files（内嵌面板宿主）/ file-manager（文件管理 UI）/ file-window（独立文件窗口）/ update（更新窗口：提示框 + 下载）/ font-picker-window（字体选择子窗口）
         │   ├── tools/           # 每个工具一个文件，注册进 ShipsToolRegistry

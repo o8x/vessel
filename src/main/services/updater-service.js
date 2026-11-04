@@ -10,7 +10,7 @@ const settings = require('./settings-service');
 const proxyService = require('./proxy-service');
 const logger = require('../utils/logger');
 const wm = require('../window-manager');
-const { IPC, UPDATE_COUNTDOWN_SECONDS, APP_NAME } = require('../../shared/constants');
+const { IPC, UPDATE_COUNTDOWN_SECONDS, UPDATE_CHANGELOG_TIMEOUT_MS, APP_NAME } = require('../../shared/constants');
 const pkg = require('../../../package.json');
 
 /* 自动更新：
@@ -95,6 +95,7 @@ const dl = {
   packagePath: '',
   packageName: '',
   packageUrl: '',
+  changelog: '',
 };
 
 function snapshot() {
@@ -108,6 +109,7 @@ function snapshot() {
     bytesPerSecond: dl.bytesPerSecond,
     countdown: dl.countdown,
     packageName: dl.packageName,
+    changelog: dl.changelog,
   };
 }
 
@@ -136,7 +138,7 @@ let promptSeq = 0;
 function getPromptState() {
   if (!pendingPrompt) return null;
   const { id, title, message, buttons, defaultId, cancelId } = pendingPrompt;
-  return { id, title, message, buttons, defaultId, cancelId };
+  return { id, title, message, buttons, defaultId, cancelId, changelog: dl.changelog };
 }
 
 function showPrompt(options) {
@@ -204,13 +206,15 @@ async function promptDownload(info) {
     wm.openUpdateWindow();
     return;
   }
+  const latest = (info && info.version) || '';
+  dl.changelog = await resolveChangelog(latest, (info && (info.body || info.releaseNotes)) || '');
   const c = copy();
   const { response } = await showPrompt({
     buttons: [c.download, c.later],
     defaultId: 0,
     cancelId: 1,
     title: c.availableTitle,
-    message: c.availableMessage(info.version, app.getVersion()),
+    message: c.availableMessage(latest, app.getVersion()),
   });
   if (response === 0) startDownload(info);
 }
@@ -370,6 +374,121 @@ async function httpGetJson(url) {
   const chunks = [];
   for await (const chunk of res) chunks.push(chunk);
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+function httpGetText(url) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let request = null;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+    const timer = setTimeout(() => {
+      if (request) {
+        try {
+          request.destroy();
+        } catch (err) {
+          /* ignore */
+        }
+      }
+      finish(reject, new Error('timeout'));
+    }, UPDATE_CHANGELOG_TIMEOUT_MS);
+
+    requestStream(url, 0, (req) => {
+      request = req;
+    })
+      .then(({ res }) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          finish(reject, new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => finish(resolve, Buffer.concat(chunks).toString('utf8')));
+        res.on('error', (err) => finish(reject, err));
+      })
+      .catch((err) => finish(reject, err));
+  });
+}
+
+/* ------------------------- 更新日志（CHANGELOG） -------------------------
+   更新窗口底部展示「当前版本 → 最新版」之间的更新日志：
+   优先读取 GitHub 上对应 tag 的 CHANGELOG.md，其次回退到 latest 分支；
+   都拿不到时使用 Release 说明（body / releaseNotes）。只保留介于两个版本
+   之间的段落，避免把历史版本全部展示出来。 */
+
+function compareVersions(a, b) {
+  const pa = versionParts(a);
+  const pb = versionParts(b);
+  for (let i = 0; i < 3; i += 1) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
+}
+
+function extractChangelogRange(text, current, latest) {
+  const source = String(text || '');
+  if (!source.trim()) return '';
+  const headingRe = /^##\s+\[?v?([0-9]+(?:\.[0-9]+){0,2})\]?(?:\s|$)/;
+  const sections = [];
+  let active = null;
+  for (const line of source.split(/\r?\n/)) {
+    const match = headingRe.exec(line);
+    if (match) {
+      if (active) sections.push(active);
+      active = { version: match[1], lines: [line] };
+    } else if (active) {
+      active.lines.push(line);
+    }
+  }
+  if (active) sections.push(active);
+  const picked = sections.filter(
+    (section) =>
+      compareVersions(section.version, current) > 0 && compareVersions(section.version, latest) <= 0
+  );
+  return picked
+    .map((section) => section.lines.join('\n').trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function releaseNotesText(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item : (item && item.note) || ''))
+      .filter(Boolean)
+      .join('\n\n');
+  }
+  return '';
+}
+
+async function resolveChangelog(latestVersion, fallback) {
+  const latest = String(latestVersion || '').replace(/^v/i, '');
+  if (!latest) return releaseNotesText(fallback).trim();
+  const { owner, repo } = publishConfig();
+  if (owner && repo) {
+    const candidates = [
+      `https://raw.githubusercontent.com/${owner}/${repo}/v${latest}/CHANGELOG.md`,
+      `https://raw.githubusercontent.com/${owner}/${repo}/main/CHANGELOG.md`,
+    ];
+    for (const url of candidates) {
+      try {
+        const text = await httpGetText(url);
+        const section = extractChangelogRange(text, app.getVersion(), latest);
+        if (section) return section;
+      } catch (err) {
+        logger.file('[updater] fetch changelog failed:', (err && err.message) || err);
+      }
+    }
+  }
+  return releaseNotesText(fallback).trim();
 }
 
 async function startPkgDownload() {
@@ -580,6 +699,7 @@ function resetDownloadState() {
   dl.packagePath = '';
   dl.packageName = '';
   dl.packageUrl = '';
+  dl.changelog = '';
 }
 
 /* 取消（下载窗口的「取消」按钮）：下载阶段中止下载；已完成则仅停止倒计时、不立即安装。 */
@@ -664,7 +784,7 @@ async function fetchLatestMacRelease() {
   );
   const match = packages.find((asset) => asset.name.includes(`-${process.arch}.pkg`)) || packages[0];
   if (!version || !match || !match.browser_download_url) throw new Error('pkg asset not found');
-  return { version, url: match.browser_download_url, name: match.name };
+  return { version, url: match.browser_download_url, name: match.name, body: (data && data.body) || '' };
 }
 
 async function checkForUpdatesMac(manual) {
@@ -678,6 +798,7 @@ async function checkForUpdatesMac(manual) {
   try {
     const release = await fetchLatestMacRelease();
     if (!isNewerVersion(release.version, app.getVersion())) {
+      dl.changelog = '';
       if (manual) {
         showPrompt({ buttons: ['OK'], defaultId: 0, title: c.checkTitle, message: c.notAvailable }).catch(
           () => {}
@@ -732,6 +853,7 @@ function initUpdater() {
   });
   updater.on('update-not-available', () => {
     logger.info('[updater] already up to date');
+    dl.changelog = '';
     if (!manualCheck) return;
     manualCheck = false;
     const c = copy();
