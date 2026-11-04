@@ -2,6 +2,12 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.2.0 - 2026-11-04
+
+### 新增
+
+- Show changelog in update window and add release notes automation
+
 ## v6.1.1 - 2026-11-03
 
 ### 修复
