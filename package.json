@@ -115,6 +115,12 @@
     "directories": {
       "output": "release"
     },
+    "protocols": [
+      {
+        "name": "Vessel",
+        "schemes": ["vessel"]
+      }
+    ],
     "publish": [
       {
         "provider": "github",

@@ -56,17 +56,73 @@ const { APP_NAME, VERSION, appConfig } = require('../shared/constants');
 
 gameService.registerGameScheme();
 
+/* --------------------------- 自定义 URL 协议 ---------------------------
+   vessel://open/terminal —— 无条件新开一扇悬浮终端窗口。
+   - macOS：系统经 `open-url` 事件投递（应用未运行时先启动再投递）。
+   - Windows / Linux：经 `second-instance` 的 argv 或首次启动的 argv 投递。
+   协议已在 package.json 的 build.protocols 中声明（打包后写入 Info.plist / 注册表）。 */
+const APP_PROTOCOL = 'vessel';
+const pendingDeepLinks = [];
+
+function isTerminalDeepLink(raw) {
+  try {
+    const url = new URL(String(raw || ''));
+    if (url.protocol.toLowerCase() !== `${APP_PROTOCOL}:`) return false;
+    return url.hostname.toLowerCase() === 'open' && url.pathname.replace(/\/+$/, '').toLowerCase() === '/terminal';
+  } catch (err) {
+    return false;
+  }
+}
+
+function findDeepLink(args) {
+  return (args || []).find(
+    (arg) => typeof arg === 'string' && arg.toLowerCase().startsWith(`${APP_PROTOCOL}://`)
+  ) || '';
+}
+
+function handleDeepLink(raw) {
+  if (!isTerminalDeepLink(raw)) return false;
+  if (!app.isReady()) {
+    pendingDeepLinks.push(raw);
+    return true;
+  }
+  logger.file(`[protocol] ${raw} -> new terminal`);
+  wm.openTerminalWindow();
+  return true;
+}
+
+// macOS 可能在 ready 之前就投递 open-url，必须尽早注册并先入队。
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => wm.showMainWindow());
+  app.on('second-instance', (_event, argv) => {
+    const link = findDeepLink(argv);
+    if (link && handleDeepLink(link)) return;
+    wm.showMainWindow();
+  });
   app.whenReady().then(onReady);
 }
 
 function onReady() {
   if (process.platform === 'darwin' && app.dock && !appConfig.showDockIcon) {
     app.dock.hide();
+  }
+
+  // 注册 vessel:// 协议（开发模式需带上 Electron 可执行文件与入口脚本）。
+  try {
+    if (process.defaultApp && process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient(APP_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+    } else {
+      app.setAsDefaultProtocolClient(APP_PROTOCOL);
+    }
+  } catch (err) {
+    logger.warn(`[protocol] register ${APP_PROTOCOL} failed: ${err.message}`);
   }
 
   registerAppIpc(ipcMain);
@@ -99,6 +155,11 @@ function onReady() {
     onOpenSettings: () => wm.openSettingsWindow(),
   });
   wm.setTray(tray);
+
+  // 首次启动即携带协议（Windows / Linux 的 argv）或 ready 前收到的 open-url：此时正式处理。
+  const launchLink = findDeepLink(process.argv);
+  if (launchLink) handleDeepLink(launchLink);
+  for (const link of pendingDeepLinks.splice(0)) handleDeepLink(link);
 
   printStartupInfo();
   // 启动时请求一次 macOS「本地网络」授权并保持 socket 30 秒；之后不再重复触发。
