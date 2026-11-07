@@ -558,11 +558,13 @@
     /* 目录右键菜单：目录树节点与文件列表里的目录行共用。 */
     function directoryMenuItems(path) {
       const items = [];
-      if (onCd) items.push({ label: i18n.t('filesUi.cdEnter'), run: () => enterDirectory(path) });
+      if (onCd) {
+        items.push({ label: i18n.t('filesUi.cdEnter'), icon: 'arrowRight', run: () => enterDirectory(path) });
+      }
       items.push(
-        { label: i18n.t('filesUi.upload'), run: () => chooseAndUpload(path) },
-        { label: i18n.t('filesUi.copyPath'), run: () => copyPath([path]) },
-        { label: i18n.t('filesUi.copyReference'), run: () => copyReference([path]) }
+        { label: i18n.t('filesUi.upload'), icon: 'arrowUp', run: () => chooseAndUpload(path) },
+        { label: i18n.t('filesUi.copyPath'), icon: 'copy', run: () => copyPath([path]) },
+        { label: i18n.t('filesUi.copyReference'), icon: 'copy', run: () => copyReference([path]) }
       );
       return items;
     }
@@ -889,12 +891,14 @@
           const singleEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
           items.push({
             label: i18n.t('filesUi.editFile'),
+            icon: 'edit',
             disabled: !singleEntry || !isEditorEntry(singleEntry),
             run: () => openInEditor(paths[0]),
           });
-          items.push({ label: nativeOpenLabel(), run: () => openFiles(paths) });
+          items.push({ label: nativeOpenLabel(), icon: 'folder', run: () => openFiles(paths) });
           items.push({
             label: i18n.t('filesUi.openVSCode'),
+            icon: 'code',
             disabled: !selectedEntries.length || !selectedEntries.every((item) => !isBinaryEntry(item)),
             run: () => openFilesVSCode(paths),
           });
@@ -902,14 +906,15 @@
           if (selectedEntries.length && selectedEntries.every((item) => WIRESHARK_EXTENSIONS.has(entryExtension(item)))) {
             items.push({
               label: i18n.t('filesUi.openWireshark'),
+              icon: 'globe',
               disabled: !selectedEntries.every((item) => isWiresharkEntry(item)),
               run: () => openFilesWireshark(paths),
             });
           }
           items.push(
-            { label: i18n.t('filesUi.download'), run: () => downloadFiles(paths) },
-            { label: i18n.t('filesUi.copyPath'), run: () => copyPath(paths) },
-            { label: i18n.t('filesUi.copyReference'), run: () => copyReference(paths) }
+            { label: i18n.t('filesUi.download'), icon: 'download', run: () => downloadFiles(paths) },
+            { label: i18n.t('filesUi.copyPath'), icon: 'copy', run: () => copyPath(paths) },
+            { label: i18n.t('filesUi.copyReference'), icon: 'copy', run: () => copyReference(paths) }
           );
           openContextMenu(event.clientX, event.clientY, items);
         });
@@ -1374,7 +1379,11 @@
       closeContextMenu();
       const menu = el('div', { class: 'fm-menu' });
       for (const item of items) {
-        const btn = el('button', { class: 'fm-menu-item', type: 'button' }, item.label);
+        const btn = el('button', { class: 'fm-menu-item', type: 'button' });
+        const icon = el('span', { class: 'term-menu-icon' });
+        if (item.icon && Icons[item.icon]) icon.innerHTML = Icons[item.icon](13);
+        btn.appendChild(icon);
+        btn.appendChild(el('span', { class: 'term-menu-label' }, item.label));
         if (item.disabled) {
           btn.disabled = true;
           btn.setAttribute('aria-disabled', 'true');
