@@ -60,6 +60,7 @@
 | `ssh:list` | — | `{ hosts, detected }` | 读 `~/.ssh/config`；每个 host 含 `group`（分组名，未分组为 `''`）与 `hasPassword`（是否已存密码，见 §5.1）字段 |
 | `ssh:edit` | `{ alias }` | `{ ok, error? }` | 主面板 SSH 条目的编辑图标：隐藏主面板、打开设置窗口的 SSH 分区，并让该主机直接进入编辑表单（设置窗口未打开时等渲染层挂载后再发 `settings:edit-ssh`）；别名缺失返回错误 |
 | `ssh:connect` | `{ alias, inTerminal? }` | `{ ok, command?, error? }` | 按 alias 查表并拼 `ssh …`：`inTerminal: true`（终端窗口头部的 SSH 下拉）**强制注入当前悬浮终端窗口**、不受 `sshBuiltinTerminal` 影响；省略时按 `settings.sshBuiltinTerminal` 决定走悬浮终端或 iTerm |
+| `ssh:quick-connect` | `{ hostName, user?, port?, password?, inCurrentTerminal? }` | `{ ok, command?, alias?, hosts?, error? }` | SSH 管理 / 终端右键「快速连接」：`hostName` **必填**（缺省返回 `{ ok:false, error:'hostName required' }`），`port` 默认 `22`。有 `password` 则加密保存，否则清除该别名旧密码并使用 `~/.ssh/id_ed25519`。**无论连接成败**都写入 `~/.ssh/config` 的「快速连接」分组并置于最前，随后广播 `ssh-config:changed` 并触发探测。连接目标：省略 / `inCurrentTerminal: false` → **始终新开一扇终端**再注入（`runInNewTerminal`）；`inCurrentTerminal: true`（终端右键菜单）→ 在**发起请求的那个终端窗口**注入（`runInTerminal` 指定窗口，不新开）。成功返回 `command` / `alias` |
 | `ssh:detect` | `{ alias }` | `{ queued }` | 异步，结果经 `ssh:detected` 回传（兼容保留） |
 | `ssh:detect-host` | `{ alias?, hostName, user?, port?, identityFile?, proxyJump?, password?, useStoredPassword? }` | `{ ok, alias, info }` | 对任意主机（可尚未保存）同步探测，结果写入缓存并广播。**支持密码认证**：用 `password`（表单填的明文密码）优先，为空且 `useStoredPassword !== false` 时回退到该别名已保存的加密密码（主进程解密后用于这次探测，不外传） |
 | `ssh:get-detected` | — | `{ [alias]: { os, family, label, at } }` | 读取探测缓存 |
@@ -118,12 +119,16 @@
 | `terminal:export` | `{ text, name? }` | `{ ok, path?, canceled?, error? }` | 保存对话框 + 把终端文本写入本地文件 |
 | `terminal:open-iterm` | — | `{ ok, command?, error? }` | 在 iTerm 中重放最后注入的命令并关闭终端窗口 |
 | `terminal:set-top` | `{ value: boolean }` | `{ ok, alwaysOnTop: false }` | **已弃用（兼容保留）**：终端窗口不再置顶（图钉按钮只控制失焦缩成悬浮球），本通道恒返回 `alwaysOnTop: false`、**不写设置** |
-| `shortcut:set` | `{ target: 'main' \| 'terminal', hotkey: string }` | `{ ok, hotkey, error? }` | 设置 → 快捷键 改绑主窗口 / 终端快捷键：先试注册（空串 = 注销），**成功才写 `settings.mainWindowHotkey` / `settings.terminalHotkey`**；失败返回 `{ ok: false, error }`（`unavailable` = 已被占用，`invalid-target` = target 非法）并保持原值 |
+| `shortcut:set` | `{ target: 'terminal', hotkey: string }` | `{ ok, hotkey, error? }` | 设置 → 快捷键 改绑**终端**全局快捷键：先试注册（空串 = 注销），**成功才写 `settings.terminalHotkey`**；失败返回 `{ ok: false, error }`（`unavailable` = 已被占用，`invalid-target` = target 非法 / `main` 已不再支持）并保持原值 |
 | `terminal:reset` | — | `{ ok, settings }` | 设置 → 终端 →「重置」：把终端相关设置（`terminalShell`/`terminalFontSize`/`terminalScrollback`/`terminalOpacity`/`terminalWindowWidth`/`terminalWindowHeight`/`terminalAlwaysOnTop`/`terminalCloseAction`/`sshBuiltinTerminal`/`sftpDownloadDir`/`terminalBallEnabled`/`terminalBallDelayMs`/`terminalBallSize`/`terminalBallIcon`/`terminalBallDark`/`terminalBallTransparent`）恢复为 `package.json` 里的默认值，并删除 `terminal-window.json`（记住的屏幕 / 位置 / 大小）；返回重置后的完整设置 |
 | `terminal:destroy` | — | `{ ok }` | 会话结束后销毁终端窗口（渲染层在 shell `exit` 时调用）：**始终销毁，不受「关闭按钮行为=隐藏」影响**；只接受来自终端窗口本身的请求 |
 | `terminal:snap-size` | `{ width?, height? }` | `{ ok, size?, deferred? }` | 渲染层按**实测余量**请求把窗口收到「整行 / 整列」：**拖动期间只挂起**（`deferred: true`），松手后由渲染层重新测量再对齐；偏差 > 60px 视为状态异常、不做。只接受来自终端窗口本身的请求 |
 | `terminal:ensure-size` | `{ width, height }` | `{ ok, width?, height? }` | 打开内嵌文件面板时把本窗口**只放大不缩小**到至少给定内容尺寸（首次无布局记录时用，见 §3.8-10）；受屏幕工作区限制，不写回几何记忆；只接受来自终端窗口本身的请求 |
 | `window:control` | `{ action: 'close' \| 'minimize' \| 'zoom' }` | `{ ok, action }` | 终端窗口自绘小红绿灯的窗口控制：只作用于**发起请求的那个窗口**（`BrowserWindow.fromWebContents(event.sender)`），未知 action 返回 `{ ok: false }`；`close` 在终端窗口上按「关闭按钮行为」收缩成悬浮球或销毁（见 §3.8-9） |
+| `window:show-main` | — | `{ ok }` | 终端右键菜单「显示主界面」：`showMainWindow()` 显示 / 带到前台主面板（主窗口已无全局快捷键，见 §3.8-8） |
+| `window:list-open` | — | `[{ id, type, title }]` | 设置 → 窗口管理：列出当前已打开的可管理窗口；`type` ∈ `main` / `terminal` / `file` / `editor` / `game`（编辑器 `title` 为文件名） |
+| `window:activate` | `{ id }` | `{ ok }` | 激活指定窗口：最小化的先还原，再 `show()` + `focus()` + `moveTop()` |
+| `window:destroy-window` | `{ id }` | `{ ok }` | 销毁指定窗口：终端走 `destroyTerminalWindow`（结束会话）、游戏先存档、文件窗口先落盘几何；其余直接 `destroy()` |
 | `ssh-config:read` | — | `hosts` | 每个 host 含 `group` 与 `hasPassword` 字段（见 §5.1） |
 | `ssh-config:upsert` | `host`（含可选 `group`、`originalAlias`） | 更新后的 `hosts` | 保留未管理指令与注释；`group` 有值时写入 / 复用 `# group: <名称>` 注释并归入该分组，空串 / 缺省 = 未分组；改分组时把主机移动到目标分组末尾，分组清空后自动移除其注释标记 |
 | `ssh-config:remove` | `alias` | 更新后的 `hosts` | 删除该分组最后一个主机后自动移除其 `# group:` 注释标记 |

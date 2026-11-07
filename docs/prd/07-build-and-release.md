@@ -15,7 +15,8 @@
   - `release:notes`：`python3 scripts/changelog.py extract <version>` —— 输出指定版本的更新日志段落，供 CI 写入 GitHub Release 说明。
 - **更新日志**：仓库根目录 `CHANGELOG.md` 按版本记录面向用户的功能变化（不展开技术细节）。新版本通过 `scripts/bump.sh` 自动生成段落；CI 打 tag 时用 `scripts/changelog.py extract` 把对应段落作为 GitHub Release 说明。
 - **打包配置**（`package.json` 的 `build` 段，electron-builder）：
-  - `appId = cn.com.stdout.vessel`，`productName = Vessel`；产物目录 `release/`。**appId 是本地网络授权的键**：更换 appId 会得到一条全新的未授权记录；当前正式 appId 保持为 `cn.com.stdout.vessel`，不要随意改（旧 `com.ships.app` 的授权记录仍在系统里，但不影响新 id）。改名 / 改 id 还会触发 Installer 的重定位行为与「运行实例 id 不一致」，处理步骤见 `docs/FAQ.md` §1。
+  - `appId = cn.com.stdout.vessel`，`productName = Vessel`；产物目录 `release/`。
+  - **自定义协议**：`build.protocols` 声明 `{ name: 'Vessel', schemes: ['vessel'] }`，打包时写入 macOS `Info.plist` 的 `CFBundleURLTypes`（Windows / Linux 写入对应注册信息）。运行时主进程 `app.setAsDefaultProtocolClient('vessel')`（开发模式附带 Electron 可执行文件与入口脚本），处理 `vessel://open/terminal`（见 §3.8-1）。**appId 是本地网络授权的键**：更换 appId 会得到一条全新的未授权记录；当前正式 appId 保持为 `cn.com.stdout.vessel`，不要随意改（旧 `com.ships.app` 的授权记录仍在系统里，但不影响新 id）。改名 / 改 id 还会触发 Installer 的重定位行为与「运行实例 id 不一致」，处理步骤见 `docs/FAQ.md` §1。
   - `publish`：`[{ provider: 'github', owner: 'o8x', repo: 'vessel' }]`；macOS 检测更新不依赖 `latest-mac.yml`，使用 `package.json` 的 `vessel.updateRepo`（不会被 electron-builder 裁剪）调用 GitHub Releases API。
   - `files`：`src/**/*`、`assets/**/*`、`package.json`，并排除 `assets/games/**`（调试 ROM / 存档不随应用分发）；依赖由 electron-builder 自动收集（`asar: true`）—— 渲染层直接从 `node_modules/@xterm/…` 加载终端资源，因此 `@xterm/xterm` 与 `@xterm/addon-fit` 放在 `dependencies`（不是 devDependencies）；`electron-updater` 同样放在 `dependencies`。
   - **原生依赖 `electron-liquid-glass`**：N-API 预编译（含 `darwin-arm64` / `darwin-x64`），故 `npmRebuild: false` 无需重编；`build.asarUnpack` 把 `**/*.node` 与 `node_modules/electron-liquid-glass/**` 解包到 `app.asar.unpacked` 供加载（Liquid Glass 仅运行时 macOS 26+ 生效，旧系统由主进程回退）。
