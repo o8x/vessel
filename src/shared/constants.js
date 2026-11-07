@@ -40,8 +40,12 @@ const IPC = {
   UPDATE_PROMPT: 'update:prompt',
 
   WINDOW_HIDE: 'window:hide',
+  WINDOW_SHOW_MAIN: 'window:show-main',
   WINDOW_OPEN_SETTINGS: 'window:open-settings',
   WINDOW_CLOSE_SETTINGS: 'window:close-settings',
+  WINDOW_LIST_OPEN: 'window:list-open',
+  WINDOW_ACTIVATE: 'window:activate',
+  WINDOW_DESTROY: 'window:destroy-window',
   FONT_PICKER_OPEN: 'font-picker:open',
   FONT_PICKER_CLOSE: 'font-picker:close',
   WINDOW_CONTROL: 'window:control',

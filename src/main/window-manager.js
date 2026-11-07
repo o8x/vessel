@@ -1975,6 +1975,62 @@ settings.on('changed', (_data, keys) => {
 // 跟随系统主题时，系统外观变化也要重设窗口底色。
 nativeTheme.on('updated', applyThemeBackgrounds);
 
+/* --------------------------- 窗口管理（设置页） ---------------------------
+   列出当前已打开的可管理窗口，供设置 → 窗口管理 激活 / 销毁。 */
+function listManagedWindows() {
+  const items = [];
+  const push = (win, type, title) => {
+    if (!win || win.isDestroyed()) return;
+    items.push({ id: win.id, type, title: title || '' });
+  };
+  push(getMainWindow(), 'main', '');
+  for (const win of terminalWindowsList()) push(win, 'terminal', '');
+  push(getFileWindow(), 'file', '');
+  for (const win of fileEditorWindows) push(win, 'editor', win.getTitle());
+  push(getGameWindow(), 'game', '');
+  return items;
+}
+
+function getManagedWindow(id) {
+  const win = BrowserWindow.fromId(Number(id));
+  if (!win || win.isDestroyed()) return null;
+  return win;
+}
+
+function activateManagedWindow(id) {
+  const win = getManagedWindow(id);
+  if (!win) return false;
+  if (isTerminalWindow(win) && isBallMode(win)) {
+    exitBallMode(win, true);
+    return true;
+  }
+  if (typeof win.isMinimized === 'function' && win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  if (typeof win.moveTop === 'function') win.moveTop();
+  return true;
+}
+
+function destroyManagedWindow(id) {
+  const win = getManagedWindow(id);
+  if (!win) return false;
+  // 终端 / 游戏 / 文件窗口走各自的清理流程（会话、存档、几何记忆）。
+  if (isTerminalWindow(win)) {
+    destroyTerminalWindow(win);
+    return true;
+  }
+  if (isGameWindow(win)) {
+    closeGameWindowNow();
+    return true;
+  }
+  if (win === fileWindow) {
+    closeFileWindow();
+    return true;
+  }
+  win.destroy();
+  return true;
+}
+
 module.exports = {
   setTray,
   createMainWindow,
@@ -2034,6 +2090,9 @@ module.exports = {
   closeFileEditorsForOwner,
   forgetFileWindowGeometry,
   applyFileWindowAlwaysOnTop,
+  listManagedWindows,
+  activateManagedWindow,
+  destroyManagedWindow,
   broadcast,
   applyVibrancy,
 };

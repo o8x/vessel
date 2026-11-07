@@ -32,6 +32,11 @@ const api = {
   },
   openExternal: (url) => ipcRenderer.invoke(IPC.OPEN_EXTERNAL, url),
   closeSettings: () => ipcRenderer.send(IPC.WINDOW_CLOSE_SETTINGS),
+  windowManager: {
+    list: () => ipcRenderer.invoke(IPC.WINDOW_LIST_OPEN),
+    activate: (id) => ipcRenderer.invoke(IPC.WINDOW_ACTIVATE, { id }),
+    destroy: (id) => ipcRenderer.invoke(IPC.WINDOW_DESTROY, { id }),
+  },
   openDevTools: (target) => ipcRenderer.invoke(IPC.DEVTOOLS_OPEN, target),
   sshDetectHost: (host) => ipcRenderer.invoke(IPC.SSH_DETECT_HOST, host),
   sshGetDetected: () => ipcRenderer.invoke(IPC.SSH_GET_DETECTED),

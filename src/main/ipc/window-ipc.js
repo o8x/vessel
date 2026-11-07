@@ -4,6 +4,10 @@ const { BrowserWindow } = require('electron');
 const { IPC } = require('../../shared/constants');
 const {
   hideMainWindow,
+  showMainWindow,
+  listManagedWindows,
+  activateManagedWindow,
+  destroyManagedWindow,
   openSettingsWindow,
   closeSettingsWindow,
   getMainWindow,
@@ -59,6 +63,22 @@ function registerWindowIpc(ipcMain) {
   });
 
   ipcMain.on(IPC.WINDOW_HIDE, () => hideMainWindow());
+  // 终端右键菜单「显示主界面」：从托盘应用语义出发，显示 / 带到前台主面板。
+  ipcMain.handle(IPC.WINDOW_SHOW_MAIN, () => {
+    showMainWindow();
+    return { ok: true };
+  });
+
+  // 设置 → 窗口管理：列出已打开窗口、激活 / 销毁指定窗口。
+  ipcMain.handle(IPC.WINDOW_LIST_OPEN, () => listManagedWindows());
+  ipcMain.handle(IPC.WINDOW_ACTIVATE, (_event, payload) => {
+    const id = Number(payload && payload.id);
+    return { ok: Boolean(id) && activateManagedWindow(id) };
+  });
+  ipcMain.handle(IPC.WINDOW_DESTROY, (_event, payload) => {
+    const id = Number(payload && payload.id);
+    return { ok: Boolean(id) && destroyManagedWindow(id) };
+  });
 
   // 悬浮球：拖动（按光标位置移动窗口）与点击放大回终端窗口。
   ipcMain.on(IPC.TERMINAL_BALL_DRAG, (event, payload) => {
