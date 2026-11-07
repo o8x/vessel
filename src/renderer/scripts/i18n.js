@@ -31,7 +31,7 @@ window.ShipsI18n = (function createI18n() {
       tools: {
         timestamp: '时间戳转换',
         subnet: 'IP / 网段',
-        radix: '进制转换',
+        radix: '单位转换',
         json: 'JSON 格式化',
         ssh: 'SSH 管理',
         clipboard: '剪贴板',
@@ -43,7 +43,7 @@ window.ShipsI18n = (function createI18n() {
       toolDesc: {
         timestamp: '秒 / 毫秒 / 纳秒与日期互转',
         subnet: 'IP 进制与网段 / 掩码计算，含归属地查询',
-        radix: '2–36 进制之间实时换算',
+        radix: '字节 / 位与 KiB–TiB、Kbps–Gbps 互转',
         json: '粘贴 JSON 自动原地格式化与结构查看',
         ssh: '读取 ~/.ssh/config，点击或双击在 iTerm 连接',
         clipboard: '最近的剪贴板记录，支持复制与清空',
@@ -82,7 +82,7 @@ window.ShipsI18n = (function createI18n() {
       tools: {
         timestamp: 'Timestamp',
         subnet: 'IP / Subnet',
-        radix: 'Radix',
+        radix: 'Units',
         json: 'JSON',
         ssh: 'SSH',
         clipboard: 'Clipboard',
@@ -94,7 +94,7 @@ window.ShipsI18n = (function createI18n() {
       toolDesc: {
         timestamp: 'Convert between s / ms / ns and dates',
         subnet: 'IP bases and subnet / mask, with geolocation',
-        radix: 'Live conversion across bases 2–36',
+        radix: 'Bytes / bits ↔ KiB–TiB, Kbps–Gbps',
         json: 'Paste JSON to format in place and view its structure',
         ssh: 'Read ~/.ssh/config; click or double-click to open in iTerm',
         clipboard: 'Recent clipboard items with copy and clear',
