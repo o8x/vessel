@@ -2,6 +2,21 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.3.0 - 2026-11-07
+
+### 新增
+
+- Vessel://open/terminal protocol
+- Icons to file manager context menus
+- Rework terminal shortcut and context menu
+- Window management settings
+- Replace radix tool with unit conversion
+- SSH quick connect that opens a new terminal
+
+### 修复
+
+- Re-record terminal space after bringing it to front
+
 ## v6.2.0 - 2026-11-04
 
 ### 新增
