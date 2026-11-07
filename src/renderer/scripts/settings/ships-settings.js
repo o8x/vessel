@@ -262,55 +262,6 @@
       row(i18n.t('settingsPage.followSystemProxy'), i18n.t('settingsPage.followSystemProxyHint'), proxySwitch.root)
     );
 
-    const folderBtn = el('button', { class: 'btn shrink-0', type: 'button' });
-    folderBtn.append(
-      el('span', { class: 'inline-flex' }, Icons.folder(14)),
-      el('span', {}, i18n.t('settingsPage.open'))
-    );
-    folderBtn.addEventListener('click', () => window.ships.openDataFolder());
-    generalSection.appendChild(
-      row(i18n.t('settingsPage.dataFolder'), (info && info.dataDir) || '', folderBtn)
-    );
-
-    // 一键清理「非业务数据」（窗口位置 / 大小、列宽、cd 历史等）：二次确认后执行。
-    let clearingData = false;
-    const clearControlWrap = el('div', { class: 'flex shrink-0 items-center gap-1' });
-    function renderClearControl() {
-      clearControlWrap.innerHTML = '';
-      if (clearingData) {
-        clearControlWrap.appendChild(
-          el('span', { class: 'text-[11px] text-danger' }, i18n.t('settingsPage.clearDataConfirm'))
-        );
-        const yes = el('button', { class: 'icon-btn h-7 w-7', type: 'button' });
-        yes.innerHTML = Icons.check(15);
-        yes.style.color = 'var(--color-danger)';
-        yes.addEventListener('click', () => {
-          window.ships.clearData().finally(() => {
-            clearingData = false;
-            renderClearControl();
-          });
-        });
-        const no = el('button', { class: 'icon-btn h-7 w-7', type: 'button' });
-        no.innerHTML = Icons.x(15);
-        no.addEventListener('click', () => {
-          clearingData = false;
-          renderClearControl();
-        });
-        clearControlWrap.append(yes, no);
-      } else {
-        const button = el('button', { class: 'btn shrink-0', type: 'button' }, i18n.t('settingsPage.clearDataAction'));
-        button.addEventListener('click', () => {
-          clearingData = true;
-          renderClearControl();
-        });
-        clearControlWrap.appendChild(button);
-      }
-    }
-    renderClearControl();
-    generalSection.appendChild(
-      row(i18n.t('settingsPage.clearData'), i18n.t('settingsPage.clearDataHint'), clearControlWrap)
-    );
-
     const aboutSection = section(i18n.t('settingsPage.about'));
     aboutSection.appendChild(
       row(i18n.t('settingsPage.version'), '', el('span', { class: 'font-mono text-[12px] text-fg-muted' }, `v${(info && info.version) || ''}`))
@@ -391,8 +342,6 @@
 
     pane.append(languageSection, appearanceSection, generalSection);
     // 日志与导入 / 导出合并到「应用」分区（不再单独占导航项）。
-    if (window.ShipsBackupSettings) window.ShipsBackupSettings.mount(pane, ctx);
-    if (window.ShipsLogSettings) window.ShipsLogSettings.mount(pane, ctx);
     pane.append(aboutSection, devSection);
 
     return () => {

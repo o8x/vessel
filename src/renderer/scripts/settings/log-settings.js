@@ -89,4 +89,10 @@
   }
 
   window.ShipsLogSettings = { mount };
+  window.ShipsSettingsRegistry.register({
+    id: 'logs',
+    icon: 'doc',
+    labelKey: 'settingsPage.logs',
+    mount,
+  });
 })();

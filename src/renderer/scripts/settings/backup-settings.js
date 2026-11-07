@@ -7,6 +7,13 @@
   i18n.extend({
     zh: {
       settingsPage: {
+        data: '数据',
+        dataFolder: '数据文件夹',
+        clearData: '清理数据',
+        clearDataHint: '清除窗口位置 / 大小、列宽与 cd 历史等非业务数据',
+        clearDataAction: '清除',
+        clearDataConfirm: '确认清理？',
+        open: '打开',
         backup: '导入 / 导出',
         exportConfig: '导出配置',
         exportHint: '把应用设置与 SSH 主机导出为 JSON 文件（SSH 密码为明文，请妥善保管）',
@@ -23,6 +30,13 @@
     },
     en: {
       settingsPage: {
+        data: 'Data',
+        dataFolder: 'Data folder',
+        clearData: 'Clear data',
+        clearDataHint: 'Remove window position / size, column widths and cd history (non-business data)',
+        clearDataAction: 'Clear',
+        clearDataConfirm: 'Clear data?',
+        open: 'Open',
         backup: 'Import / Export',
         exportConfig: 'Export config',
         exportHint: 'Export app settings and SSH hosts as a JSON file (SSH passwords are plaintext — keep it safe)',
@@ -50,7 +64,58 @@
     return root;
   }
 
-  function mount(pane) {
+  function mount(pane, ctx) {
+    const info = (ctx && ctx.info) || {};
+    const dataSection = section(i18n.t('settingsPage.data'));
+
+    const folderBtn = el('button', { class: 'btn shrink-0', type: 'button' });
+    folderBtn.append(
+      el('span', { class: 'inline-flex' }, Icons.folder(14)),
+      el('span', {}, i18n.t('settingsPage.open'))
+    );
+    folderBtn.addEventListener('click', () => window.ships.openDataFolder());
+    dataSection.appendChild(row(i18n.t('settingsPage.dataFolder'), info.dataDir || '', folderBtn));
+
+    // 一键清理「非业务数据」（窗口位置 / 大小、列宽、cd 历史等）：二次确认后执行。
+    let clearingData = false;
+    const clearControlWrap = el('div', { class: 'flex shrink-0 items-center gap-1' });
+    function renderClearControl() {
+      clearControlWrap.innerHTML = '';
+      if (clearingData) {
+        clearControlWrap.appendChild(
+          el('span', { class: 'text-[11px] text-danger' }, i18n.t('settingsPage.clearDataConfirm'))
+        );
+        const yes = el('button', { class: 'icon-btn h-7 w-7', type: 'button' });
+        yes.innerHTML = Icons.check(15);
+        yes.style.color = 'var(--color-danger)';
+        yes.addEventListener('click', () => {
+          window.ships.clearData().finally(() => {
+            clearingData = false;
+            renderClearControl();
+          });
+        });
+        const no = el('button', { class: 'icon-btn h-7 w-7', type: 'button' });
+        no.innerHTML = Icons.x(15);
+        no.addEventListener('click', () => {
+          clearingData = false;
+          renderClearControl();
+        });
+        clearControlWrap.append(yes, no);
+      } else {
+        const button = el('button', { class: 'btn shrink-0', type: 'button' }, i18n.t('settingsPage.clearDataAction'));
+        button.addEventListener('click', () => {
+          clearingData = true;
+          renderClearControl();
+        });
+        clearControlWrap.appendChild(button);
+      }
+    }
+    renderClearControl();
+    dataSection.appendChild(
+      row(i18n.t('settingsPage.clearData'), i18n.t('settingsPage.clearDataHint'), clearControlWrap)
+    );
+    pane.append(dataSection);
+
     const backupSection = section(i18n.t('settingsPage.backup'));
 
     const note = el('div', { class: 'mt-1 break-all text-[11px] text-fg-muted' }, '');
@@ -152,4 +217,10 @@
   }
 
   window.ShipsBackupSettings = { mount };
+  window.ShipsSettingsRegistry.register({
+    id: 'data',
+    icon: 'archive',
+    labelKey: 'settingsPage.data',
+    mount,
+  });
 })();
