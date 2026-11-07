@@ -2,6 +2,16 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.4.0 - 2026-11-07
+
+### 新增
+
+- Split data and logs into separate settings sections
+
+### 修复
+
+- Show update check failure reason and shrink prompt window
+
 ## v6.3.0 - 2026-11-07
 
 ### 新增
