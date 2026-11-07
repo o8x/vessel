@@ -351,8 +351,9 @@ const DEFAULT_SETTINGS = {
   terminalAlwaysOnTop: false,
   // 终端窗口关闭按钮的行为：'hide' 只隐藏窗口（会话保留），'destroy' 直接销毁（结束会话）
   terminalCloseAction: TERMINAL_WINDOW.closeAction === 'hide' ? 'hide' : 'destroy',
-  // 全局快捷键（Electron accelerator，空字符串 = 不注册）：主窗口双击 / 终端单击
-  mainWindowHotkey: TERMINAL_WINDOW.hotkey || 'CommandOrControl+Shift+Z',
+  // 全局快捷键（Electron accelerator，空字符串 = 不注册）：仅终端，单击立即生效。
+  // mainWindowHotkey 保留为历史字段（不再注册），新安装默认空。
+  mainWindowHotkey: '',
   terminalHotkey: TERMINAL_WINDOW.hotkey || 'CommandOrControl+Shift+Z',
   sshBuiltinTerminal: appConfig.sshBuiltinTerminal !== false,
   // 遵循 macOS 系统代理 / PAC：开启后终端、SSH / SFTP、更新请求按系统代理转发；

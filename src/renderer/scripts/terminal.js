@@ -21,14 +21,27 @@
         failed: '无法启动终端会话：{error}',
         restarting: '正在重建终端会话…',
         noTerminal: 'xterm 未能加载，无法显示终端',
+        menuShowMain: '显示主界面',
+        menuSelectAll: '全选',
         menuNewTerminal: '新建终端',
         menuCopy: '复制',
         menuPaste: '粘贴',
+        menuQuickConnect: '快速连接',
         menuIterm: '从 iTerm 打开',
         menuConnect: '连接到服务器',
         menuNoHosts: '无可用主机',
         menuFiles: '切换文件管理器',
         menuUpload: '上传文件到此处',
+        quickUser: '用户名',
+        quickAddress: '地址',
+        quickPort: '端口',
+        quickPassword: '密码',
+        quickConfirm: '确认',
+        quickConnecting: '连接中…',
+        quickAddressRequired: '请填写 IP 地址',
+        quickFailed: '连接失败：{error}',
+        quickKeyHint: '留空密码则使用 ~/.ssh/id_ed25519 密钥连接',
+        quickTip: '在当前终端快速连接',
       },
     },
     en: {
@@ -44,14 +57,27 @@
         failed: 'Cannot start the terminal session: {error}',
         restarting: 'Restarting terminal session…',
         noTerminal: 'xterm failed to load',
+        menuShowMain: 'Show main window',
+        menuSelectAll: 'Select all',
         menuNewTerminal: 'New terminal',
         menuCopy: 'Copy',
         menuPaste: 'Paste',
+        menuQuickConnect: 'Quick connect',
         menuIterm: 'Open in iTerm',
         menuConnect: 'Connect to server',
         menuNoHosts: 'No hosts available',
         menuFiles: 'Toggle file manager',
         menuUpload: 'Upload files here',
+        quickUser: 'Username',
+        quickAddress: 'Address',
+        quickPort: 'Port',
+        quickPassword: 'Password',
+        quickConfirm: 'Connect',
+        quickConnecting: 'Connecting…',
+        quickAddressRequired: 'IP address is required',
+        quickFailed: 'Connect failed: {error}',
+        quickKeyHint: 'Leave password empty to use the ~/.ssh/id_ed25519 key',
+        quickTip: 'Quick connect in this terminal',
       },
     },
   });
@@ -916,6 +942,9 @@
   function menuItem(item) {
     if (item.header) return el('div', { class: 'fm-menu-title' }, item.label);
     const btn = el('button', { class: 'fm-menu-item term-menu-item', type: 'button' });
+    const icon = el('span', { class: 'term-menu-icon' });
+    if (item.icon && Icons[item.icon]) icon.innerHTML = Icons[item.icon](13);
+    btn.appendChild(icon);
     btn.appendChild(el('span', { class: 'term-menu-label' }, item.label));
     if (item.submenu) {
       btn.classList.add('has-submenu');
@@ -973,6 +1002,177 @@
         term.focus();
       }
     });
+  }
+
+  /* ----------------------- 在当前终端快速连接 -----------------------
+     终端右键菜单「快速连接」：弹出与 SSH 工具相同的固定尺寸表单，确认后
+     由主进程把 ssh 命令注入**当前这个终端窗口**（不新开窗口）。 */
+  let quickConnectEl = null;
+
+  function positionQuickConnect() {
+    if (!quickConnectEl) return;
+    const width = quickConnectEl.offsetWidth;
+    const height = quickConnectEl.offsetHeight;
+    quickConnectEl.style.left = `${Math.max(8, (window.innerWidth - width) / 2)}px`;
+    quickConnectEl.style.top = `${Math.max(8, (window.innerHeight - height) / 2)}px`;
+  }
+
+  function onQuickDocDown(event) {
+    if (!quickConnectEl || quickConnectEl.contains(event.target)) return;
+    closeQuickConnect();
+  }
+
+  function onQuickKeyDown(event) {
+    if (event.key === 'Escape') closeQuickConnect();
+  }
+
+  function closeQuickConnect() {
+    if (!quickConnectEl) return;
+    quickConnectEl.remove();
+    quickConnectEl = null;
+    document.removeEventListener('mousedown', onQuickDocDown, true);
+    document.removeEventListener('keydown', onQuickKeyDown, true);
+    window.removeEventListener('resize', positionQuickConnect);
+    window.removeEventListener('blur', closeQuickConnect);
+  }
+
+  function openQuickConnect() {
+    if (quickConnectEl) {
+      closeQuickConnect();
+      return;
+    }
+    const pop = el('div', { class: 'ssh-quick-pop' });
+
+    const row1 = el('div', { class: 'ssh-quick-row' });
+    const chips = {};
+    for (const name of ['root', 'ubuntu']) {
+      const chip = el('button', { class: 'ssh-quick-chip', type: 'button' }, name);
+      chip.addEventListener('click', () => {
+        userInput.value = name;
+        syncChips();
+        userInput.focus();
+      });
+      chips[name] = chip;
+      row1.appendChild(chip);
+    }
+    const userInput = el('input', {
+      class: 'field ssh-quick-user',
+      type: 'text',
+      placeholder: i18n.t('terminalWin.quickUser'),
+      value: 'root',
+      spellcheck: 'false',
+      autocomplete: 'off',
+    });
+    row1.appendChild(userInput);
+
+    const row2 = el('div', { class: 'ssh-quick-row' });
+    const addressInput = el('input', {
+      class: 'field ssh-quick-addr',
+      type: 'text',
+      placeholder: i18n.t('terminalWin.quickAddress'),
+      spellcheck: 'false',
+      autocomplete: 'off',
+    });
+    const portInput = el('input', {
+      class: 'field ssh-quick-port',
+      type: 'text',
+      inputmode: 'numeric',
+      value: '22',
+      spellcheck: 'false',
+      autocomplete: 'off',
+    });
+    row2.append(addressInput, portInput);
+
+    const row3 = el('div', { class: 'ssh-quick-row' });
+    const passwordInput = el('input', {
+      class: 'field ssh-quick-pass',
+      type: 'password',
+      placeholder: i18n.t('terminalWin.quickPassword'),
+      autocomplete: 'off',
+    });
+    const confirmBtn = el(
+      'button',
+      { class: 'btn btn-accent ssh-quick-confirm', type: 'button' },
+      i18n.t('terminalWin.quickConfirm')
+    );
+    row3.append(passwordInput, confirmBtn);
+
+    const hint = el('div', { class: 'ssh-quick-hint' }, i18n.t('terminalWin.quickKeyHint'));
+    pop.append(row1, row2, row3, hint);
+
+    /* 报错用红色边框闪烁表示（不额外占一行文字）。 */
+    function flashError(input) {
+      if (!input) return;
+      input.classList.remove('field-flash-error');
+      void input.offsetWidth;
+      input.classList.add('field-flash-error');
+      input.addEventListener(
+        'animationend',
+        () => input.classList.remove('field-flash-error'),
+        { once: true }
+      );
+      input.focus();
+    }
+
+    function syncChips() {
+      const value = userInput.value.trim();
+      for (const name of Object.keys(chips)) {
+        chips[name].classList.toggle('active', value === name);
+      }
+    }
+    userInput.addEventListener('input', syncChips);
+    syncChips();
+
+    async function submit() {
+      const hostName = addressInput.value.trim();
+      if (!hostName) {
+        flashError(addressInput);
+        return;
+      }
+      const user = userInput.value.trim();
+      const port = Number(portInput.value.trim()) || 22;
+      confirmBtn.disabled = true;
+      const original = confirmBtn.textContent;
+      confirmBtn.textContent = i18n.t('terminalWin.quickConnecting');
+      try {
+        const result = await window.ships.ssh.quickConnect({
+          user,
+          hostName,
+          port,
+          password: passwordInput.value,
+          inCurrentTerminal: true,
+        });
+        if (result && result.ok) {
+          closeQuickConnect();
+          if (term) term.focus();
+        } else {
+          flashError(addressInput);
+        }
+      } catch (err) {
+        flashError(addressInput);
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = original;
+      }
+    }
+
+    confirmBtn.addEventListener('click', submit);
+    pop.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        submit();
+      }
+    });
+
+    pop.classList.add('open');
+    document.body.appendChild(pop);
+    quickConnectEl = pop;
+    positionQuickConnect();
+    setTimeout(() => addressInput.focus(), 0);
+    document.addEventListener('mousedown', onQuickDocDown, true);
+    document.addEventListener('keydown', onQuickKeyDown, true);
+    window.addEventListener('resize', positionQuickConnect);
+    window.addEventListener('blur', closeQuickConnect);
   }
 
   /* 拖放本地文件 / 文件夹到终端：取绝对路径（必要时 shell 转义）后插入光标处。
@@ -1066,11 +1266,17 @@
   });
 
   function sshMenuItems() {
-    if (!sshHosts.length) return [{ label: i18n.t('terminalWin.menuNoHosts'), disabled: true }];
+    if (!sshHosts.length) {
+      return [{ label: i18n.t('terminalWin.menuNoHosts'), icon: 'server', disabled: true }];
+    }
     const { grouped, ungrouped, showHeaders } = groupSshHosts(sshHosts);
     const items = [];
     const pushHost = (host) => {
-      items.push({ label: sshHostLabel(host), run: () => void connectSshHost(host.alias) });
+      items.push({
+        label: sshHostLabel(host),
+        icon: 'server',
+        run: () => void connectSshHost(host.alias),
+      });
     };
     for (const section of grouped) {
       if (showHeaders) items.push({ header: true, label: section.name });
@@ -1099,19 +1305,51 @@
     const selection = term ? term.getSelection() : '';
     const sshReady = Boolean(sshTarget);
     return [
-      { label: i18n.t('terminalWin.menuNewTerminal'), run: openTerminalWithNewBall },
-      { label: i18n.t('terminalWin.menuIterm'), run: () => window.ships.terminal.openIterm() },
+      {
+        label: i18n.t('terminalWin.menuNewTerminal'),
+        icon: 'plus',
+        run: openTerminalWithNewBall,
+      },
+      {
+        label: i18n.t('terminalWin.menuShowMain'),
+        icon: 'monitor',
+        run: () => window.ships.showMainWindow(),
+      },
+      {
+        label: i18n.t('terminalWin.menuSelectAll'),
+        icon: 'check',
+        run: () => {
+          if (!term) return;
+          term.selectAll();
+          term.focus();
+        },
+      },
       {
         label: i18n.t('terminalWin.menuCopy'),
+        icon: 'copy',
         disabled: !selection,
         run: () => {
           if (selection) window.ships.terminal.copyText(selection);
         },
       },
-      { label: i18n.t('terminalWin.menuPaste'), run: pasteFromClipboard },
-      { label: i18n.t('terminalWin.menuConnect'), submenu: sshMenuItems() },
+      {
+        label: i18n.t('terminalWin.menuPaste'),
+        icon: 'clipboard',
+        run: pasteFromClipboard,
+      },
+      {
+        label: i18n.t('terminalWin.menuQuickConnect'),
+        icon: 'plug',
+        run: openQuickConnect,
+      },
+      {
+        label: i18n.t('terminalWin.menuConnect'),
+        icon: 'server',
+        submenu: sshMenuItems(),
+      },
       {
         label: i18n.t('terminalWin.menuFiles'),
+        icon: 'folder',
         disabled: !sshReady || !filesApi,
         run: () => {
           if (filesApi) filesApi.toggle();
@@ -1119,10 +1357,16 @@
       },
       {
         label: i18n.t('terminalWin.menuUpload'),
+        icon: 'arrowUp',
         disabled: !sshReady || !filesApi,
         run: () => {
           if (filesApi) filesApi.uploadHere();
         },
+      },
+      {
+        label: i18n.t('terminalWin.menuIterm'),
+        icon: 'terminal',
+        run: () => window.ships.terminal.openIterm(),
       },
     ];
   }

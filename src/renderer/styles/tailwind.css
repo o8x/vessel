@@ -1624,10 +1624,18 @@ body.file-window .fm-tree-row {
   overflow-y: auto;
 }
 .term-menu-item {
-  justify-content: space-between;
-  gap: 18px;
+  gap: 8px;
+}
+.term-menu-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  color: var(--color-fg-muted);
 }
 .term-menu-label {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1637,6 +1645,7 @@ body.file-window .fm-tree-row {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
+  margin-left: auto;
   color: var(--color-fg-muted);
 }
 .term-menu-item.has-submenu.active {

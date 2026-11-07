@@ -8,9 +8,7 @@
     zh: {
       settingsPage: {
         shortcuts: '快捷键',
-        shortcutsHint: '两项使用同一个组合键时：按一下 = 终端，快速连按两下 = 主窗口',
-        mainWindowShortcut: '主窗口',
-        mainWindowShortcutHint: '快速按两下组合键显示 / 带到前台主窗口',
+        shortcutsHint: '按下组合键立即打开 / 收起终端（无延迟）；主界面请从终端右键菜单打开',
         terminalShortcut: '终端',
         terminalShortcutHint: '按一下组合键打开 / 收起终端',
         shortcutEmpty: '未设置（点击后按组合键）',
@@ -24,11 +22,9 @@
     en: {
       settingsPage: {
         shortcuts: 'Shortcuts',
-        shortcutsHint: 'When both use the same combo: press once for the terminal, double-press quickly for the main window',
-        mainWindowShortcut: 'Main window',
-        mainWindowShortcutHint: 'Double-press the combo to show / bring the main window to front',
+        shortcutsHint: 'The combo opens / collapses the terminal immediately (no delay). Open the main window from the terminal context menu.',
         terminalShortcut: 'Terminal',
-        terminalShortcutHint: 'Press the combo once to open / collapse the terminal',
+        terminalShortcutHint: 'Press the combo to open / collapse the terminal',
         shortcutEmpty: 'Not set (click, then press a combo)',
         shortcutPress: 'Press the shortcut…',
         shortcutNeedModifier: 'Include at least one of Command / Control / Alt',
@@ -204,7 +200,7 @@
     return {
       root: controls,
       sync(next) {
-        value = (target === 'main' ? next.mainWindowHotkey : next.terminalHotkey) || '';
+        value = next.terminalHotkey || '';
         capturing = false;
         note.textContent = '';
         render();
@@ -216,11 +212,6 @@
     const wrap = section();
     wrap.appendChild(el('div', { class: 'text-[12px] text-fg-muted' }, i18n.t('settingsPage.shortcutsHint')));
 
-    const main = hotkeyControl('main', ctx.settings.mainWindowHotkey);
-    wrap.appendChild(
-      row(i18n.t('settingsPage.mainWindowShortcut'), i18n.t('settingsPage.mainWindowShortcutHint'), main.root)
-    );
-
     const terminal = hotkeyControl('terminal', ctx.settings.terminalHotkey);
     wrap.appendChild(
       row(i18n.t('settingsPage.terminalShortcut'), i18n.t('settingsPage.terminalShortcutHint'), terminal.root)
@@ -229,7 +220,6 @@
     pane.appendChild(wrap);
 
     return window.ships.onSettingsChanged((next) => {
-      main.sync(next);
       terminal.sync(next);
     });
   }
