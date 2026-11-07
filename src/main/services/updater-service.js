@@ -10,7 +10,15 @@ const settings = require('./settings-service');
 const proxyService = require('./proxy-service');
 const logger = require('../utils/logger');
 const wm = require('../window-manager');
-const { IPC, UPDATE_COUNTDOWN_SECONDS, UPDATE_CHANGELOG_TIMEOUT_MS, APP_NAME } = require('../../shared/constants');
+const {
+  IPC,
+  UPDATE_WINDOW,
+  UPDATE_WINDOW_PROMPT,
+  UPDATE_WINDOW_PROMPT_LOG,
+  UPDATE_COUNTDOWN_SECONDS,
+  UPDATE_CHANGELOG_TIMEOUT_MS,
+  APP_NAME,
+} = require('../../shared/constants');
 const pkg = require('../../../package.json');
 
 /* 自动更新：
@@ -20,7 +28,7 @@ const pkg = require('../../../package.json');
    - 发现新版本 → 提示后下载 → 小型不可关闭的前台下载窗口（进度条 + 取消 + 安装按钮）。
    - 取消 = 退出本次更新（下载阶段会中止下载）。
    - 自动检查：每次打开主界面 / 设置界面时触发（不再在启动后定时检查）。
-   - 设置 → Vessel → 关于 可手动「检查更新」（提示已是最新 / 暂时无法检查，不报技术错误）。
+   - 设置 → Vessel → 关于 可手动「检查更新」（提示已是最新 / 暂时无法检查 + 具体原因）。
    仅打包后的 macOS / Windows 生效；开发模式不检查。 */
 
 const COPY = {
@@ -32,6 +40,10 @@ const COPY = {
     checkTitle: '检查更新',
     notAvailable: '当前已是最新版本',
     notCheckable: '暂时无法检查更新，请稍后再试',
+    notCheckableReason: (reason) => `暂时无法检查更新：${reason}`,
+    reasonUnavailable: '更新组件不可用',
+    reasonNoResult: '未收到更新检查结果',
+    reasonUnknown: '未知错误',
     devMessage: '开发模式不检查更新',
   },
   en: {
@@ -42,12 +54,56 @@ const COPY = {
     checkTitle: 'Check for updates',
     notAvailable: 'You are on the latest version',
     notCheckable: 'Unable to check for updates right now. Please try again later.',
+    notCheckableReason: (reason) => `Unable to check for updates: ${reason}`,
+    reasonUnavailable: 'update component unavailable',
+    reasonNoResult: 'no result from the update check',
+    reasonUnknown: 'unknown error',
     devMessage: 'Update check is disabled in development',
   },
 };
 
 function copy() {
   return COPY[settings.get('locale') === 'en' ? 'en' : 'zh'];
+}
+
+/* 把更新检查失败的技术错误翻译成面向用户的具体原因（保留原始信息便于判断）。 */
+function describeCheckError(err) {
+  const c = copy();
+  const raw = String((err && err.message) || err || '').trim();
+  const en = settings.get('locale') === 'en';
+  if (!raw) return c.reasonUnknown;
+  const lower = raw.toLowerCase();
+  if (lower === 'timeout') return en ? 'request timed out' : '请求超时';
+  if (lower.includes('http 403') || lower.includes('http 429')) {
+    return en
+      ? 'GitHub API rate limit reached (HTTP 403/429), please try again later'
+      : 'GitHub API 请求被限流（HTTP 403/429），请稍后再试';
+  }
+  if (lower.includes('http 404')) {
+    return en ? 'release not found (HTTP 404)' : '未找到发布信息（HTTP 404）';
+  }
+  if (lower.includes('http 5')) {
+    return en ? `GitHub server error (${raw})` : `GitHub 服务异常（${raw}）`;
+  }
+  if (lower.includes('enotfound') || lower.includes('eai_again')) {
+    return en ? 'cannot resolve the server (check your network)' : '无法解析服务器域名（请检查网络）';
+  }
+  if (lower.includes('econnrefused')) {
+    return en ? 'connection refused' : '连接被拒绝';
+  }
+  if (lower.includes('etimedout') || lower.includes('econnreset') || lower.includes('socket hang up')) {
+    return en ? 'network connection interrupted' : '网络连接中断';
+  }
+  if (lower.includes('publish repo unavailable')) {
+    return en ? 'publish repository config is missing' : '缺少发布仓库配置';
+  }
+  if (lower.includes('pkg asset not found')) {
+    return en ? 'no installer found for this architecture' : '未找到当前架构的安装包';
+  }
+  if (lower.includes('json')) {
+    return en ? `invalid response from server (${raw})` : `服务器返回内容无法解析（${raw}）`;
+  }
+  return raw;
 }
 
 let updaterModule = null;
@@ -165,7 +221,7 @@ function showPrompt(options) {
       cancelId,
       resolve,
     };
-    wm.openUpdateWindow();
+    wm.openUpdateWindow({ size: dl.changelog ? UPDATE_WINDOW_PROMPT_LOG : UPDATE_WINDOW_PROMPT });
     wm.sendToUpdateWindow(IPC.UPDATE_PROMPT, getPromptState());
   }).then((response) => {
     // 提示结束且当前没有下载任务：关掉这个只用于提示的窗口。
@@ -203,7 +259,7 @@ function reportProgress(transferred, total, bytesPerSecond) {
 /* 确认下载：用户点「下载」后打开下载窗口并开始下载。 */
 async function promptDownload(info) {
   if (dl.phase !== 'idle') {
-    wm.openUpdateWindow();
+    wm.openUpdateWindow({ size: UPDATE_WINDOW });
     return;
   }
   const latest = (info && info.version) || '';
@@ -231,7 +287,7 @@ function startDownload(info) {
   dl.total = 0;
   dl.bytesPerSecond = 0;
   dl.countdown = 0;
-  wm.openUpdateWindow();
+  wm.openUpdateWindow({ size: UPDATE_WINDOW });
   logger.info(`[updater] download start: ${dl.version} (mode=${dl.mode})`);
   if (dl.mode === 'pkg') {
     startPkgDownload().catch(() => {});
@@ -747,7 +803,7 @@ function onDownloaded(info) {
   dl.percent = 100;
   dl.bytesPerSecond = 0;
   logger.info(`[updater] downloaded: ${info && info.version}`);
-  wm.openUpdateWindow();
+  wm.openUpdateWindow({ size: UPDATE_WINDOW });
   // 先启动倒计时（写入 countdown 初值），再发快照，保证「下载完成」那一刻就有 60 秒。
   startCountdown();
   wm.sendToUpdateWindow(IPC.UPDATE_DOWNLOADED, snapshot());
@@ -790,7 +846,7 @@ async function fetchLatestMacRelease() {
 async function checkForUpdatesMac(manual) {
   if (interactiveChecking) return { ok: true, checking: true };
   if (dl.phase !== 'idle') {
-    wm.openUpdateWindow();
+    wm.openUpdateWindow({ size: UPDATE_WINDOW });
     return { ok: true };
   }
   setChecking(true);
@@ -816,10 +872,9 @@ async function checkForUpdatesMac(manual) {
   } catch (err) {
     logger.warn('[updater] mac check failed:', (err && err.message) || err);
     if (manual) {
-      showPrompt({ buttons: ['OK'], defaultId: 0, title: c.checkTitle, message: c.notCheckable }).catch(
-        () => {}
-      );
-      return { ok: false, error: 'check-failed', message: c.notCheckable };
+      const message = c.notCheckableReason(describeCheckError(err));
+      showPrompt({ buttons: ['OK'], defaultId: 0, title: c.checkTitle, message }).catch(() => {});
+      return { ok: false, error: 'check-failed', message };
     }
     return { ok: false, error: 'check-failed' };
   } finally {
@@ -888,7 +943,7 @@ function initUpdater() {
         buttons: ['OK'],
         defaultId: 0,
         title: c.checkTitle,
-        message: c.notCheckable,
+        message: c.notCheckableReason(describeCheckError(err)),
       }).catch(() => {});
     }
   });
@@ -934,7 +989,7 @@ async function checkForUpdatesInteractive(_win) {
   }
   // 正在下载 / 已完成：不重复检查，直接把下载窗口拉到前台。
   if (dl.phase !== 'idle') {
-    wm.openUpdateWindow();
+    wm.openUpdateWindow({ size: UPDATE_WINDOW });
     return { ok: true };
   }
   if (process.platform === 'darwin') {
@@ -942,8 +997,9 @@ async function checkForUpdatesInteractive(_win) {
   }
   const updater = loadUpdater();
   if (!updater) {
-    showPrompt({ buttons: ['OK'], defaultId: 0, title: copy().checkTitle, message: copy().notCheckable }).catch(() => {});
-    return { ok: false, error: 'unavailable', message: copy().notCheckable };
+    const message = copy().notCheckableReason(copy().reasonUnavailable);
+    showPrompt({ buttons: ['OK'], defaultId: 0, title: copy().checkTitle, message }).catch(() => {});
+    return { ok: false, error: 'unavailable', message };
   }
   if (interactiveChecking) return { ok: true, checking: true };
   setChecking(true);
@@ -961,8 +1017,9 @@ async function checkForUpdatesInteractive(_win) {
   // 兜底：整次检查没有触发任何事件（理论上仅当更新被停用），也要给用户一个反馈。
   if (manualCheck) {
     manualCheck = false;
-    showPrompt({ buttons: ['OK'], defaultId: 0, title: copy().checkTitle, message: copy().notCheckable }).catch(() => {});
-    return { ok: false, error: 'no-result', message: copy().notCheckable };
+    const message = copy().notCheckableReason(copy().reasonNoResult);
+    showPrompt({ buttons: ['OK'], defaultId: 0, title: copy().checkTitle, message }).catch(() => {});
+    return { ok: false, error: 'no-result', message };
   }
   return { ok: true };
 }

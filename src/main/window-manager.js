@@ -1887,7 +1887,8 @@ function isUpdateWindow(win) {
   return Boolean(win) && win === updateWindow && !win.isDestroyed();
 }
 
-function openUpdateWindow() {
+function openUpdateWindow(options) {
+  const size = options && options.size ? options.size : null;
   // 菜单栏 Agent（隐藏 Dock）需要显式抢焦，窗口才会到前台。
   if (process.platform === 'darwin' && typeof app.focus === 'function') {
     try {
@@ -1897,14 +1898,21 @@ function openUpdateWindow() {
     }
   }
   if (updateWindow && !updateWindow.isDestroyed()) {
+    if (size && Number.isFinite(size.width) && Number.isFinite(size.height)) {
+      const bounds = updateWindow.getBounds();
+      if (bounds.width !== size.width || bounds.height !== size.height) {
+        updateWindow.setSize(size.width, size.height);
+        updateWindow.center();
+      }
+    }
     updateWindow.show();
     updateWindow.focus();
     return updateWindow;
   }
 
   updateWindow = new BrowserWindow({
-    width: UPDATE_WINDOW.width,
-    height: UPDATE_WINDOW.height,
+    width: size ? size.width : UPDATE_WINDOW.width,
+    height: size ? size.height : UPDATE_WINDOW.height,
     show: false,
     // 真正的系统红绿灯（hiddenInset）：与标题同一行；只保留「最小化」，
     // 关闭 / 缩放禁用（closable:false + maximizable:false），另见下方的 close 拦截。

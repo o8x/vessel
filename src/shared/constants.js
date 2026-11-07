@@ -278,6 +278,10 @@ const UPDATE_WINDOW = Object.assign(
   appConfig.updateWindow || {}
 );
 
+// 更新提示窗口：无更新日志时用紧凑尺寸；带更新日志时用稍大的尺寸。
+const UPDATE_WINDOW_PROMPT = { width: 420, height: 200 };
+const UPDATE_WINDOW_PROMPT_LOG = { width: 560, height: 420 };
+
 // 更新下载完成后自动重启安装的倒计时（秒）。
 const UPDATE_COUNTDOWN_SECONDS = 60;
 
@@ -399,6 +403,8 @@ module.exports = {
   FILE_EDITOR_WINDOW,
   GAME_WINDOW,
   UPDATE_WINDOW,
+  UPDATE_WINDOW_PROMPT,
+  UPDATE_WINDOW_PROMPT_LOG,
   UPDATE_COUNTDOWN_SECONDS,
   UPDATE_CHANGELOG_TIMEOUT_MS,
   SHORTCUT_DOUBLE_TAP_MS,

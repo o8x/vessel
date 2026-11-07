@@ -39,7 +39,7 @@
 | --- | --- |
 | 主窗口尺寸 | 固定 640 × 480（不可缩放；`vessel.mainWindow`） |
 | 设置窗口尺寸 | 800 × 600（固定，不可缩放 / 全屏） |
-| 更新窗口尺寸 | 固定 640 × 480（不可缩放；`vessel.updateWindow`） |
+| 更新窗口尺寸 | 下载 640 × 480；提示无日志 420 × 200、带日志 560 × 420（不可缩放；`vessel.updateWindow` / `UPDATE_WINDOW_PROMPT*`） |
 | 游戏窗口尺寸 | 默认 / 最小 480 × 320；最大 1440 × 900（`vessel.gameWindow`） |
 | 游戏主界面网格 | 8 列，间距 8px；封面 1:1 |
 | `--tabbar-height` | 46px |
