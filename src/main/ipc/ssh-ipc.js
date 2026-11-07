@@ -7,7 +7,7 @@ const configService = require('../services/ssh-config-service');
 const sshService = require('../services/ssh-service');
 const credentials = require('../services/ssh-credentials-service');
 const { broadcast, getMainWindow } = require('../window-manager');
-const { runInTerminal } = require('./terminal-ipc');
+const { runInTerminal, runInNewTerminal } = require('./terminal-ipc');
 const { requestLocalNetworkAccess } = require('../services/local-network-service');
 const proxyService = require('../services/proxy-service');
 const logger = require('../utils/logger');
@@ -50,6 +50,46 @@ function registerSshIpc(ipcMain) {
     logger.file(`[ssh] connect(alias=${host.alias}) -> terminal: ${command}${secret ? ' (+password)' : ''}`);
     if (!runInTerminal(command, secret, host.alias)) return { ok: false, error: 'terminal unavailable', command };
     return { ok: true, command };
+  });
+
+  // 「快速连接」：地址必填；有密码用密码，无密码回退到 ~/.ssh/id_ed25519 密钥。
+  // 无论连接成功与否都写入 ~/.ssh/config 的「快速连接」分组（该分组恒在最前）。
+  ipcMain.handle(IPC.SSH_QUICK_CONNECT, async (event, payload) => {
+    requestLocalNetworkAccess();
+    const hostName = String((payload && payload.hostName) || '').trim();
+    const user = String((payload && payload.user) || '').trim();
+    const port = Number(payload && payload.port) || 22;
+    const password = String((payload && payload.password) || '');
+    // 终端右键菜单发起 = 在当前终端连接；SSH 工具发起 = 始终新开一扇终端。
+    const inCurrentTerminal = Boolean(payload && payload.inCurrentTerminal);
+    if (!hostName) return { ok: false, error: 'hostName required' };
+
+    const alias = `${user ? `${user}@` : ''}${hostName}${port !== 22 ? `:${port}` : ''}`;
+    const host = {
+      alias,
+      hostName,
+      user,
+      port,
+      identityFile: '~/.ssh/id_ed25519',
+      proxyJump: '',
+    };
+    // 先写入分组（成功 / 失败都要留下记录）。
+    configService.upsertQuickConnect(host);
+    const hosts = notifyConfigChanged(configService.list());
+    if (password) credentials.save(alias, password);
+    else credentials.remove(alias);
+    sshService.detect(host);
+
+    const socksProxy = await proxyService.resolveSocks(hostName, port);
+    const command = sshService.buildCommand(host, { socksProxy });
+    logger.file(
+      `[ssh] quick-connect ${alias} -> ${inCurrentTerminal ? 'current' : 'new'} terminal (${password ? 'password' : 'key ~/.ssh/id_ed25519'}): ${command}`
+    );
+    const started = inCurrentTerminal
+      ? runInTerminal(command, password, alias, BrowserWindow.fromWebContents(event.sender))
+      : runInNewTerminal(command, password, alias);
+    if (!started) return { ok: false, error: 'terminal unavailable', command, alias, hosts };
+    return { ok: true, command, alias, hosts };
   });
 
   ipcMain.handle(IPC.SSH_DETECT, (_event, payload) => {

@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { SSH_CONFIG_FILE } = require('../utils/paths');
+const { SSH_QUICK_CONNECT_GROUP } = require('../../shared/constants');
 const logger = require('../utils/logger');
 
 const MANAGED_KEYS = new Set(['hostname', 'user', 'port', 'identityfile', 'proxyjump']);
@@ -240,6 +241,61 @@ function upsert(host) {
   return list();
 }
 
+/* 「快速连接」：把主机写入 `~/.ssh/config` 的快速连接分组，并让该分组始终排在文件最前面
+   （分组列表按文件顺序展示，因此快速连接组恒在其他分组之前）。
+   - 同一别名重复连接时更新该主机并移到组内最前；
+   - 已有的快速连接主机保留在其后；
+   - 顶部原有的说明 / 注释块保持不动，快速连接组紧跟其后。 */
+function upsertQuickConnect(host) {
+  if (!host || !host.alias) return list();
+  const qLower = SSH_QUICK_CONNECT_GROUP.toLowerCase();
+  const aliasLower = String(host.alias).toLowerCase();
+  const entries = parseEntries(readContent());
+
+  // 取出整个快速连接分组块（标记 + 其后到下一个分组标记之前的所有条目）。
+  const qi = entries.findIndex(
+    (entry) => entry.kind === 'group' && (entry.name || '').trim().toLowerCase() === qLower
+  );
+  let block;
+  if (qi >= 0) {
+    let end = qi + 1;
+    while (end < entries.length && entries[end].kind !== 'group') end += 1;
+    block = entries.splice(qi, end - qi);
+  } else {
+    block = [{ kind: 'group', name: SSH_QUICK_CONNECT_GROUP, lines: [`# group: ${SSH_QUICK_CONNECT_GROUP}`] }];
+  }
+
+  const hostEntry = {
+    kind: 'host',
+    patterns: [host.alias],
+    group: SSH_QUICK_CONNECT_GROUP,
+    lines: serializeHost(host),
+  };
+  const withoutAlias = (entry) =>
+    !(entry.kind === 'host' && (entry.patterns[0] || '').toLowerCase() === aliasLower);
+
+  block = block.filter(withoutAlias);
+  let rest = entries.filter(withoutAlias);
+  // block[0] 是分组标记；新主机放在组内最前。
+  block.splice(1, 0, hostEntry);
+
+  // 顶部说明 / 注释（第一个 raw 块）保留在最前。
+  const head = [];
+  if (rest[0] && rest[0].kind === 'raw') head.push(rest.shift());
+
+  // 未分组主机必须排在第一个分组标记之前，否则会被错误并入「快速连接」组
+  // （config 的分组是按标记的位置生效的）。它们移到顶部注释之后、快速连接组之前；
+  // 列表 UI 仍会把命名分组排在未分组之前，因此快速连接组依旧显示在最前面。
+  const ungrouped = rest.filter((entry) => entry.kind === 'host' && !entry.group);
+  if (ungrouped.length) {
+    rest = rest.filter((entry) => !(entry.kind === 'host' && !entry.group));
+  }
+
+  const ordered = head.concat(ungrouped, block, rest);
+  writeContent(serializeEntries(ordered));
+  return list();
+}
+
 /* 重命名分组：把 config 里所有匹配 `from` 的 `# group:` 注释改成 `to`（不区分大小写）。
    若目标名与已有分组同名，会在 config 中产生同名标记（UI 层已拦截，避免意外合并）。 */
 function renameGroup(from, to) {
@@ -278,6 +334,7 @@ module.exports = {
   list,
   listGroups,
   upsert,
+  upsertQuickConnect,
   remove,
   renameGroup,
   _parseEntries: parseEntries,

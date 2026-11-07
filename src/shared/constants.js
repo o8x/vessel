@@ -171,6 +171,7 @@ const IPC = {
   SSH_LIST: 'ssh:list',
   SSH_EDIT: 'ssh:edit',
   SSH_CONNECT: 'ssh:connect',
+  SSH_QUICK_CONNECT: 'ssh:quick-connect',
   SSH_DETECT: 'ssh:detect',
   SSH_DETECT_HOST: 'ssh:detect-host',
   SSH_GET_DETECTED: 'ssh:get-detected',
@@ -280,7 +281,11 @@ const UPDATE_COUNTDOWN_SECONDS = 60;
 const UPDATE_CHANGELOG_TIMEOUT_MS = 8000;
 
 // 同一个全局快捷键同时绑定主窗口（双击）与终端（单击）时，用于区分单 / 双击的等待时间。
+// 已不再共用快捷键（仅保留常量以兼容旧引用）。
 const SHORTCUT_DOUBLE_TAP_MS = 260;
+
+// SSH「快速连接」写入 ~/.ssh/config 的分组名（该分组始终排在分组列表最前面）。
+const SSH_QUICK_CONNECT_GROUP = '快速连接';
 
 // 拖动窗口时，窗口中心与屏幕（工作区）**垂直中线**（x 方向）对齐的「磁性吸附」（px，滞回）：
 // 进入吸附的阈值 / 脱离吸附的释放阈值。用于终端窗口与主窗口；
@@ -392,6 +397,7 @@ module.exports = {
   UPDATE_COUNTDOWN_SECONDS,
   UPDATE_CHANGELOG_TIMEOUT_MS,
   SHORTCUT_DOUBLE_TAP_MS,
+  SSH_QUICK_CONNECT_GROUP,
   CENTER_SNAP,
   SPACE_CONFIRM_DELAY_MS,
   SSH_EXIT_MARKER,

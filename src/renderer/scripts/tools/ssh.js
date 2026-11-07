@@ -22,6 +22,18 @@
         detectDone: '{host}：{os}',
         files: '打开文件管理',
         ungrouped: '未分组',
+        quickTitle: '快速连接',
+        quickUser: '用户名',
+        quickAddress: '地址',
+        quickPort: '端口',
+        quickPassword: '密码',
+        quickConfirm: '确认',
+        quickConnecting: '连接中…',
+        quickAddressRequired: '请填写 IP 地址',
+        quickFailed: '连接失败：{error}',
+        quickStarted: '已加入「快速连接」：{host}',
+        quickKeyHint: '留空密码则使用 ~/.ssh/id_ed25519 密钥连接',
+        quickTip: '快速连接',
       },
     },
     en: {
@@ -41,6 +53,18 @@
         detectDone: '{host}: {os}',
         files: 'Open file manager',
         ungrouped: 'Ungrouped',
+        quickTitle: 'Quick connect',
+        quickUser: 'Username',
+        quickAddress: 'Address',
+        quickPort: 'Port',
+        quickPassword: 'Password',
+        quickConfirm: 'Connect',
+        quickConnecting: 'Connecting…',
+        quickAddressRequired: 'IP address is required',
+        quickFailed: 'Connect failed: {error}',
+        quickStarted: 'Added to Quick connect: {host}',
+        quickKeyHint: 'Leave password empty to use the ~/.ssh/id_ed25519 key',
+        quickTip: 'Quick connect',
       },
     },
   });
@@ -58,7 +82,7 @@
     return fallback[detected.os] || detected.os || i18n.t('ssh.unknown');
   }
 
-  function mount(container) {
+  function mount(container, ctx) {
     const state = {
       hosts: [],
       detected: {},
@@ -72,12 +96,195 @@
     const list = el('div', { class: 'flex flex-col gap-card' }, '');
     container.append(status, list);
 
+    setupQuickConnect(ctx && ctx.headerActions);
+
     function showStatus(text, isError) {
       status.textContent = text;
       status.style.color = isError ? 'var(--color-danger)' : 'var(--color-success)';
       status.classList.remove('hidden');
       clearTimeout(state.statusTimer);
       state.statusTimer = setTimeout(() => status.classList.add('hidden'), 3200);
+    }
+
+    /* 标题行右侧「快速连接」按钮 + 固定尺寸弹窗（不可调整大小）。
+       第一行：root / ubuntu 预设 + 用户名输入；第二行：地址 + 端口；第三行：密码 + 确认。 */
+    function setupQuickConnect(headerActions) {
+      if (!headerActions) return;
+      const toggle = el('button', {
+        class: 'icon-btn h-7 w-7',
+        type: 'button',
+        'data-tip': i18n.t('ssh.quickTip'),
+      });
+      toggle.innerHTML = Icons.plus(16);
+      headerActions.appendChild(toggle);
+
+      const pop = el('div', { class: 'ssh-quick-pop' });
+      const row1 = el('div', { class: 'ssh-quick-row' });
+      const chips = {};
+      for (const name of ['root', 'ubuntu']) {
+        const chip = el('button', { class: 'ssh-quick-chip', type: 'button' }, name);
+        chip.addEventListener('click', () => {
+          userInput.value = name;
+          syncChips();
+          userInput.focus();
+        });
+        chips[name] = chip;
+        row1.appendChild(chip);
+      }
+      const userInput = el('input', {
+        class: 'field ssh-quick-user',
+        type: 'text',
+        placeholder: i18n.t('ssh.quickUser'),
+        value: 'root',
+        spellcheck: 'false',
+        autocomplete: 'off',
+      });
+      row1.appendChild(userInput);
+
+      const row2 = el('div', { class: 'ssh-quick-row' });
+      const addressInput = el('input', {
+        class: 'field ssh-quick-addr',
+        type: 'text',
+        placeholder: i18n.t('ssh.quickAddress'),
+        spellcheck: 'false',
+        autocomplete: 'off',
+      });
+      const portInput = el('input', {
+        class: 'field ssh-quick-port',
+        type: 'text',
+        inputmode: 'numeric',
+        value: '22',
+        spellcheck: 'false',
+        autocomplete: 'off',
+      });
+      row2.append(addressInput, portInput);
+
+      const row3 = el('div', { class: 'ssh-quick-row' });
+      const passwordInput = el('input', {
+        class: 'field ssh-quick-pass',
+        type: 'password',
+        placeholder: i18n.t('ssh.quickPassword'),
+        autocomplete: 'off',
+      });
+      const confirmBtn = el(
+        'button',
+        { class: 'btn btn-accent ssh-quick-confirm', type: 'button' },
+        i18n.t('ssh.quickConfirm')
+      );
+      row3.append(passwordInput, confirmBtn);
+
+      const hint = el('div', { class: 'ssh-quick-hint' }, i18n.t('ssh.quickKeyHint'));
+      pop.append(row1, row2, row3, hint);
+      document.body.appendChild(pop);
+
+      /* 报错用红色边框闪烁表示（不额外占一行文字）。 */
+      function flashError(input) {
+        if (!input) return;
+        input.classList.remove('field-flash-error');
+        void input.offsetWidth;
+        input.classList.add('field-flash-error');
+        input.addEventListener(
+          'animationend',
+          () => input.classList.remove('field-flash-error'),
+          { once: true }
+        );
+        input.focus();
+      }
+
+      function syncChips() {
+        const value = userInput.value.trim();
+        for (const name of Object.keys(chips)) {
+          chips[name].classList.toggle('active', value === name);
+        }
+      }
+
+      userInput.addEventListener('input', syncChips);
+      syncChips();
+
+      function positionPop() {
+        const rect = toggle.getBoundingClientRect();
+        const width = pop.offsetWidth;
+        const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+        pop.style.left = `${left}px`;
+        pop.style.top = `${rect.bottom + 6}px`;
+      }
+
+      function onDocDown(event) {
+        if (pop.contains(event.target) || toggle.contains(event.target)) return;
+        close();
+      }
+      function onKeyDown(event) {
+        if (event.key === 'Escape') close();
+      }
+      function close() {
+        pop.classList.remove('open');
+        document.removeEventListener('mousedown', onDocDown, true);
+        document.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('resize', positionPop);
+        window.removeEventListener('blur', close);
+      }
+      function open() {
+        pop.classList.add('open');
+        positionPop();
+        document.addEventListener('mousedown', onDocDown, true);
+        document.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('resize', positionPop);
+        window.addEventListener('blur', close);
+        setTimeout(() => addressInput.focus(), 0);
+      }
+
+      toggle.addEventListener('click', () => {
+        if (pop.classList.contains('open')) close();
+        else open();
+      });
+
+      async function submit() {
+        const hostName = addressInput.value.trim();
+        if (!hostName) {
+          flashError(addressInput);
+          return;
+        }
+        const user = userInput.value.trim();
+        const port = Number(portInput.value.trim()) || 22;
+        confirmBtn.disabled = true;
+        const original = confirmBtn.textContent;
+        confirmBtn.textContent = i18n.t('ssh.quickConnecting');
+        try {
+          const result = await window.ships.ssh.quickConnect({
+            user,
+            hostName,
+            port,
+            password: passwordInput.value,
+          });
+          if (result && result.ok) {
+            showStatus(i18n.t('ssh.quickStarted', { host: result.alias || hostName }), false);
+            passwordInput.value = '';
+            close();
+          } else {
+            flashError(addressInput);
+          }
+          await load();
+        } catch (err) {
+          flashError(addressInput);
+        } finally {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = original;
+        }
+      }
+
+      confirmBtn.addEventListener('click', submit);
+      pop.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          submit();
+        }
+      });
+
+      state.disposers.push(() => {
+        close();
+        if (pop.parentNode) pop.parentNode.removeChild(pop);
+        if (toggle.parentNode) toggle.parentNode.removeChild(toggle);
+      });
     }
 
     function buildRow(host) {
@@ -231,6 +438,10 @@
         );
       })
     );
+
+    if (window.ships.ssh.onConfigChanged) {
+      state.disposers.push(window.ships.ssh.onConfigChanged(() => load()));
+    }
 
     load();
 

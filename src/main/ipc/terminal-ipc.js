@@ -69,11 +69,27 @@ function notifyTarget(sender, sessionId, target) {
   sender.send(IPC.TERMINAL_SESSION, { id: sessionId, type: 'session', ssh: value, target: value, busy: false });
 }
 
-/* Runs `command` in a terminal window: the focused one if any, otherwise a new one
-   (windows never move across desktops — we never pull an existing one over). */
-function runInTerminal(command, secret, target) {
+/* 把命令注入给定窗口；会话尚未就绪时先排队（窗口会话上报后 flush）。 */
+function injectInto(win, command, secret, target) {
+  if (!win || win.isDestroyed()) return false;
+  overlayLastCommand = command;
+  const ownerId = win.webContents.id;
+  const sessionId = sessionByOwner.get(ownerId);
+  if (sessionId && terminal.get(sessionId)) {
+    terminal.inject(sessionId, command, secret);
+    notifyTarget(win.webContents, sessionId, target);
+  } else {
+    pendingByOwner.set(ownerId, { command, secret, target }); // flushed once the window's session reports in
+  }
+  return true;
+}
+
+/* Runs `command` in a terminal window: `preferredWin`（从该终端窗口本身发起时）优先，
+   否则用当前聚焦的终端；都没有时新开一扇（窗口不跨桌面移动）。 */
+function runInTerminal(command, secret, target, preferredWin) {
   if (!command) return false;
-  let win = wm.getFocusedTerminalWindow();
+  let win =
+    preferredWin && wm.isTerminalWindow(preferredWin) ? preferredWin : wm.getFocusedTerminalWindow();
   if (!win) {
     // 只有一扇终端且处于「悬浮球」时，直接放大它并注入命令，而不是再开一扇。
     const existing = wm.getTerminalWindow();
@@ -84,17 +100,14 @@ function runInTerminal(command, secret, target) {
       win = wm.openTerminalWindow();
     }
   }
-  overlayLastCommand = command;
-  if (!win || win.isDestroyed()) return false;
-  const ownerId = win.webContents.id;
-  const sessionId = sessionByOwner.get(ownerId);
-  if (sessionId && terminal.get(sessionId)) {
-    terminal.inject(sessionId, command, secret);
-    notifyTarget(win.webContents, sessionId, target);
-  } else {
-    pendingByOwner.set(ownerId, { command, secret, target }); // flushed once the window's session reports in
-  }
-  return true;
+  return injectInto(win, command, secret, target);
+}
+
+/* 始终新开一扇终端再注入命令（SSH 快速连接使用）。 */
+function runInNewTerminal(command, secret, target) {
+  if (!command) return false;
+  const win = wm.openTerminalWindow();
+  return injectInto(win, command, secret, target);
 }
 
 function registerTerminalIpc(ipcMain) {
@@ -229,4 +242,4 @@ function registerTerminalIpc(ipcMain) {
   });
 }
 
-module.exports = { registerTerminalIpc, runInTerminal };
+module.exports = { registerTerminalIpc, runInTerminal, runInNewTerminal };
