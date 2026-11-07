@@ -397,6 +397,29 @@ function destroyTerminalWindow(target) {
   win.destroy();
 }
 
+/* 把终端显式「拉回前台」（快捷键 / 窗口管理 · 激活）。此时窗口会被带到当前桌面，
+   因此要等窗口真正落到当前桌面后重新记录 Space；否则旧记录会让后续失焦被误判为
+   「用户切换了桌面」而永不缩成悬浮球。 */
+function bringTerminalToFront(win) {
+  if (!isTerminalWindow(win) || win.isDestroyed()) return;
+  if (typeof win.isMinimized === 'function' && win.isMinimized()) win.restore();
+  // 先清掉旧记录：拉回后立刻失焦时，detectSpaceChange 会等待这次重新读取，
+  // 不会拿旧桌面做比较。
+  win.__spaceId = '';
+  win.__spacePromise = new Promise((resolve) => {
+    setTimeout(() => {
+      if (!isTerminalWindow(win) || win.isDestroyed()) {
+        resolve('');
+        return;
+      }
+      rememberTerminalSpace(win).then((signature) => resolve(signature || ''), () => resolve(''));
+    }, 200);
+  });
+  win.show();
+  win.focus();
+  if (typeof win.moveTop === 'function') win.moveTop();
+}
+
 /* 全局快捷键（Steam 式开关）：
    - 同时存在多扇终端窗口 → 失效（不响应）。
    - 只有一扇 → 「悬浮球 ↔ 终端」互相切换：球态放大回窗口；窗口态收缩成球；都不在前台则拉回。
@@ -425,8 +448,7 @@ function toggleTerminalWindow() {
     destroyTerminalWindow(win);
     return null;
   }
-  win.show();
-  win.focus();
+  bringTerminalToFront(win);
   return win;
 }
 
@@ -1208,9 +1230,9 @@ function openTerminalWindow(options) {
     // 会重置为默认的「固定在本桌面」）。之后变球时不再动它，避免球跟着切换桌面。
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
     win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true });
-    // 注意：**不要**在这里重新记录 Space。切桌面时窗口可能被系统短暂带到新桌面并重新获得焦点，
+    // 注意：**不要**在这里无脑重新记录 Space。切桌面时窗口可能被系统短暂带到新桌面并重新获得焦点，
     // 若在 focus 时覆盖记录，检测就会把「已切走」误判成「没切」→ 仍然缩球。
-    // 记录只取窗口创建时那一次（见 openTerminalWindow 中的 rememberTerminalSpace 调用）。
+    // 只有「显式拉回前台」（快捷键 / 窗口管理激活）才经 bringTerminalToFront 重新记录。
   });
   // 失去焦点 → 延迟后缩成圆形悬浮球（延时内焦点回来则取消；DevTools 打开 / iTerm 交接时不动）。
   win.on('blur', () => {
@@ -2000,8 +2022,9 @@ function getManagedWindow(id) {
 function activateManagedWindow(id) {
   const win = getManagedWindow(id);
   if (!win) return false;
-  if (isTerminalWindow(win) && isBallMode(win)) {
-    exitBallMode(win, true);
+  if (isTerminalWindow(win)) {
+    if (isBallMode(win)) exitBallMode(win, true);
+    else bringTerminalToFront(win);
     return true;
   }
   if (typeof win.isMinimized === 'function' && win.isMinimized()) win.restore();
