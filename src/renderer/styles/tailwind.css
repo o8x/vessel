@@ -1944,8 +1944,13 @@ body.file-window .fm-tree-row {
   display: none;
 }
 /* 编码转换有 6 个连续输入框，使用更紧凑的字段间距。 */
-.section.encode-fields,
+.section.encode-fields {
+  gap: 8px;
+}
+/* 进制 / 单位转换的输入框一行三个，避免过宽。 */
 .section.radix-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 /* 编码转换：字段、二维码 / Data Matrix 分区及标题统一 8px 间距。 */

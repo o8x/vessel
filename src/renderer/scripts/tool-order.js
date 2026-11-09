@@ -8,7 +8,7 @@ window.ShipsToolOrder = [
     "timestamp", // 时间戳转换
     "subnet", // IP / 网段与掩码计算
     "encode", // 编码转换（字符串 / Base64 / 十六进制 / URL / ASCII）
-    "radix", // 单位转换（字节 / 位 / KiB–TiB / Kbps–Gbps）
+    "radix", // 进制转换 + 单位转换（字节 / 位 / KiB–TiB / Kbps–Gbps）
     "json", // JSON 格式化
     "hash", // 哈希计算（MD5 / SHA1 / SHA256）
     "nutrient", // 营养成分

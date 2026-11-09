@@ -43,7 +43,7 @@ window.ShipsI18n = (function createI18n() {
       toolDesc: {
         timestamp: '秒 / 毫秒 / 纳秒与日期互转',
         subnet: 'IP 进制与网段 / 掩码计算，含归属地查询',
-        radix: '字节 / 位与 KiB–TiB、Kbps–Gbps 互转',
+        radix: '二进制 / 八进制 / 十进制 / 十六进制互转，字节 / 位与 KiB–TiB、Kbps–Gbps 换算',
         json: '粘贴 JSON 自动原地格式化与结构查看',
         ssh: '读取 ~/.ssh/config，点击或双击在 iTerm 连接',
         clipboard: '最近的剪贴板记录，支持复制与清空',
@@ -94,7 +94,7 @@ window.ShipsI18n = (function createI18n() {
       toolDesc: {
         timestamp: 'Convert between s / ms / ns and dates',
         subnet: 'IP bases and subnet / mask, with geolocation',
-        radix: 'Bytes / bits ↔ KiB–TiB, Kbps–Gbps',
+        radix: 'Binary / octal / decimal / hex, plus bytes / bits ↔ KiB–TiB, Kbps–Gbps',
         json: 'Paste JSON to format in place and view its structure',
         ssh: 'Read ~/.ssh/config; click or double-click to open in iTerm',
         clipboard: 'Recent clipboard items with copy and clear',
