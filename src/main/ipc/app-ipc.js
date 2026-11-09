@@ -8,6 +8,7 @@ const { IPC, VERSION, TERMINAL_WINDOW } = require('../../shared/constants');
 const logger = require('../utils/logger');
 const updater = require('../services/updater-service');
 const fontService = require('../services/font-service');
+const localAddressService = require('../services/local-address-service');
 const {
   DATA_DIR,
   LOG_DIR,
@@ -34,6 +35,18 @@ function registerAppIpc(ipcMain) {
 
   // 系统字体列表（设置 → 终端 → 字体）。
   ipcMain.handle(IPC.APP_LIST_FONTS, () => fontService.listFonts());
+
+  // 获取本机地址：公网 / 内网，IPv4 / IPv6，供网络工具下拉选择使用。
+  ipcMain.handle(IPC.LOCAL_ADDRESS, async (_event, payload) => {
+    const kind = payload && payload.kind;
+    try {
+      const address = await localAddressService.getAddress(kind);
+      if (!address) return { ok: false, error: 'not-found' };
+      return { ok: true, address };
+    } catch (err) {
+      return { ok: false, error: (err && err.message) || 'error' };
+    }
+  });
 
   ipcMain.handle(IPC.OPEN_DATA_FOLDER, async () => {
     const err = await shell.openPath(DATA_DIR);

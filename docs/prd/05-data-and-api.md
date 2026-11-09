@@ -40,6 +40,7 @@
 | --- | --- | --- | --- |
 | `app:info` | — | `{ version, platform, arch, systemLocale, dataDir, dataFiles, terminalScrollback }` | 版本取 `package.json`；`terminalScrollback` 取 `vessel.terminalWindow.scrollback` |
 | `app:list-fonts` | — | `{ ok, fonts?, error? }`（`fonts: [{ family, mono }]`） | 通过 AppKit `NSFontManager`（`osascript -l JavaScript`）读取系统已安装字体家族，并标记是否为等宽字体；**等宽字体排在前面**，同组按名称排序，结果缓存。供字体选择子窗口使用。仅 macOS |
+| `app:local-address` | `{ kind }`（`'public4'` / `'public6'` / `'lan4'` / `'lan6'`） | `{ ok, address }` 或 `{ ok: false, error }` | 取本机地址供 IP / 网段工具的下拉使用：`lan4` / `lan6` 从 `os.networkInterfaces()` 取对应地址族的非内部地址（v4 优先 RFC 1918 私有网段；v6 去掉作用域后缀并优先非链路本地）；`public4` / `public6` 按地址族（`family: 4` / `6`）请求 `ipv4.icanhazip.com` / `ipv6.icanhazip.com`（失败退回 `ifconfig.me/ip`）获取出口 IP（遵循系统代理，5s 超时，任一成功即返回）；均失败返回 `{ ok: false }` |
 | `font-picker:open` | — | `{ ok }` | 打开设置窗口的非模态字体选择子窗口（`font-picker.html`）；已打开时聚焦现有窗口 |
 | `app:open-data-folder` | — | `{ ok, error? }` | 打开数据目录 |
 | `app:open-log` | — | `{ ok, error? }` | 打开**日志文件夹**（macOS：`~/Library/Logs/Vessel`；不存在则创建；**只打开文件夹，不打开日志文件**） |

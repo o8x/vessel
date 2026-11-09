@@ -55,6 +55,7 @@ const IPC = {
   THEME_CHANGED: 'theme:changed',
 
   GEO_LOOKUP: 'geo:lookup',
+  LOCAL_ADDRESS: 'app:local-address',
   DEVTOOLS_OPEN: 'devtools:open',
 
   CLIPBOARD_LIST: 'clipboard:list',

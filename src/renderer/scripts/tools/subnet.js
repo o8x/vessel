@@ -1,13 +1,20 @@
 'use strict';
 
 (function registerSubnetTool() {
-  const { Icons, el, section, field, resultRow, createGeoRow } = window.ShipsUI;
+  const { Icons, el, section, field, resultRow, createGeoRow, createSelect } = window.ShipsUI;
   const i18n = window.ShipsI18n;
 
   i18n.extend({
     zh: {
       subnet: {
         input: 'IP / 网段 / 掩码',
+        localAddress: '本机地址',
+        localPublic4: 'IPv4 公网地址',
+        localPublic6: 'IPv6 公网地址',
+        localLan4: 'IPv4 内网地址',
+        localLan6: 'IPv6 内网地址',
+        localError: '获取本机地址失败',
+        localLoading: '获取中…',
         placeholder: '如 192.168.1.10/24、192.168.1.0 255.255.255.0、2001:db8::/32 或 3232235777',
         defaultMask: '未指定掩码，默认按 /24 计算',
         baseTitle: 'IP 进制',
@@ -59,6 +66,13 @@
     en: {
       subnet: {
         input: 'IP / subnet / mask',
+        localAddress: 'Local IP',
+        localPublic4: 'IPv4 public',
+        localPublic6: 'IPv6 public',
+        localLan4: 'IPv4 LAN',
+        localLan6: 'IPv6 LAN',
+        localError: 'Failed to get local address',
+        localLoading: 'Fetching…',
         placeholder: 'e.g. 192.168.1.10/24, 192.168.1.0 255.255.255.0, 2001:db8::/32 or 3232235777',
         defaultMask: 'No mask given, using /24',
         baseTitle: 'IP bases',
@@ -364,8 +378,68 @@
 
   function mount(container) {
     const inputSection = section();
+    const inputRow = el('div', { class: 'flex items-center gap-2' });
+    const inputWrap = el('div', { class: 'relative min-w-0 flex-1' });
     const input = field(null, { placeholder: i18n.t('subnet.placeholder'), spellcheck: 'false' }).input;
-    inputSection.appendChild(input);
+    inputWrap.appendChild(input);
+    const loading = el('span', {
+      class: 'pointer-events-none absolute right-2.5 top-1/2 inline-flex -translate-y-1/2 text-fg-muted hidden',
+    });
+    const loadingIcon = el('span', { class: 'spin inline-flex' });
+    loadingIcon.innerHTML = Icons.refresh(14);
+    loading.appendChild(loadingIcon);
+    inputWrap.appendChild(loading);
+    inputRow.appendChild(inputWrap);
+
+    const defaultPlaceholder = input.getAttribute('placeholder') || '';
+    function setLoading(active) {
+      loading.classList.toggle('hidden', !active);
+      input.disabled = active;
+      if (active) {
+        input.setAttribute('aria-busy', 'true');
+        input.setAttribute('placeholder', i18n.t('subnet.localLoading'));
+      } else {
+        input.removeAttribute('aria-busy');
+        input.setAttribute('placeholder', defaultPlaceholder);
+      }
+    }
+
+    const localSelect = createSelect({
+      options: [
+        { value: 'public4', label: i18n.t('subnet.localPublic4') },
+        { value: 'public6', label: i18n.t('subnet.localPublic6') },
+        { value: 'lan4', label: i18n.t('subnet.localLan4') },
+        { value: 'lan6', label: i18n.t('subnet.localLan6') },
+      ],
+      value: '',
+      placeholder: i18n.t('subnet.localAddress'),
+      className: 'shrink-0',
+      align: 'right',
+      onChange: async (kind) => {
+        localSelect.setValue('');
+        if (!window.ships || typeof window.ships.localAddress !== 'function') return;
+        input.value = '';
+        setLoading(true);
+        let address = null;
+        try {
+          const res = await window.ships.localAddress(kind);
+          if (res && res.ok && res.address) address = res.address;
+        } catch (err) {
+          address = null;
+        }
+        setLoading(false);
+        if (address) {
+          input.value = address;
+          update();
+        } else {
+          hint.textContent = i18n.t('subnet.localError');
+          hint.style.color = 'var(--color-danger)';
+        }
+      },
+    });
+    inputRow.appendChild(localSelect.el);
+    localSelect.el.style.width = '150px';
+    inputSection.appendChild(inputRow);
     const hint = el('div', { class: 'text-[11px] text-fg-muted' }, i18n.t('subnet.empty'));
     inputSection.appendChild(hint);
 

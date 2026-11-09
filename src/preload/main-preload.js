@@ -29,6 +29,7 @@ const api = {
   copyImage: (dataUrl) => ipcRenderer.invoke(IPC.COPY_IMAGE, dataUrl),
   saveImage: (payload) => ipcRenderer.invoke(IPC.SAVE_IMAGE, payload),
   geoLookup: (ip) => ipcRenderer.invoke(IPC.GEO_LOOKUP, ip),
+  localAddress: (kind) => ipcRenderer.invoke(IPC.LOCAL_ADDRESS, { kind }),
   clipboard: {
     list: () => ipcRenderer.invoke(IPC.CLIPBOARD_LIST),
     copy: (id) => ipcRenderer.invoke(IPC.CLIPBOARD_COPY, id),
