@@ -2,6 +2,14 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.5.0 - 2026-11-09
+
+### 新增
+
+- Official WHOIS and ping lookup links
+- Local address lookup to IP/subnet tool
+- Restore radix conversion alongside unit conversion
+
 ## v6.4.0 - 2026-11-07
 
 ### 新增
