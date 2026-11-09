@@ -507,10 +507,33 @@
     const geoRow = createGeoRow();
     geoSection.appendChild(geoRow.root);
 
-    // Two public lookup sites, opened in the browser with the current address.
+    // Public lookup sites, opened in the browser with the current address.
     const GEO_LINKS = [
-      { icon: 'globe', site: 'ipgeolocation.io', base: 'https://ipgeolocation.io/what-is-my-ip/' },
-      { icon: 'external', site: 'iplocation.io', base: 'https://iplocation.io/ip/' },
+      {
+        icon: 'mapPin',
+        site: 'ipgeolocation.io',
+        href: (ip) => `https://ipgeolocation.io/what-is-my-ip/${encodeURIComponent(ip)}`,
+      },
+      {
+        icon: 'globe',
+        site: 'iplocation.io',
+        href: (ip) => `https://iplocation.io/ip/${encodeURIComponent(ip)}`,
+      },
+      {
+        icon: 'whois',
+        site: 'CNNIC WHOIS',
+        href: (ip) => `https://webwhois.cnnic.cn/WhoisServlet?queryType=Host&domain=${encodeURIComponent(ip)}`,
+      },
+      {
+        icon: 'whois',
+        site: 'APNIC WHOIS',
+        href: (ip) => `https://wq.apnic.net/apnic-bin/whois.pl?searchtext=${encodeURIComponent(ip)}`,
+      },
+      {
+        icon: 'ping',
+        site: 'ping.pe',
+        href: (ip) => `https://ping.pe/${encodeURIComponent(ip)}`,
+      },
     ];
     let geoIp = '';
     const geoLinkButtons = GEO_LINKS.map((link) => {
@@ -523,7 +546,7 @@
       button.disabled = true;
       button.addEventListener('click', async () => {
         if (!geoIp) return;
-        const result = await window.ships.openExternal(`${link.base}${geoIp}`);
+        const result = await window.ships.openExternal(link.href(geoIp));
         if (result && result.ok === false) console.error('open failed:', result.error);
       });
       geoRow.root.appendChild(button);
