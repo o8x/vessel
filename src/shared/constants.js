@@ -270,7 +270,10 @@ const GAME_WINDOW = Object.assign(
   appConfig.gameWindow || {}
 );
 
-// 更新下载窗口：小、不可关闭、置顶的前台窗口（进度 / 取消 / 重启安装 + 更新日志）。
+// 更新窗口按内容分三种尺寸（都不可缩放、置顶居中）：
+//   - 有更新日志（下载 / 提示均适用）：最大，给日志留足滚动空间；
+//   - 有进度条（下载中、无日志）：中等；
+//   - 纯提示（无进度、无日志）：紧凑。
 const UPDATE_WINDOW = Object.assign(
   {
     width: 640,
@@ -278,10 +281,10 @@ const UPDATE_WINDOW = Object.assign(
   },
   appConfig.updateWindow || {}
 );
-
-// 更新提示窗口：无更新日志时用紧凑尺寸；带更新日志时用稍大的尺寸。
-const UPDATE_WINDOW_PROMPT = { width: 420, height: 200 };
-const UPDATE_WINDOW_PROMPT_LOG = { width: 560, height: 420 };
+const UPDATE_WINDOW_PROGRESS = { width: 480, height: 200 };
+const UPDATE_WINDOW_PROMPT = { width: 400, height: 168 };
+// 兼容旧引用：带更新日志沿用最大尺寸。
+const UPDATE_WINDOW_PROMPT_LOG = UPDATE_WINDOW;
 
 // 更新下载完成后自动重启安装的倒计时（秒）。
 const UPDATE_COUNTDOWN_SECONDS = 60;
@@ -404,6 +407,7 @@ module.exports = {
   FILE_EDITOR_WINDOW,
   GAME_WINDOW,
   UPDATE_WINDOW,
+  UPDATE_WINDOW_PROGRESS,
   UPDATE_WINDOW_PROMPT,
   UPDATE_WINDOW_PROMPT_LOG,
   UPDATE_COUNTDOWN_SECONDS,

@@ -13,8 +13,8 @@ const wm = require('../window-manager');
 const {
   IPC,
   UPDATE_WINDOW,
+  UPDATE_WINDOW_PROGRESS,
   UPDATE_WINDOW_PROMPT,
-  UPDATE_WINDOW_PROMPT_LOG,
   UPDATE_COUNTDOWN_SECONDS,
   UPDATE_CHANGELOG_TIMEOUT_MS,
   APP_NAME,
@@ -185,6 +185,13 @@ function loadUpdater() {
   return autoUpdater;
 }
 
+/* 按当前内容选择窗口尺寸：有更新日志 → 最大；下载进度 → 中等；纯提示 → 紧凑。
+   （三种尺寸见 shared/constants.js 的 UPDATE_WINDOW*） */
+function windowSizeFor(options) {
+  if (dl.changelog) return UPDATE_WINDOW;
+  return options && options.prompt ? UPDATE_WINDOW_PROMPT : UPDATE_WINDOW_PROGRESS;
+}
+
 /* ----------------------------- 应用内提示框 -----------------------------
    复用更新窗口（update.html）显示提示，替代系统 dialog.showMessageBox。
    options: { title, message, buttons: string[], defaultId?, cancelId? }；返回 { response }。 */
@@ -221,7 +228,7 @@ function showPrompt(options) {
       cancelId,
       resolve,
     };
-    wm.openUpdateWindow({ size: dl.changelog ? UPDATE_WINDOW_PROMPT_LOG : UPDATE_WINDOW_PROMPT });
+    wm.openUpdateWindow({ size: windowSizeFor({ prompt: true }) });
     wm.sendToUpdateWindow(IPC.UPDATE_PROMPT, getPromptState());
   }).then((response) => {
     // 提示结束且当前没有下载任务：关掉这个只用于提示的窗口。
@@ -259,7 +266,7 @@ function reportProgress(transferred, total, bytesPerSecond) {
 /* 确认下载：用户点「下载」后打开下载窗口并开始下载。 */
 async function promptDownload(info) {
   if (dl.phase !== 'idle') {
-    wm.openUpdateWindow({ size: UPDATE_WINDOW });
+    wm.openUpdateWindow({ size: windowSizeFor() });
     return;
   }
   const latest = (info && info.version) || '';
@@ -287,7 +294,7 @@ function startDownload(info) {
   dl.total = 0;
   dl.bytesPerSecond = 0;
   dl.countdown = 0;
-  wm.openUpdateWindow({ size: UPDATE_WINDOW });
+  wm.openUpdateWindow({ size: windowSizeFor() });
   logger.info(`[updater] download start: ${dl.version} (mode=${dl.mode})`);
   if (dl.mode === 'pkg') {
     startPkgDownload().catch(() => {});
@@ -803,7 +810,7 @@ function onDownloaded(info) {
   dl.percent = 100;
   dl.bytesPerSecond = 0;
   logger.info(`[updater] downloaded: ${info && info.version}`);
-  wm.openUpdateWindow({ size: UPDATE_WINDOW });
+  wm.openUpdateWindow({ size: windowSizeFor() });
   // 先启动倒计时（写入 countdown 初值），再发快照，保证「下载完成」那一刻就有 60 秒。
   startCountdown();
   wm.sendToUpdateWindow(IPC.UPDATE_DOWNLOADED, snapshot());
@@ -846,7 +853,7 @@ async function fetchLatestMacRelease() {
 async function checkForUpdatesMac(manual) {
   if (interactiveChecking) return { ok: true, checking: true };
   if (dl.phase !== 'idle') {
-    wm.openUpdateWindow({ size: UPDATE_WINDOW });
+    wm.openUpdateWindow({ size: windowSizeFor() });
     return { ok: true };
   }
   setChecking(true);
@@ -989,7 +996,7 @@ async function checkForUpdatesInteractive(_win) {
   }
   // 正在下载 / 已完成：不重复检查，直接把下载窗口拉到前台。
   if (dl.phase !== 'idle') {
-    wm.openUpdateWindow({ size: UPDATE_WINDOW });
+    wm.openUpdateWindow({ size: windowSizeFor() });
     return { ok: true };
   }
   if (process.platform === 'darwin') {

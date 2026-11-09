@@ -74,7 +74,7 @@
 
 ### 8.7 更新窗口（应用内提示框 / 下载）
 
-- 尺寸：**下载模式 640 × 480**（`package.json` 的 `vessel.updateWindow` → `constants.js` 的 `UPDATE_WINDOW`）；**纯提示模式自适应缩小** —— 无更新日志时 **420 × 200**（`UPDATE_WINDOW_PROMPT`），带更新日志时 **560 × 420**（`UPDATE_WINDOW_PROMPT_LOG`），窗口复用时会 `setSize` 并重新居中。**不可缩放**；**标准窗口 + `titleBarStyle: 'hiddenInset'`**（真正的系统红绿灯，`trafficLightPosition {14,13}`）、**不可关闭**（`closable: false`，系统关闭按钮禁用、Cmd-W 无效，仅应用退出 / `quitAndInstall` / 提示框处理完毕后由主进程关闭时放行；`close` 事件另有 `preventDefault` 兜底）、置顶（`alwaysOnTop`）并**居中**显示。**可最小化**（`minimizable: true`，系统黄灯生效）。
+- 尺寸：**按内容分三种**（`constants.js` 的 `UPDATE_WINDOW*`，窗口复用时会 `setSize` 并重新居中）——**含更新日志 640 × 480**（`UPDATE_WINDOW`，即 `package.json` 的 `vessel.updateWindow`，下载 / 提示均适用）；**仅进度条 480 × 200**（`UPDATE_WINDOW_PROGRESS`，下载中且无日志）；**纯提示 400 × 168**（`UPDATE_WINDOW_PROMPT`，无进度、无日志）。**不可缩放**；**标准窗口 + `titleBarStyle: 'hiddenInset'`**（真正的系统红绿灯，`trafficLightPosition {14,13}`）、**不可关闭**（`closable: false`，系统关闭按钮禁用、Cmd-W 无效，仅应用退出 / `quitAndInstall` / 提示框处理完毕后由主进程关闭时放行；`close` 事件另有 `preventDefault` 兜底）、置顶（`alwaysOnTop`）并**居中**显示。**可最小化**（`minimizable: true`，系统黄灯生效）。
 - **应用内提示框（替代系统弹窗）**：同一窗口承载所有更新提示 —— 标题（`#update-title`）+ 消息（`#update-message`）+ 按钮（`#update-prompt-actions`），隐藏进度条 / 状态行 / 取消 / 安装按钮。按钮文案与顺序由主进程按当前语言下发（`update:prompt`），首项 / `defaultId` 用强调色；点击或按 `Esc` 经 `update:choice` 回传，主进程据此继续（如下载）或关闭窗口。发现新版本的提示同时展示更新日志。
 - **更新日志区域**：底部 `#update-changelog`（`flex: 1`、`overflow-y: auto`、可选中文本）用 `marked` 渲染「当前版本 → 最新版」之间的 Markdown（数据来自状态 / 提示对象的 `changelog` 字段）；无内容时隐藏。
 - **标题与红绿灯同一行**：`.update-titlebar`（高 40px、`padding-left: 74px` 避开红绿灯、整行为拖动区）内放标题 `#update-title`。
