@@ -29,6 +29,9 @@
         splitHorizontal: '水平分割',
         splitVertical: '垂直分割',
         splitClose: '关闭副终端',
+        splitToggleVertical: '左右分割',
+        splitToggleHorizontal: '切换为上下分割',
+        splitToggleClose: '关闭副终端',
         menuCopy: '复制',
         menuPaste: '粘贴',
         menuQuickConnect: '快速连接',
@@ -69,6 +72,9 @@
         splitHorizontal: 'Split horizontally',
         splitVertical: 'Split vertically',
         splitClose: 'Close split terminal',
+        splitToggleVertical: 'Split left/right',
+        splitToggleHorizontal: 'Switch to top/bottom split',
+        splitToggleClose: 'Close split terminal',
         menuCopy: 'Copy',
         menuPaste: 'Paste',
         menuQuickConnect: 'Quick connect',
@@ -114,6 +120,7 @@
   const filesBtn = document.getElementById('btn-files');
   const itermBtn = document.getElementById('btn-iterm');
   const splitBtn = document.getElementById('btn-split');
+  const splitToggleBtn = document.getElementById('btn-split-toggle');
   const lightClose = document.getElementById('light-close');
   const lightMinimize = document.getElementById('light-minimize');
   const lightZoom = document.getElementById('light-zoom');
@@ -787,6 +794,18 @@
     itermBtn.innerHTML = Icons.terminal(15);
     splitBtn.innerHTML = Icons.newWindow(15);
     splitBtn.setAttribute('data-tip', i18n.t('terminalWin.newWindow'));
+    if (splitToggleBtn) {
+      // 图标反映当前布局：默认 / 左右分割用 split-vertical，上下分割用 split-horizontal；
+      // 下一次点击的含义见 data-tip（分割 → 切换布局 → 关闭副终端）。
+      const horizontal = splitActive() && splitOrientation === 'horizontal';
+      splitToggleBtn.innerHTML = horizontal ? Icons.splitHorizontal(15) : Icons.splitVertical(15);
+      const tip = !splitActive()
+        ? 'terminalWin.splitToggleVertical'
+        : horizontal
+          ? 'terminalWin.splitToggleClose'
+          : 'terminalWin.splitToggleHorizontal';
+      splitToggleBtn.setAttribute('data-tip', i18n.t(tip));
+    }
     if (pinBtn) {
       pinBtn.innerHTML = (ballPinned ? Icons.pin : Icons.pinOff)(15);
       pinBtn.style.color = ballPinned ? 'var(--color-accent)' : '';
@@ -1520,6 +1539,31 @@
     });
   }
 
+  /* 只切换布局方向（左右 ↔ 上下），不重建终端 / 不重开会话。 */
+  function setSplitOrientation(orientation) {
+    if (!splitActive()) return;
+    if (orientation !== 'horizontal' && orientation !== 'vertical') return;
+    if (splitOrientation === orientation) return;
+    splitOrientation = orientation;
+    panesWrap.classList.remove('split-horizontal', 'split-vertical');
+    panesWrap.classList.add(orientation === 'horizontal' ? 'split-horizontal' : 'split-vertical');
+    // 切换方向时恢复 50 / 50（清除拖动留下的大小）。
+    const primary = paneRecords[0];
+    if (primary && primary.host) primary.host.style.flex = '';
+    fitIfNeeded(true);
+    renderHeader();
+  }
+
+  /* 头栏分屏按钮：未分割 → 左右分割；已左右分割 → 切换为上下分割；已上下分割 → 关闭副终端。 */
+  function toggleSplitFromHeader() {
+    if (splitActive()) {
+      if (splitOrientation === 'horizontal') closeSecondaryPane();
+      else setSplitOrientation('horizontal');
+      return;
+    }
+    splitTerminal('vertical');
+  }
+
   function splitTerminal(orientation) {
     if (splitActive() || ballMode || !term) return; // 分割后不能再分割
     captureGlobals(activeRecord);
@@ -1547,6 +1591,7 @@
     updatePaneStyles();
     initTerminal(paneOpts, rec);
     requestAnimationFrame(() => fitIfNeeded(true));
+    renderHeader();
   }
 
   function closeSecondaryPane() {
@@ -1582,6 +1627,7 @@
     updatePaneStyles();
     if (sessionId) window.ships.terminal.setActiveSession(sessionId);
     requestAnimationFrame(() => fitIfNeeded(true));
+    renderHeader();
   }
 
   function contextMenuItems() {
@@ -1721,6 +1767,10 @@
   if (splitBtn) {
     // 新开一扇终端窗口，并随机换一个与当前窗口不同的悬浮球图标（右键「新建终端」同款）。
     splitBtn.addEventListener('click', openTerminalWithNewBall);
+  }
+  if (splitToggleBtn) {
+    // 左右分割 → 上下分割（只换布局、不重建终端）→ 关闭副终端。
+    splitToggleBtn.addEventListener('click', toggleSplitFromHeader);
   }
   if (pinBtn) {
     // 固定：开启后本窗口失焦不缩成悬浮球（仅当前窗口）。
