@@ -1012,7 +1012,7 @@ input[type='color'].swatch::-webkit-color-swatch {
   height: var(--term-row-h, 1.2em);
   line-height: var(--term-row-h, 1.2em);
 }
-body.show-lines:not(.term-split) #term-host {
+body.show-lines #term-host {
   padding-left: calc(var(--file-font-size, 12px) * 2.6);
 }
 /* 拖动 / 缩放期间的头栏尺寸提示（居中、不吃鼠标事件，停手后由 JS 隐藏） */

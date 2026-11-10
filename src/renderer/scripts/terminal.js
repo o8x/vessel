@@ -386,9 +386,12 @@
   /* 左侧行号（默认关闭）：给可见的每一行编号（两位，不足补 0），随滚动 / 重绘更新。 */
   let gutterRaf = null;
   function renderGutter() {
-    if (!gutterEl || !term) return;
-    // 分屏时行号栏会跨两块终端、无法对齐，先隐藏（关闭副终端后自动恢复）。
-    if (!showLines || splitActive()) {
+    if (!gutterEl) return;
+    // 行号栏始终贴在窗口最左侧，只给主终端（分屏后位于最左 / 最上）编号；
+    // 副终端不加行号，避免在右侧重复显示。
+    const primary = paneRecords[0];
+    const targetTerm = (primary && primary.term) || term;
+    if (!showLines || !targetTerm) {
       gutterEl.textContent = '';
       gutterEl.classList.add('hidden');
       return;
@@ -396,7 +399,7 @@
     gutterEl.classList.remove('hidden');
     // 按「当前窗口」编号：第一行永远是 1（不随滚动变化）。
     gutterEl.textContent = '';
-    for (let i = 0; i < term.rows; i += 1) {
+    for (let i = 0; i < targetTerm.rows; i += 1) {
       const number = String(i + 1).padStart(2, '0');
       gutterEl.appendChild(el('div', { class: 'term-gutter-line' }, number));
     }
@@ -533,7 +536,9 @@
 
   /* 行号栏每行的高度 = 终端实测单元格高度（写 CSS 变量 --term-row-h）。 */
   function updateRowHeightVar() {
-    const { height } = readCellSize();
+    // 行号栏只服务主终端：行高始终取主终端的实测值（分屏时也不会跟副终端走）。
+    const primary = paneRecords[0];
+    const { height } = readCellSize(primary && primary.term, primary && primary.host);
     if (height) document.documentElement.style.setProperty('--term-row-h', `${height}px`);
   }
 
@@ -1578,7 +1583,6 @@
     panesWrap.appendChild(secondaryHost);
     splitDividerEl = divider;
     splitOrientation = orientation;
-    document.body.classList.add('term-split');
     const rec = makePaneRecord(secondaryHost);
     paneRecords.push(rec);
     setupSplitDivider(divider);
@@ -1622,7 +1626,6 @@
     if (secondary.host) secondary.host.remove();
     splitDividerEl = null;
     splitOrientation = '';
-    document.body.classList.remove('term-split');
     panesWrap.classList.remove('split-horizontal', 'split-vertical');
     if (primary && primary.host) primary.host.style.flex = '';
     paneRecords.pop();
