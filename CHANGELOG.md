@@ -2,6 +2,12 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.6.1 - 2026-11-10
+
+### 修复
+
+- Prefer saved SSH password for SFTP connections
+
 ## v6.6.0 - 2026-11-10
 
 ### 新增
