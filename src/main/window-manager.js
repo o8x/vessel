@@ -27,6 +27,25 @@ const { GAME_CLOSE_TIMEOUT_MS, GAME_HEADER_HEIGHT } = require('../shared/game-co
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
 const PRELOAD_DIR = path.join(__dirname, '..', 'preload');
+// 悬浮球图标目录（新建终端时可随机挑一个，见 openTerminalWindow）。
+const BALL_ICONS_DIR = path.join(__dirname, '..', '..', 'assets', 'icons', 'ball');
+let ballIconNames = null;
+
+function randomBallIconName(exclude) {
+  if (!ballIconNames) {
+    try {
+      ballIconNames = fs
+        .readdirSync(BALL_ICONS_DIR)
+        .filter((file) => file.endsWith('.svg'))
+        .sort();
+    } catch (err) {
+      ballIconNames = [];
+    }
+  }
+  const pool = ballIconNames.filter((name) => name !== exclude);
+  if (!pool.length) return '';
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 // 终端窗口「悬浮球」尺寸（设置 → 终端，宽高强制 1:1，默认 90px，见 §3.9-12）。
 const BALL_SIZE_DEFAULT = Number(TERMINAL_WINDOW.ballSize) || 90;
@@ -1140,8 +1159,12 @@ function getFontPickerWindow() {
    窗口一旦打开就留在那个桌面，不会被拉去别的桌面（Steam 式独立窗口）。 */
 function openTerminalWindow(options) {
   const opts = options || {};
-  // 新建终端时可传入本次专用的悬浮球图标（不写设置、仅该窗口有效）。
-  const ballIcon = typeof opts.ballIcon === 'string' ? opts.ballIcon : '';
+  // 新建终端时可传入本次专用的悬浮球图标（不写设置、仅该窗口有效）；
+  // 未指定且请求随机时，在主进程从 assets/icons/ball 里挑一个（与 excludeBallIcon 不同）。
+  let ballIcon = typeof opts.ballIcon === 'string' ? opts.ballIcon : '';
+  if (!ballIcon && opts.randomBallIcon) {
+    ballIcon = randomBallIconName(typeof opts.excludeBallIcon === 'string' ? opts.excludeBallIcon : '');
+  }
   // 有同屏记忆就用记忆里的屏幕 / 位置 / 尺寸，否则默认尺寸居中（见 terminalBoundsForOpen）。
   const bounds = terminalBoundsForOpen();
   // 已有多扇时逐扇偏移一段，避免完全盖在一起（并夹回该屏幕工作区）。

@@ -65,7 +65,7 @@
 | `ssh:detect` | `{ alias }` | `{ queued }` | 异步，结果经 `ssh:detected` 回传（兼容保留） |
 | `ssh:detect-host` | `{ alias?, hostName, user?, port?, identityFile?, proxyJump?, password?, useStoredPassword? }` | `{ ok, alias, info }` | 对任意主机（可尚未保存）同步探测，结果写入缓存并广播。**支持密码认证**：用 `password`（表单填的明文密码）优先，为空且 `useStoredPassword !== false` 时回退到该别名已保存的加密密码（主进程解密后用于这次探测，不外传） |
 | `ssh:get-detected` | — | `{ [alias]: { os, family, label, at } }` | 读取探测缓存 |
-| `terminal:open` | `{ ballIcon? }` | `{ ok }` | **新开**一扇悬浮终端窗口（落在当前桌面；不复用 / 不拉取别的桌面的窗口，§3.8）。可选 `ballIcon`（`assets/icons/ball/*.svg` 文件名）：该窗口本次专用的悬浮球图标，经 URL 查询参数传给渲染层，**不写入设置**、不影响其它窗口 |
+| `terminal:open` | `{ ballIcon?, randomBallIcon?, excludeBallIcon? }` | `{ ok }` | **新开**一扇悬浮终端窗口（落在当前桌面；不复用 / 不拉取别的桌面的窗口，§3.8）。可选 `ballIcon`（`assets/icons/ball/*.svg` 文件名）：该窗口本次专用的悬浮球图标，经 URL 查询参数传给渲染层，**不写入设置**、不影响其它窗口。未传 `ballIcon` 且 `randomBallIcon: true` 时，由主进程从 `assets/icons/ball` 随机挑一个（可用 `excludeBallIcon` 排除当前窗口的图标），结果同样经 URL 查询参数传入；终端右键菜单「新建终端」即用此方式 |
 | `terminal:start` | `{ cols, rows }` | `{ ok, id, cols, rows, shell }` | 新建交互终端会话（真实 PTY + 默认登录 shell） |
 | `terminal:input` | `{ id, data }` | `{ ok }` | 把 xterm 的键盘输入写进 PTY |
 | `terminal:resize` | `{ id, cols, rows }` | `{ ok }` | 同步 PTY 尺寸（`TIOCSWINSZ`） |

@@ -264,7 +264,7 @@
     else dom.content.innerHTML = emptyState(i18n.t('emptyTools'));
 
     dom.settings.addEventListener('click', () => window.ships.openSettings());
-    dom.terminal.addEventListener('click', () => window.ships.openTerminal());
+    dom.terminal.addEventListener('click', () => window.ships.openTerminal({ randomBallIcon: true }));
     // 打开独立文件管理窗口，不选中任何连接（target 传空串）。
     dom.files.addEventListener('click', () => window.ships.fileWindow.open(''));
     dom.theme.addEventListener('click', cycleTheme);

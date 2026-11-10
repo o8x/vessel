@@ -1478,16 +1478,10 @@
     return items;
   }
 
-  /* 新建终端时随机挑一个与当前不同的悬浮球图标（仅通过 URL 参数传给新窗口，不写设置）。 */
-  function randomBallIconName(exclude) {
-    const names = (window.shipsBallIcons && window.shipsBallIcons.names) || [];
-    const pool = names.filter((name) => name !== exclude);
-    if (!pool.length) return '';
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
+  /* 新建终端时随机换一个与当前窗口不同的悬浮球图标（由主进程从 assets/icons/ball 挑选，
+     仅通过 URL 参数传给新窗口，不写设置）。 */
   function openTerminalWithNewBall() {
-    window.ships.openTerminal({ ballIcon: randomBallIconName(ballIconName) });
+    window.ships.openTerminal({ randomBallIcon: true, excludeBallIcon: ballIconName });
   }
 
   /* ------------------------------- 分屏 -------------------------------
@@ -1725,8 +1719,8 @@
     linesBtn.addEventListener('click', toggleLineNumbers);
   }
   if (splitBtn) {
-    // 新开一扇终端窗口（与主面板底部栏的终端按钮行为一致）。
-    splitBtn.addEventListener('click', () => window.ships.openTerminal());
+    // 新开一扇终端窗口，并随机换一个与当前窗口不同的悬浮球图标（右键「新建终端」同款）。
+    splitBtn.addEventListener('click', openTerminalWithNewBall);
   }
   if (pinBtn) {
     // 固定：开启后本窗口失焦不缩成悬浮球（仅当前窗口）。

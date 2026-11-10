@@ -112,8 +112,15 @@ function runInNewTerminal(command, secret, target) {
 
 function registerTerminalIpc(ipcMain) {
   ipcMain.handle(IPC.TERMINAL_OPEN, (_event, payload) => {
-    const ballIcon = payload && typeof payload.ballIcon === 'string' ? payload.ballIcon : '';
-    return { ok: Boolean(wm.openTerminalWindow({ ballIcon })) };
+    const options = {};
+    if (payload) {
+      if (typeof payload.ballIcon === 'string' && payload.ballIcon) options.ballIcon = payload.ballIcon;
+      if (payload.randomBallIcon) {
+        options.randomBallIcon = true;
+        if (typeof payload.excludeBallIcon === 'string') options.excludeBallIcon = payload.excludeBallIcon;
+      }
+    }
+    return { ok: Boolean(wm.openTerminalWindow(options)) };
   });
 
   ipcMain.handle(IPC.TERMINAL_START, (event, payload) => {
