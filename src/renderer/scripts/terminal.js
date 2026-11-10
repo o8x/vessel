@@ -1033,7 +1033,8 @@
     document.removeEventListener('mousedown', onQuickDocDown, true);
     document.removeEventListener('keydown', onQuickKeyDown, true);
     window.removeEventListener('resize', positionQuickConnect);
-    window.removeEventListener('blur', closeQuickConnect);
+    // 弹窗关闭：恢复失焦缩球行为（弹窗打开期间临时抑制）。
+    window.ships.terminal.setBallSuppress(false);
   }
 
   function openQuickConnect() {
@@ -1172,7 +1173,8 @@
     document.addEventListener('mousedown', onQuickDocDown, true);
     document.addEventListener('keydown', onQuickKeyDown, true);
     window.addEventListener('resize', positionQuickConnect);
-    window.addEventListener('blur', closeQuickConnect);
+    // 弹窗打开期间：失焦不关闭弹窗，也不把终端缩成悬浮球。
+    window.ships.terminal.setBallSuppress(true);
   }
 
   /* 拖放本地文件 / 文件夹到终端：取绝对路径（必要时 shell 转义）后插入光标处。

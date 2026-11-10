@@ -105,6 +105,7 @@ const IPC = {
   TERMINAL_BALL_DRAG: 'terminal:ball-drag',
   TERMINAL_BALL_RESTORE: 'terminal:ball-restore',
   TERMINAL_BALL_PIN: 'terminal:ball-pin',
+  TERMINAL_BALL_SUPPRESS: 'terminal:ball-suppress',
 
   SFTP_CONNECT: 'sftp:connect',
   SFTP_LIST: 'sftp:list',

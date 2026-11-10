@@ -87,6 +87,7 @@ const api = {
     ballDrag: (payload) => ipcRenderer.send(IPC.TERMINAL_BALL_DRAG, payload),
     restoreBall: () => ipcRenderer.invoke(IPC.TERMINAL_BALL_RESTORE),
     setBallPin: (value) => ipcRenderer.invoke(IPC.TERMINAL_BALL_PIN, { value }),
+    setBallSuppress: (value) => ipcRenderer.invoke(IPC.TERMINAL_BALL_SUPPRESS, { value }),
   },
   sftp: {
     // target: ssh 目标 token（兼容旧调用）或完整连接参数对象

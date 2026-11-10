@@ -221,7 +221,6 @@
         document.removeEventListener('mousedown', onDocDown, true);
         document.removeEventListener('keydown', onKeyDown, true);
         window.removeEventListener('resize', positionPop);
-        window.removeEventListener('blur', close);
       }
       function open() {
         pop.classList.add('open');
@@ -229,7 +228,6 @@
         document.addEventListener('mousedown', onDocDown, true);
         document.addEventListener('keydown', onKeyDown, true);
         window.addEventListener('resize', positionPop);
-        window.addEventListener('blur', close);
         setTimeout(() => addressInput.focus(), 0);
       }
 

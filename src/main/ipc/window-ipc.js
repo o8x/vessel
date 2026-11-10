@@ -101,6 +101,15 @@ function registerWindowIpc(ipcMain) {
     win.__ballPin = Boolean(payload && payload.value);
     return { ok: true, value: win.__ballPin };
   });
+
+  // 临时抑制缩球（如终端内「快速连接」弹窗打开期间）：不改动用户的「固定」状态。
+  // 抑制期间窗口失焦不缩球；恢复时不主动缩球（下次失焦再按正常逻辑处理）。
+  ipcMain.handle(IPC.TERMINAL_BALL_SUPPRESS, (event, payload) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed() || !isTerminalWindow(win)) return { ok: false };
+    win.__suppressBall = Boolean(payload && payload.value);
+    return { ok: true, value: win.__suppressBall };
+  });
   ipcMain.on(IPC.WINDOW_OPEN_SETTINGS, (_event, section) => {
     hideMainWindow();
     openSettingsWindow(typeof section === 'string' ? section : '');
