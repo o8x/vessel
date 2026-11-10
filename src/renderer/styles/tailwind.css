@@ -1004,8 +1004,8 @@ input[type='color'].swatch::-webkit-color-swatch {
   left: 0;
   top: 0;
   bottom: 0;
-  width: calc(var(--file-font-size, 12px) * 2.6);
-  padding-right: 6px;
+  width: var(--term-gutter-width);
+  padding-right: 4px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1022,7 +1022,7 @@ input[type='color'].swatch::-webkit-color-swatch {
   line-height: var(--term-row-h, 1.2em);
 }
 body.show-lines #term-host {
-  padding-left: calc(var(--file-font-size, 12px) * 2.6);
+  padding-left: var(--term-gutter-width);
 }
 /* 拖动 / 缩放期间的头栏尺寸提示（居中、不吃鼠标事件，停手后由 JS 隐藏） */
 /* 头栏尺寸 / 字号提示：显示在「固定」图标右侧（不再绝对居中）。 */

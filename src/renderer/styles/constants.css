@@ -43,6 +43,8 @@
   --term-padding-y: 0px;
   /* 文件管理（内嵌面板 / 独立窗口）基础字号；终端窗口里由 terminal.js 跟随终端字号改写 */
   --file-font-size: 12px;
+  /* 终端左侧行号栏宽度：两位数字（01–99）+ 少量间隙；随终端字号缩放。 */
+  --term-gutter-width: calc(var(--file-font-size, 12px) * 1.4);
   /* Hash 工具：字符串 / 文件两种输入模式共用同一高度，切换时下方结果不跳动。 */
   --hash-source-height: 76px;
   /* 头栏里自绘小红绿灯（macOS 观感，比系统标准尺寸小） */
