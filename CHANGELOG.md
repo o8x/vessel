@@ -2,6 +2,24 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.6.0 - 2026-11-10
+
+### 新增
+
+- Highlight the cursor line in the active terminal
+- Toggle split layout to terminal context menu
+- Terminal split toggle to header
+- Restart app to tray menu
+- In-window terminal split panes
+
+### 修复
+
+- Narrow terminal line-number gutter to two digits
+- Keep line numbers on the leftmost pane after split
+- Restore random terminal ball icon on new windows
+- Use distinct new-window icon in terminal header
+- Keep quick connect open on window blur
+
 ## v6.5.1 - 2026-11-09
 
 ### 修复
