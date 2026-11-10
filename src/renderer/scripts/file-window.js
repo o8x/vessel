@@ -161,8 +161,10 @@
       drafts.password = '';
       drafts.key = '';
     }
-    setAuth('key');
-    credentialInput.value = drafts.key;
+    // 与 SSH 连接一致的优先级：主机有已保存密码时默认走密码（输入框留空由主进程回退到已保存密码），
+    // 没有已保存密码时再默认密钥。
+    setAuth(record && record.hasPassword ? 'password' : 'key');
+    credentialInput.value = authMode === 'password' ? drafts.password : drafts.key;
     filling = false;
   }
 

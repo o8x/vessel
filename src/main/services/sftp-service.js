@@ -14,6 +14,7 @@ const path = require('path');
 const { Client } = require('ssh2');
 const sshConfig = require('./ssh-config-service');
 const sshService = require('./ssh-service');
+const credentials = require('./ssh-credentials-service');
 const proxyService = require('./proxy-service');
 const settings = require('./settings-service');
 const logger = require('../utils/logger');
@@ -89,6 +90,18 @@ function resolveTarget(target) {
   };
 }
 
+/* 已保存的 SSH 密码（按别名 / 目标 token 查找，AES-256-GCM 解密；不存在返回空串）。 */
+function savedCredentialPassword(alias) {
+  const key = String(alias || '').trim();
+  if (!key) return '';
+  try {
+    return credentials.has(key) ? String(credentials.get(key) || '') : '';
+  } catch (err) {
+    logger.warn('[sftp] read saved password failed:', (err && err.message) || err);
+    return '';
+  }
+}
+
 /* 文件窗口可以手动填「用户名 / 地址 / 端口 / 密码或密钥」。显式字段优先于
    ssh config；`target` 仍可传别名（保留 ProxyJump 等配置解析）。
    返回统一结构，供连接与会话标识使用。 */
@@ -108,13 +121,22 @@ function resolveConnection(input) {
 
   const username = String(request.username || base.username || localUsername()).trim();
   const port = Number(request.port) || Number(base.port) || 22;
-  const password = typeof request.password === 'string' ? request.password : '';
-  const auth =
+  let password = typeof request.password === 'string' ? request.password : '';
+  let auth =
     request.auth === 'password' || request.auth === 'key'
       ? request.auth
       : password
         ? 'password'
         : '';
+  // 与 SSH 连接一致的优先级：未显式指定认证方式时，**先尝试已保存的密码**，没有才用密钥。
+  // 显式选了「密钥」则尊重用户选择；显式「密码」但留空时回退到已保存密码。
+  const savedPassword = savedCredentialPassword(base.alias) || savedCredentialPassword(token);
+  if (auth === 'password') {
+    if (!password) password = savedPassword;
+  } else if (!auth && savedPassword) {
+    auth = 'password';
+    password = savedPassword;
+  }
   const identityFile =
     auth === 'password' ? '' : String(request.identityFile || base.identityFile || DEFAULT_IDENTITY);
   const target = token || (username ? `${username}@${host}` : host);
