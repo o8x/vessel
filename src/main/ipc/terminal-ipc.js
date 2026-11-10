@@ -140,6 +140,16 @@ function registerTerminalIpc(ipcMain) {
   ipcMain.handle(IPC.TERMINAL_INPUT, (_event, payload) => ({
     ok: terminal.write(payload && payload.id, payload && payload.data),
   }));
+  /* 终端窗口内可能同时有主 / 副两块终端（分屏）：把「当前聚焦的会话」告诉主进程，
+     之后 SSH 注入等操作就会落到这块终端，而不是最后一次启动的会话。 */
+  ipcMain.handle(IPC.TERMINAL_SET_ACTIVE_SESSION, (event, payload) => {
+    if (!isOverlaySender(event)) return { ok: false };
+    const id = String((payload && payload.id) || '');
+    if (!id || !terminal.get(id)) return { ok: false };
+    sessionByOwner.set(event.sender.id, id);
+    return { ok: true, id };
+  });
+
   ipcMain.handle(IPC.TERMINAL_RESIZE, (_event, payload) => ({
     ok: terminal.resize(payload && payload.id, payload && payload.cols, payload && payload.rows),
   }));

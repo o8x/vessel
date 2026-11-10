@@ -183,6 +183,7 @@
 | `terminal:ball` | `{ active, size, phase, duration, scaleX, scaleY }` | 悬浮球状态（见 §3.8-12）：`phase` ∈ `enter`（终端按缩放缩小）/ `settle`（切球或切终端）/ `grow`（终端从球 scale 放大）；`size` 球边长、`scaleX/scaleY` 起止缩放、`duration` 过渡时长。只发给对应终端窗口 |
 | `terminal:ball-pin` | `{ value: boolean }` | `{ ok, value }` | 头栏「固定」按钮：设置该终端窗口是否**失焦不缩球**（`win.__ballPin`，仅当前窗口、不持久）；只接受来自该终端窗口本身的请求 |
 | `terminal:ball-suppress` | `{ value: boolean }` | `{ ok, value }` | 临时抑制该终端窗口失焦缩球（`win.__suppressBall`，仅当前窗口、不持久、不改动「固定」状态）：终端内「快速连接」弹窗打开时置 `true`、关闭时置 `false`；恢复时**不主动缩球**（下次失焦再按正常逻辑处理）；只接受来自该终端窗口本身的请求 |
+| `terminal:set-active-session` | `{ id }` | `{ ok, id }` | 分屏时告诉主进程「当前聚焦的终端会话」：之后 SSH 注入等落到该会话（`sessionByOwner`）；`id` 必须是仍在运行的终端会话，否则 `{ ok:false }`；只接受来自终端窗口本身的请求 |
 | `terminal:recalibrate` | — | 拖动结束后请终端窗口重新测量并按整行对齐高度（拖动期间主进程不改窗口尺寸，见 §3.8-4） |
 | `terminal:drag-active` | — | 主进程检测到终端窗口开始被拖动（`will-resize`）：渲染层据此在拖动期间不发对齐请求 |
 | `terminal:zoom` | `'in' \| 'out' \| 'reset'` | 焦点在终端窗口时 `Cmd +/-/0` 的字号缩放（见 §5.3）；独立文件窗口不支持缩放 |

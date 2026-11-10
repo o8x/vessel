@@ -41,7 +41,10 @@
       <!-- 留白放在外层 #term-host 上；xterm 挂在无内边距的 #term-fit 里，见 scripts/terminal.js -->
       <main id="term-host" class="min-h-0 flex-1 overflow-hidden">
         <div id="term-gutter" class="hidden"></div>
-        <div id="term-fit" class="h-full w-full"></div>
+        <!-- 终端分屏容器：默认只有主终端；右键「分割窗口」后插入分隔条与副终端（最多两块）。 -->
+        <div id="term-panes">
+          <div id="term-fit" class="term-pane"></div>
+        </div>
       </main>
       <!-- 终端 / 文件面板之间的可拖动分隔线（向上拖 = 终端变小），见 scripts/terminal-files.js -->
       <div id="term-divider" class="hidden"></div>

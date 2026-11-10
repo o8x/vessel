@@ -1,7 +1,8 @@
 'use strict';
 
-/* Always-on-top terminal window: one real PTY session (default login shell) rendered
-   by xterm.js, with iTerm handoff and buffer export in the header. */
+/* Always-on-top terminal window: a real PTY session (default login shell) rendered by
+   xterm.js, with iTerm handoff and buffer export in the header. The right-click menu can
+   split the window into at most two panes, each with its own xterm + PTY session. */
 
 (function bootstrapTerminalWindow() {
   const { Icons, el } = window.ShipsUI;
@@ -24,6 +25,10 @@
         menuShowMain: '显示主界面',
         menuSelectAll: '全选',
         menuNewTerminal: '新建终端',
+        menuSplit: '分割窗口',
+        splitHorizontal: '水平分割',
+        splitVertical: '垂直分割',
+        splitClose: '关闭副终端',
         menuCopy: '复制',
         menuPaste: '粘贴',
         menuQuickConnect: '快速连接',
@@ -60,6 +65,10 @@
         menuShowMain: 'Show main window',
         menuSelectAll: 'Select all',
         menuNewTerminal: 'New terminal',
+        menuSplit: 'Split window',
+        splitHorizontal: 'Split horizontally',
+        splitVertical: 'Split vertically',
+        splitClose: 'Close split terminal',
         menuCopy: 'Copy',
         menuPaste: 'Paste',
         menuQuickConnect: 'Quick connect',
@@ -97,8 +106,9 @@
      「父元素的 border box 高度」算行数，父元素带内边距会把可用高度多算一份内边距，
      于是一行被挤出可视区 —— 最后一行只露大半行，页面还会多出几像素可滚动高度
      （滚轮时标题跟着上下动）。父元素无内边距时测量值即真实可用区。 */
-  const host = document.getElementById('term-fit');
+  let host = document.getElementById('term-fit');
   const hostBox = document.getElementById('term-host');
+  const panesWrap = document.getElementById('term-panes');
   const gutterEl = document.getElementById('term-gutter');
   const linesBtn = document.getElementById('btn-lines');
   const filesBtn = document.getElementById('btn-files');
@@ -124,6 +134,12 @@
   let lastHostKey = '';
   let lastCols = 0;
   let lastRows = 0;
+  // 分屏：每块终端一个记录（主终端 + 至多一块副终端）；全局 term / fit / host / sessionId
+  // 等始终指向「当前聚焦」的那块，切换焦点时在记录与全局之间同步。
+  const paneRecords = [];
+  let activeRecord = null;
+  let splitDividerEl = null;
+  let splitOrientation = '';
   let fontSize = FONT_DEFAULT;
   let settingsFontSize = FONT_DEFAULT;
   let settingsFontFamily = '';
@@ -147,6 +163,79 @@
   let ballMode = false;
   // 「固定」：开启后本窗口失焦不缩成悬浮球（仅当前窗口，默认关，不持久）
   let ballPinned = false;
+
+  /* ------------------------------- 分屏状态 -------------------------------
+     全局的 term / fit / host / sessionId / sshTarget / lastCols / lastRows / typedLine
+     始终代表「当前聚焦」的终端；切换焦点时用 captureGlobals / applyGlobals 在记录与全局之间同步。
+     每块终端各有自己的 xterm、FitAddon、PTY 会话与 SSH 目标。 */
+  function makePaneRecord(hostEl) {
+    return {
+      host: hostEl,
+      term: null,
+      fit: null,
+      sessionId: '',
+      sshTarget: '',
+      lastCols: 0,
+      lastRows: 0,
+      lastHostKey: '',
+      typedLine: '',
+    };
+  }
+
+  function captureGlobals(rec) {
+    if (!rec) return;
+    rec.term = term;
+    rec.fit = fit;
+    rec.host = host;
+    rec.sessionId = sessionId;
+    rec.sshTarget = sshTarget;
+    rec.lastCols = lastCols;
+    rec.lastRows = lastRows;
+    rec.lastHostKey = lastHostKey;
+    rec.typedLine = typedLine;
+  }
+
+  function applyGlobals(rec) {
+    if (!rec) return;
+    activeRecord = rec;
+    term = rec.term;
+    fit = rec.fit;
+    host = rec.host;
+    sessionId = rec.sessionId;
+    sshTarget = rec.sshTarget;
+    lastCols = rec.lastCols;
+    lastRows = rec.lastRows;
+    lastHostKey = rec.lastHostKey;
+    typedLine = rec.typedLine;
+    if (filesApi) filesApi.setSshTarget(sshTarget);
+  }
+
+  function splitActive() {
+    return paneRecords.length > 1;
+  }
+
+  function updatePaneStyles() {
+    for (const rec of paneRecords) {
+      if (!rec.host) continue;
+      rec.host.classList.toggle('term-pane-active', rec === activeRecord);
+    }
+  }
+
+  /* 切换焦点：保存旧块的全局状态，载入新块的，并把「活动会话」告诉主进程
+     （SSH 注入等操作据此落到当前这块终端）。 */
+  function setActiveRecord(rec) {
+    if (!rec || rec === activeRecord) return;
+    captureGlobals(activeRecord);
+    applyGlobals(rec);
+    updatePaneStyles();
+    if (rec.sessionId) window.ships.terminal.setActiveSession(rec.sessionId);
+    scheduleGutter();
+  }
+
+  function findRecordBySession(id) {
+    if (!id) return null;
+    return paneRecords.find((rec) => rec.sessionId === id) || null;
+  }
 
   function themeColors() {
     // macOS-like overlay scrollbar (only a safety net: the scrollbar is hidden below)
@@ -172,23 +261,26 @@
      Cmd + 点击（非 macOS 为 Ctrl）URL 用默认浏览器打开，路径在 Finder 中定位。
      松开 Command 后不再提供链接（不显示下划线、不显示手形）。 */
   let metaHeld = false;
-  let linkProvider = null;
-  let linkProviderDisposable = null;
   let linkKeysBound = false;
 
+  /* 每块终端各有一个链接提供器（provider 里捕获自己的 xterm，而不是全局 term）。 */
+  function refreshLinkProviderFor(t) {
+    if (!t || typeof t.registerLinkProvider !== 'function' || !t.__linkProvider) return;
+    try {
+      if (t.__linkProviderDisposable) t.__linkProviderDisposable.dispose();
+    } catch (err) {
+      /* ignore */
+    }
+    t.__linkProviderDisposable = t.registerLinkProvider(t.__linkProvider);
+    try {
+      t.refresh(0, t.rows - 1);
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
   function refreshLinkProvider() {
-    if (!term || typeof term.registerLinkProvider !== 'function' || !linkProvider) return;
-    try {
-      if (linkProviderDisposable) linkProviderDisposable.dispose();
-    } catch (err) {
-      /* ignore */
-    }
-    linkProviderDisposable = term.registerLinkProvider(linkProvider);
-    try {
-      term.refresh(0, term.rows - 1);
-    } catch (err) {
-      /* ignore */
-    }
+    for (const rec of paneRecords) refreshLinkProviderFor(rec.term);
   }
 
   function bindLinkModifierKeys() {
@@ -211,15 +303,16 @@
     });
   }
 
-  function registerUrlLinks() {
-    if (!term || typeof term.registerLinkProvider !== 'function' || linkProvider) return;
-    linkProvider = {
+  function registerUrlLinks(targetTerm) {
+    const t = targetTerm || term;
+    if (!t || typeof t.registerLinkProvider !== 'function' || t.__linkProvider) return;
+    t.__linkProvider = {
       provideLinks(bufferLineNumber, callback) {
         if (!metaHeld) {
           callback(undefined);
           return;
         }
-        const line = term.buffer.active.getLine(bufferLineNumber - 1);
+        const line = t.buffer.active.getLine(bufferLineNumber - 1);
         if (!line) {
           callback(undefined);
           return;
@@ -275,8 +368,9 @@
     refreshLinkProvider();
   }
 
-  function write(text) {
-    if (term) term.write(text);
+  function write(text, rec) {
+    const target = (rec && rec.term) || term;
+    if (target) target.write(text);
     scheduleGutter();
   }
 
@@ -284,7 +378,8 @@
   let gutterRaf = null;
   function renderGutter() {
     if (!gutterEl || !term) return;
-    if (!showLines) {
+    // 分屏时行号栏会跨两块终端、无法对齐，先隐藏（关闭副终端后自动恢复）。
+    if (!showLines || splitActive()) {
       gutterEl.textContent = '';
       gutterEl.classList.add('hidden');
       return;
@@ -333,9 +428,10 @@
   let typedLine = '';
   /* 读取 xterm 当前行「光标之前」的文本：既包含 shell 回显 / Tab 补全后的真实命令，
      又排除光标之后的自动建议（zsh autosuggestion 之类的灰色提示）。 */
-  function currentLineText() {
-    if (!term) return '';
-    const buffer = term.buffer.active;
+  function currentLineText(targetTerm) {
+    const t = targetTerm || term;
+    if (!t) return '';
+    const buffer = t.buffer.active;
     const line = buffer.getLine(buffer.baseY + buffer.cursorY);
     if (!line) return '';
     return line.translateToString(false, 0, buffer.cursorX);
@@ -352,15 +448,18 @@
     return (index >= 0 ? text.slice(index + 2) : text).trim();
   }
 
-  function submitLine(line) {
+  function submitLine(line, rec) {
     // 以终端当前行（回显后的真实内容，含 Tab 补全）为准；解析不出再退回键入跟踪。
-    const rendered = commandFromRendered(currentLineText());
+    const target = rec || activeRecord;
+    const rendered = commandFromRendered(currentLineText(target && target.term));
     const candidate = /^\s*cd(?:\s|$)/.test(rendered) ? rendered : line;
     const match = /^\s*cd(?:\s+(.*))?\s*$/.exec(candidate || '');
-    if (!match || !filesApi) return;
+    if (!match || !filesApi || target !== activeRecord) return;
     filesApi.followCd(match[1] == null ? '' : match[1]);
   }
-  function trackLine(data) {
+  function trackLine(data, rec) {
+    const target = rec || activeRecord;
+    if (!target) return;
     // 跳过 ANSI 转义序列（箭头 / 括号粘贴 \x1b[200~ 等），否则会污染命令行。
     for (let i = 0; i < data.length; i += 1) {
       const ch = data[i];
@@ -370,38 +469,54 @@
         continue;
       }
       if (ch === '\r' || ch === '\n') {
-        submitLine(typedLine);
-        typedLine = '';
+        submitLine(target.typedLine, target);
+        target.typedLine = '';
       } else if (ch === '\u007f' || ch === '\b') {
-        typedLine = typedLine.slice(0, -1);
+        target.typedLine = target.typedLine.slice(0, -1);
       } else if (ch === '\u0003' || ch === '\u0015') {
-        typedLine = '';
+        target.typedLine = '';
       } else if (ch >= ' ') {
-        typedLine += ch;
+        target.typedLine += ch;
       }
     }
   }
 
   /* Only tell the PTY about a real size change: a redundant resize makes the shell
      redraw and looks like the view jumping while scrolling. */
+  function syncPtySizeFor(rec) {
+    if (!rec || !rec.term || !rec.sessionId) return;
+    if (rec.term.cols === rec.lastCols && rec.term.rows === rec.lastRows) return;
+    rec.lastCols = rec.term.cols;
+    rec.lastRows = rec.term.rows;
+    window.ships.terminal.resize(rec.sessionId, rec.term.cols, rec.term.rows);
+    if (rec === activeRecord) {
+      lastCols = rec.lastCols;
+      lastRows = rec.lastRows;
+    }
+  }
+
   function syncPtySize() {
-    if (!term || !sessionId) return;
-    if (term.cols === lastCols && term.rows === lastRows) return;
-    lastCols = term.cols;
-    lastRows = term.rows;
-    window.ships.terminal.resize(sessionId, term.cols, term.rows);
+    syncPtySizeFor(activeRecord);
+  }
+
+  /* 对单块终端执行 fit（每块终端的可用区域不同，分屏时必须分别处理）。
+     记录自己的 host 尺寸键，避免无变化的重复 fit（重复 resize 会让 shell 重绘）。 */
+  function fitRecord(rec, force) {
+    if (!rec || !rec.fit || !rec.term || !rec.host || ballMode) return;
+    const rect = rec.host.getBoundingClientRect();
+    const key = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+    if (!force && key === rec.lastHostKey) return;
+    rec.lastHostKey = key;
+    rec.fit.fit();
+    fitColumnsFor(rec);
+    syncPtySizeFor(rec);
   }
 
   function fitIfNeeded(force) {
-    if (!fit || !term || !host || ballMode) return;
-    const rect = host.getBoundingClientRect();
-    const key = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
-    if (!force && key === lastHostKey) return;
-    lastHostKey = key;
-    fit.fit();
-    fitColumns();
-    syncPtySize();
-    snapExactSize();
+    if (ballMode) return;
+    for (const rec of paneRecords) fitRecord(rec, force);
+    // 分屏时窗口内容由两块终端组成，整窗「按整格收缩」的 chrome 计算不再成立，跳过。
+    if (!splitActive()) snapExactSize();
     updateRowHeightVar();
     scheduleGutter();
     if (sizeEl && !sizeEl.classList.contains('hidden')) showSizeBadge();
@@ -419,29 +534,35 @@
   /* 单元格尺寸：优先用 xterm 的渲染尺寸（css.cell，稳定、不随列数变化）；
      退化时才用「屏幕宽 / 列数」——后者会随列数取整而抖动，导致窗口反复微调。
      返回 CSS px 的 { width, height }。 */
-  function readCellSize() {
-    if (!term || !host) return { width: 0, height: 0 };
-    const dims = term._core && term._core._renderService && term._core._renderService.dimensions;
+  function readCellSize(targetTerm, targetHost) {
+    const t = targetTerm || term;
+    const el = targetHost || host;
+    if (!t || !el) return { width: 0, height: 0 };
+    const dims = t._core && t._core._renderService && t._core._renderService.dimensions;
     let width = dims && dims.css && dims.css.cell ? dims.css.cell.width : 0;
     let height = dims && dims.css && dims.css.cell ? dims.css.cell.height : 0;
-    const rowsEl = host.querySelector('.xterm-rows');
+    const rowsEl = el.querySelector('.xterm-rows');
     const firstRow = rowsEl && rowsEl.firstElementChild;
     if (!height && firstRow) height = firstRow.getBoundingClientRect().height;
     if (!width) {
-      const screenEl = host.querySelector('.xterm-screen');
-      width = screenEl && term.cols ? screenEl.getBoundingClientRect().width / term.cols : 0;
+      const screenEl = el.querySelector('.xterm-screen');
+      width = screenEl && t.cols ? screenEl.getBoundingClientRect().width / t.cols : 0;
     }
     return { width, height };
   }
 
   /* FitAddon 只要 scrollback > 0 就固定预留 14px（给 overview ruler），会把终端挤得比
      窗口窄、右侧空出一条白边（我们本来就隐藏滚动条）。这里按真实可用宽度自己算列数。 */
-  function fitColumns() {
-    if (!term || !term.cols || !host) return;
-    const { width: cellWidth } = readCellSize();
+  function fitColumnsFor(rec) {
+    if (!rec || !rec.term || !rec.term.cols || !rec.host) return;
+    const { width: cellWidth } = readCellSize(rec.term, rec.host);
     if (!cellWidth) return;
-    const cols = Math.max(2, Math.floor(host.clientWidth / cellWidth));
-    if (cols !== term.cols) term.resize(cols, term.rows);
+    const cols = Math.max(2, Math.floor(rec.host.clientWidth / cellWidth));
+    if (cols !== rec.term.cols) rec.term.resize(cols, rec.term.rows);
+  }
+
+  function fitColumns() {
+    fitColumnsFor(activeRecord);
   }
 
   /* 把窗口内容尺寸对齐到「终端区 = 列宽×列数 / 行高×行数 + chrome」：
@@ -492,7 +613,9 @@
 
   function applyFontSize(value) {
     if (!term) return;
-    term.options.fontSize = value;
+    for (const rec of paneRecords) {
+      if (rec.term) rec.term.options.fontSize = value;
+    }
     applyHeaderFontSize(value);
     fitIfNeeded(true);
     syncPtySize();
@@ -517,7 +640,9 @@
   function applyFontFamily(family) {
     if (!term) return;
     const value = fontFamilyValue(family);
-    term.options.fontFamily = value;
+    for (const rec of paneRecords) {
+      if (rec.term) rec.term.options.fontFamily = value;
+    }
     document.documentElement.style.setProperty('--term-font-family', value);
     fitIfNeeded(true);
     syncPtySize();
@@ -584,29 +709,52 @@
     }, 120);
   }
 
-  async function startSession() {
-    if (!term || sessionId) return;
-    const result = await window.ships.terminal.start(term.cols, term.rows, shellPath);
+  async function startSessionFor(rec) {
+    if (!rec || !rec.term || rec.sessionId || rec.starting) return;
+    rec.starting = true;
+    let result = null;
+    try {
+      result = await window.ships.terminal.start(rec.term.cols, rec.term.rows, shellPath);
+    } finally {
+      rec.starting = false;
+    }
     if (!result || !result.ok) {
-      write(`\r\n${ANSI.error}${i18n.t('terminalWin.failed', { error: (result && result.error) || 'error' })}${ANSI.reset}\r\n`);
+      write(
+        `\r\n${ANSI.error}${i18n.t('terminalWin.failed', { error: (result && result.error) || 'error' })}${ANSI.reset}\r\n`,
+        rec
+      );
       return;
     }
-    sessionId = result.id;
+    rec.sessionId = result.id;
+    // the PTY was created with the current size: remember it so we do not resize again
+    rec.lastCols = rec.term.cols;
+    rec.lastRows = rec.term.rows;
+    rec.sshTarget = '';
+    if (rec === activeRecord) {
+      sessionId = rec.sessionId;
+      lastCols = rec.lastCols;
+      lastRows = rec.lastRows;
+      sshTarget = '';
+      if (filesApi) filesApi.setSshTarget('');
+      window.ships.terminal.setActiveSession(rec.sessionId);
+    }
     ballElapsedAccum = 0;
     ballTaskEnded = false;
     syncBallClock();
-    sshTarget = '';
-    if (filesApi) filesApi.setSshTarget('');
-    // the PTY was created with the current size: remember it so we do not resize again
-    lastCols = term.cols;
-    lastRows = term.rows;
+  }
+
+  function startSession() {
+    return startSessionFor(activeRecord);
   }
 
   /* 切换 SSH 前重建 shell：仅当当前已经处在 SSH 会话里（sshTarget 非空）时销毁当前
      PTY / shell 并重新创建一个登录 shell；仍停留在系统 shell 时保留原会话直接注入命令。 */
   async function restartSessionForSsh() {
-    if (!term) return false;
-    const oldId = sessionId;
+    const rec = activeRecord;
+    if (!rec || !rec.term) return false;
+    const oldId = rec.sessionId;
+    rec.sessionId = '';
+    rec.sshTarget = '';
     sessionId = '';
     sshTarget = '';
     if (filesApi) filesApi.setSshTarget('');
@@ -619,8 +767,8 @@
     }
     // 不清屏：保留原有输出，只提示一行灰色的重建信息。
     write(`\r\n${ANSI.meta}${i18n.t('terminalWin.restarting')}${ANSI.reset}\r\n`);
-    await startSession();
-    return Boolean(sessionId);
+    await startSessionFor(rec);
+    return Boolean(rec.sessionId);
   }
 
   /* 行号开关（头栏 eye 按钮与右键菜单共用）：切换后重新 fit + 整格对齐。 */
@@ -760,14 +908,23 @@
     sshPicker.el.style.opacity = hosts.length === 0 ? '0.5' : '';
   }
 
-  function initTerminal(options) {
+  function initTerminal(options, targetRec) {
     const opts = options || {};
+    let rec = targetRec;
+    if (!rec) {
+      rec = activeRecord || makePaneRecord(host);
+      if (!paneRecords.includes(rec)) paneRecords.push(rec);
+      if (!activeRecord) {
+        activeRecord = rec;
+        applyGlobals(rec);
+      }
+    }
     if (!window.Terminal) {
-      host.appendChild(el('div', { class: 'p-3 text-[12px] text-fg-muted' }, i18n.t('terminalWin.noTerminal')));
+      rec.host.appendChild(el('div', { class: 'p-3 text-[12px] text-fg-muted' }, i18n.t('terminalWin.noTerminal')));
       return;
     }
     const mono = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim();
-    term = new window.Terminal({
+    const t = new window.Terminal({
       convertEol: true,
       cursorBlink: true,
       scrollback: opts.scrollback || 10000,
@@ -775,70 +932,100 @@
       fontFamily: opts.fontFamily || mono || 'monospace',
       theme: themeColors(),
     });
-    term.open(host);
-    registerUrlLinks();
+    rec.term = t;
+    if (rec === activeRecord) term = t;
+    t.open(rec.host);
+    registerUrlLinks(t);
     requestAnimationFrame(() => {
-      if (term) term.focus();
+      if (rec.term) rec.term.focus();
     });
     if (window.FitAddon && window.FitAddon.FitAddon) {
-      fit = new window.FitAddon.FitAddon();
-      term.loadAddon(fit);
-      fitIfNeeded();
+      const addon = new window.FitAddon.FitAddon();
+      rec.fit = addon;
+      if (rec === activeRecord) fit = addon;
+      t.loadAddon(addon);
+      fitRecord(rec, true);
     }
-    observer = new ResizeObserver(() => {
-      if (ballMode) return; // 悬浮球缩放动画期间不重绘 / 不显示尺寸徽标
-      showSizeBadge();
-      scheduleResize();
+    if (!observer) {
+      observer = new ResizeObserver(() => {
+        if (ballMode) return; // 悬浮球缩放动画期间不重绘 / 不显示尺寸徽标
+        showSizeBadge();
+        scheduleResize();
+      });
+      observer.observe(hostBox || rec.host);
+    }
+    t.onData((data) => {
+      trackLine(data, rec);
+      if (rec.sessionId) window.ships.terminal.input(rec.sessionId, data);
+      else startSessionFor(rec);
     });
-    observer.observe(hostBox || host);
-    term.onData((data) => {
-      trackLine(data);
-      if (sessionId) window.ships.terminal.input(sessionId, data);
-      else startSession();
-    });
+    if (typeof t.onFocus === 'function') t.onFocus(() => setActiveRecord(rec));
+    rec.host.addEventListener('mousedown', () => setActiveRecord(rec), true);
+    rec.host.addEventListener('focusin', () => setActiveRecord(rec));
     // 行号随滚动 / 重绘更新。
-    term.onScroll(() => scheduleGutter());
-    if (typeof term.onRender === 'function') term.onRender(() => scheduleGutter());
-    startSession();
+    t.onScroll(() => scheduleGutter());
+    if (typeof t.onRender === 'function') t.onRender(() => scheduleGutter());
+    startSessionFor(rec);
     setTimeout(() => {
-      if (term) term.focus();
+      if (rec.term) rec.term.focus();
     }, 0);
   }
 
   const offData = window.ships.terminal.onData((message) => {
-    if (!message || message.id !== sessionId || message.type !== 'data') return;
+    if (!message || message.type !== 'data') return;
+    const rec = findRecordBySession(message.id);
+    if (!rec) return;
     let data = message.data;
     // ssh 进程退出：PTY 桥接检测到前台进程组回到 shell 后输出一个不可见的 OSC 标记
     // → 清空目标并断开内嵌文件面板。
     const sshExitMarker = C.SSH_EXIT_MARKER;
     if (sshExitMarker && data.includes(sshExitMarker)) {
       data = data.split(sshExitMarker).join('');
-      sshTarget = '';
-      if (filesApi) filesApi.setSshTarget('');
+      rec.sshTarget = '';
+      if (rec === activeRecord) {
+        sshTarget = '';
+        if (filesApi) filesApi.setSshTarget('');
+      }
     }
     if (!data) return;
-    write(data);
+    write(data, rec);
     pulseBall();
   });
   const offSession = window.ships.terminal.onSession((message) => {
-    if (!message || message.id !== sessionId) return;
-    sshTarget = message.target || '';
-    if (filesApi) filesApi.setSshTarget(sshTarget);
+    if (!message) return;
+    const rec = findRecordBySession(message.id);
+    if (!rec) return;
+    rec.sshTarget = message.target || '';
+    if (rec === activeRecord) {
+      sshTarget = rec.sshTarget;
+      if (filesApi) filesApi.setSshTarget(sshTarget);
+    }
   });
   const offExit = window.ships.terminal.onExit((message) => {
-    if (!message || message.id !== sessionId) return;
-    sessionId = '';
-    sshTarget = '';
+    if (!message) return;
+    const rec = findRecordBySession(message.id);
+    if (!rec) return;
+    rec.sessionId = '';
+    rec.sshTarget = '';
     ballElapsedAccum = 0;
     ballTaskEnded = false;
     syncBallClock();
-    if (filesApi) filesApi.setSshTarget('');
+    if (rec === activeRecord) {
+      sessionId = '';
+      sshTarget = '';
+      if (filesApi) filesApi.setSshTarget('');
+    }
     if (message.type === 'error') {
       // 启动失败：留在窗口里显示原因（否则用户看不到是为什么）。
-      write(`\r\n${ANSI.error}${i18n.t('terminalWin.failed', { error: message.message })}${ANSI.reset}\r\n`);
+      write(`\r\n${ANSI.error}${i18n.t('terminalWin.failed', { error: message.message })}${ANSI.reset}\r\n`, rec);
       return;
     }
-    // shell 结束（输入 exit / Ctrl-D 等）：直接销毁窗口（即使设置了「关闭按钮=隐藏」，
+    // 副终端的 shell 结束：只关闭副终端，保留主终端继续工作。
+    if (rec !== paneRecords[0]) {
+      closeSecondaryPane();
+      return;
+    }
+    // 主终端 shell 结束（输入 exit / Ctrl-D 等）：直接销毁窗口（即使设置了「关闭按钮=隐藏」，
     // 已结束的会话也不该留在后台），不留「会话已结束」这类提示。
     const destroy = window.ships && window.ships.terminal && window.ships.terminal.destroy;
     if (typeof destroy === 'function') destroy();
@@ -1303,6 +1490,106 @@
     window.ships.openTerminal({ ballIcon: randomBallIconName(ballIconName) });
   }
 
+  /* ------------------------------- 分屏 -------------------------------
+     同一窗口内最多两块终端：主终端 + 一块副终端（分割后不能再分割）。
+     两块之间是可见、可拖动的分隔条：水平分割上下排列（拖动改高度），垂直分割左右排列（拖动改宽度）。 */
+  function setupSplitDivider(divider) {
+    let raf = 0;
+    const onMove = (event) => {
+      const rect = panesWrap.getBoundingClientRect();
+      const ratio =
+        splitOrientation === 'vertical'
+          ? (event.clientX - rect.left) / rect.width
+          : (event.clientY - rect.top) / rect.height;
+      const clamped = Math.max(0.15, Math.min(0.85, ratio));
+      const primary = paneRecords[0];
+      if (primary && primary.host) primary.host.style.flex = `0 0 ${clamped * 100}%`;
+      if (!raf) {
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          fitIfNeeded(true);
+        });
+      }
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      divider.classList.remove('dragging');
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      fitIfNeeded(true);
+    };
+    divider.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      divider.classList.add('dragging');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp, { once: true });
+    });
+  }
+
+  function splitTerminal(orientation) {
+    if (splitActive() || ballMode || !term) return; // 分割后不能再分割
+    captureGlobals(activeRecord);
+    const secondaryHost = el('div', { class: 'term-pane' });
+    const divider = el('div', { class: 'term-split-divider' });
+    panesWrap.classList.remove('split-horizontal', 'split-vertical');
+    panesWrap.classList.add(orientation === 'horizontal' ? 'split-horizontal' : 'split-vertical');
+    // 主终端 → 分隔条 → 副终端
+    panesWrap.appendChild(divider);
+    panesWrap.appendChild(secondaryHost);
+    splitDividerEl = divider;
+    splitOrientation = orientation;
+    document.body.classList.add('term-split');
+    const rec = makePaneRecord(secondaryHost);
+    paneRecords.push(rec);
+    setupSplitDivider(divider);
+    // 沿用当前终端的字体 / 回滚设置（在切换焦点前读取）。
+    const paneOpts = {
+      scrollback: term ? term.options.scrollback : 10000,
+      fontSize: term ? term.options.fontSize : fontSize,
+      fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--term-font-family').trim(),
+    };
+    // 新副终端成为当前焦点。
+    applyGlobals(rec);
+    updatePaneStyles();
+    initTerminal(paneOpts, rec);
+    requestAnimationFrame(() => fitIfNeeded(true));
+  }
+
+  function closeSecondaryPane() {
+    if (!splitActive()) return;
+    const primary = paneRecords[0];
+    const secondary = paneRecords[1];
+    if (activeRecord === secondary) {
+      captureGlobals(secondary);
+      applyGlobals(primary);
+    } else {
+      captureGlobals(activeRecord);
+    }
+    if (secondary.sessionId) {
+      try {
+        window.ships.terminal.kill(secondary.sessionId);
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    try {
+      if (secondary.term) secondary.term.dispose();
+    } catch (err) {
+      /* ignore */
+    }
+    if (splitDividerEl) splitDividerEl.remove();
+    if (secondary.host) secondary.host.remove();
+    splitDividerEl = null;
+    splitOrientation = '';
+    document.body.classList.remove('term-split');
+    panesWrap.classList.remove('split-horizontal', 'split-vertical');
+    if (primary && primary.host) primary.host.style.flex = '';
+    paneRecords.pop();
+    updatePaneStyles();
+    if (sessionId) window.ships.terminal.setActiveSession(sessionId);
+    requestAnimationFrame(() => fitIfNeeded(true));
+  }
+
   function contextMenuItems() {
     const selection = term ? term.getSelection() : '';
     const sshReady = Boolean(sshTarget);
@@ -1311,6 +1598,30 @@
         label: i18n.t('terminalWin.menuNewTerminal'),
         icon: 'plus',
         run: openTerminalWithNewBall,
+      },
+      {
+        label: i18n.t('terminalWin.menuSplit'),
+        icon: 'split',
+        submenu: [
+          {
+            label: i18n.t('terminalWin.splitHorizontal'),
+            icon: 'splitHorizontal',
+            disabled: splitActive(),
+            run: () => splitTerminal('horizontal'),
+          },
+          {
+            label: i18n.t('terminalWin.splitVertical'),
+            icon: 'splitVertical',
+            disabled: splitActive(),
+            run: () => splitTerminal('vertical'),
+          },
+          {
+            label: i18n.t('terminalWin.splitClose'),
+            icon: 'x',
+            disabled: !splitActive(),
+            run: closeSecondaryPane,
+          },
+        ],
       },
       {
         label: i18n.t('terminalWin.menuShowMain'),
@@ -1373,8 +1684,12 @@
     ];
   }
 
-  host.addEventListener('contextmenu', (event) => {
+  panesWrap.addEventListener('contextmenu', (event) => {
     event.preventDefault();
+    // 右键落在哪块终端上就把焦点切到哪块（右键菜单的操作都作用于当前终端）。
+    const paneEl = event.target.closest && event.target.closest('.term-pane');
+    const rec = paneRecords.find((item) => item.host === paneEl);
+    if (rec) setActiveRecord(rec);
     if (!term) return;
     openContextMenu(event.clientX, event.clientY, contextMenuItems());
   });
@@ -1705,7 +2020,10 @@
     if (filesApi) filesApi.closeConnection();
     if (offRecalibrate) offRecalibrate();
     if (offDragActive) offDragActive();
-    if (sessionId) window.ships.terminal.kill(sessionId);
+    captureGlobals(activeRecord);
+    for (const rec of paneRecords) {
+      if (rec.sessionId) window.ships.terminal.kill(rec.sessionId);
+    }
   });
 
   async function boot() {
@@ -1745,9 +2063,15 @@
       applyTerminalOpacity(next && next.terminalOpacity);
       renderHeader();
       refreshSshPicker();
-      if (term) term.options.theme = themeColors();
+      for (const rec of paneRecords) {
+        if (rec.term) rec.term.options.theme = themeColors();
+      }
       shellPath = (next && next.terminalShell) || ''; // applies to the next session
-      if (term && next && next.terminalScrollback) term.options.scrollback = next.terminalScrollback;
+      if (next && next.terminalScrollback) {
+        for (const rec of paneRecords) {
+          if (rec.term) rec.term.options.scrollback = next.terminalScrollback;
+        }
+      }
       syncFontSizeSetting(next);
     });
   }
