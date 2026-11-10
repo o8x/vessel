@@ -932,10 +932,19 @@ input[type='color'].swatch::-webkit-color-swatch {
   min-height: 0;
 }
 #term-panes > .term-pane {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+/* 光标行高亮：自定义背景层（DOM 渲染器下放在 .xterm 之前、文字下方）。 */
+.term-cursor-line {
+  position: absolute;
+  left: 0;
+  display: none;
+  background: var(--term-cursor-line);
+  pointer-events: none;
 }
 #term-panes.split-horizontal {
   flex-direction: column;

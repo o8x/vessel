@@ -71,6 +71,8 @@
   --color-bg: #f4f5f8;
   /* 终端窗口专用底色：白天纯白，避免跟随应用窗口的蓝灰色。 */
   --term-bg: #ffffff;
+  /* 终端光标所在行的淡淡底色（iTerm 风格；xterm 装饰只接受 #RRGGBB）。 */
+  --term-cursor-line: rgba(15, 18, 25, 0.055);
   --color-surface: #ffffff;
   --color-surface-2: #eef0f4;
   --color-surface-3: #e3e6ec;
@@ -106,6 +108,8 @@
   color-scheme: dark;
   --color-bg: #0e1116;
   --term-bg: #0e1116;
+  /* 终端光标所在行的淡淡底色（暗色模式）。 */
+  --term-cursor-line: rgba(255, 255, 255, 0.07);
   --color-surface: #161a21;
   --color-surface-2: #1d222b;
   --color-surface-3: #262c37;

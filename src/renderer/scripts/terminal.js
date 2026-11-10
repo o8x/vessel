@@ -188,6 +188,7 @@
       lastRows: 0,
       lastHostKey: '',
       typedLine: '',
+      cursorEl: null,
     };
   }
 
@@ -230,6 +231,49 @@
     }
   }
 
+  /* --------------------------- 光标行高亮（iTerm 风格） ---------------------------
+     只给「当前激活」的终端整行铺一层淡淡的背景色（分屏时另一块不显示），随光标移动 / 滚动更新。
+     用自定义背景层（放在 .xterm 之前、位于文字下方），不依赖 xterm 的 decoration 渲染。 */
+  function hideCursorLine(rec) {
+    if (rec && rec.cursorEl) rec.cursorEl.style.display = 'none';
+  }
+
+  function updateCursorLine(rec) {
+    if (!rec || !rec.term || !rec.cursorEl) return;
+    // 只高亮当前激活的终端；其余（含分屏后的副终端）保持无高亮。
+    if (rec !== activeRecord || ballMode) {
+      hideCursorLine(rec);
+      return;
+    }
+    const t = rec.term;
+    const buffer = t.buffer && t.buffer.active;
+    if (!buffer) {
+      hideCursorLine(rec);
+      return;
+    }
+    // cursorY 是相对视口的行号：滚出视口时不显示（与 iTerm 一致）。
+    const row = buffer.cursorY;
+    if (row < 0 || row >= t.rows) {
+      hideCursorLine(rec);
+      return;
+    }
+    const { width: cellWidth, height: cellHeight } = readCellSize(t, rec.host);
+    if (!cellHeight) {
+      hideCursorLine(rec);
+      return;
+    }
+    const el = rec.cursorEl;
+    el.style.display = 'block';
+    el.style.left = '0';
+    el.style.top = `${Math.round(row * cellHeight)}px`;
+    el.style.height = `${Math.round(cellHeight)}px`;
+    el.style.width = `${Math.round(t.cols * (cellWidth || 0))}px`;
+  }
+
+  function refreshCursorLineHighlights() {
+    for (const rec of paneRecords) updateCursorLine(rec);
+  }
+
   /* 切换焦点：保存旧块的全局状态，载入新块的，并把「活动会话」告诉主进程
      （SSH 注入等操作据此落到当前这块终端）。 */
   function setActiveRecord(rec) {
@@ -237,6 +281,7 @@
     captureGlobals(activeRecord);
     applyGlobals(rec);
     updatePaneStyles();
+    refreshCursorLineHighlights();
     if (rec.sessionId) window.ships.terminal.setActiveSession(rec.sessionId);
     scheduleGutter();
   }
@@ -961,6 +1006,10 @@
     rec.term = t;
     if (rec === activeRecord) term = t;
     t.open(rec.host);
+    // 光标行背景层：放在 xterm 容器之前，位于文字下方（xterm 背景透明，能透出这一层）。
+    const cursorEl = el('div', { class: 'term-cursor-line' });
+    rec.host.insertBefore(cursorEl, rec.host.firstChild);
+    rec.cursorEl = cursorEl;
     registerUrlLinks(t);
     requestAnimationFrame(() => {
       if (rec.term) rec.term.focus();
@@ -988,10 +1037,19 @@
     if (typeof t.onFocus === 'function') t.onFocus(() => setActiveRecord(rec));
     rec.host.addEventListener('mousedown', () => setActiveRecord(rec), true);
     rec.host.addEventListener('focusin', () => setActiveRecord(rec));
-    // 行号随滚动 / 重绘更新。
-    t.onScroll(() => scheduleGutter());
-    if (typeof t.onRender === 'function') t.onRender(() => scheduleGutter());
+    // 行号 / 光标行高亮随滚动 / 重绘更新（光标行只画在当前激活的终端上）。
+    t.onScroll(() => {
+      scheduleGutter();
+      if (rec === activeRecord) updateCursorLine(rec);
+    });
+    if (typeof t.onRender === 'function') {
+      t.onRender(() => {
+        scheduleGutter();
+        if (rec === activeRecord) updateCursorLine(rec);
+      });
+    }
     startSessionFor(rec);
+    refreshCursorLineHighlights();
     setTimeout(() => {
       if (rec.term) rec.term.focus();
     }, 0);
@@ -1630,6 +1688,7 @@
     if (primary && primary.host) primary.host.style.flex = '';
     paneRecords.pop();
     updatePaneStyles();
+    refreshCursorLineHighlights();
     if (sessionId) window.ships.terminal.setActiveSession(sessionId);
     requestAnimationFrame(() => fitIfNeeded(true));
     renderHeader();
@@ -2121,6 +2180,7 @@
       for (const rec of paneRecords) {
         if (rec.term) rec.term.options.theme = themeColors();
       }
+      refreshCursorLineHighlights();
       shellPath = (next && next.terminalShell) || ''; // applies to the next session
       if (next && next.terminalScrollback) {
         for (const rec of paneRecords) {
