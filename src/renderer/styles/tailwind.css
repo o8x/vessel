@@ -1325,13 +1325,12 @@ body.term-window .select-menu .select-group-title {
   padding: 3px 0;
 }
 /* 独立文件窗口：原生标题栏 / 红绿灯，字号固定 14px、行高 32px，不跟随终端设置。
-   内容固定纯白底、浅色主题（window-manager 打开的文件窗口不随主界面明暗切换）。 */
+   主题跟随全局设置（跟随系统 / 浅色 / 深色），背景取 --file-window-bg（深浅各一套）。 */
 body.file-window {
   --file-font-size: 14px;
   --term-header-font-size: 15px;
   --term-header-height: 32px;
   background: var(--file-window-bg);
-  color-scheme: light;
 }
 body.file-window .fm-root,
 body.file-window .fm-status {

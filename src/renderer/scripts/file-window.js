@@ -2,8 +2,8 @@
 
 /* Detached file-manager window: an always-on-top panel with a dedicated SSH
    connection bar (saved-host picker + manual username / host / port / password or
-   key), plus the shared file manager. The window always uses the light theme and a
-   pure white background, independent of the main window's theme. */
+   key), plus the shared file manager. The window follows the app theme
+   (system / light / dark). */
 
 (function bootstrapFileWindow() {
   const i18n = window.ShipsI18n;
@@ -361,8 +361,8 @@
   async function boot() {
     const [settings, info] = await Promise.all([window.ships.getSettings(), window.ships.fileWindow.info()]);
     i18n.setLocale((settings && settings.locale) || 'zh');
-    // 文件窗口固定浅色主题（纯白背景），不跟随主界面的明暗主题。
-    window.ShipsTheme.set({ theme: 'light', accent: (settings && settings.accent) || '#2e6bfc' });
+    // 主题跟随全局设置（跟随系统 / 浅色 / 深色）。
+    window.ShipsTheme.set(settings || {});
     setupForm();
     currentTarget = (info && info.target) || '';
     const startPath = (info && info.path) || '';
@@ -412,11 +412,13 @@
     });
     window.ships.onSettingsChanged((next) => {
       i18n.setLocale((next && next.locale) || 'zh');
-      window.ShipsTheme.set({ theme: 'light', accent: (next && next.accent) || '#2e6bfc' });
+      window.ShipsTheme.set(next || {});
       refreshPicker();
     });
     // 设置页增删改 SSH 主机 / 分组后实时刷新下拉。
     window.ships.ssh.onConfigChanged(() => refreshPicker());
+    // 跟随系统主题变化时重新应用（与主界面 / 设置窗口一致）。
+    window.ships.onThemeChanged(() => window.ShipsTheme.apply());
   }
 
   boot().catch((err) => console.error(err));

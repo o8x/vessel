@@ -51,7 +51,7 @@
 | `--term-bg-alpha` | `95%`（终端窗口 `#term-shell` 底色的 alpha，由 `terminal.js` 按 `settings.terminalOpacity` 换算，默认透明度 5%；CSS 兜底 100%；见 §3.8-2 / §8.5） |
 | `--term-gutter-width` | `calc(var(--file-font-size) * 1.4)`（终端左侧行号栏宽，两位数字；见 §8.5） |
 | `--file-font-size` | 12px（文件管理基础字号；终端窗口里由 `terminal.js` 跟随终端字号改写；**独立文件窗口固定 14px**，见 §8.6） |
-| `--fm-dir-row-bg` | 文件列表目录行底色（比文件行略亮）：浅色 `rgba(255,255,255,.72)`、暗色 `rgba(255,255,255,.04)`、Liquid Glass `rgba(255,255,255,.1)`；独立文件窗口固定纯白底改为 `rgba(15,23,42,.035)` |
+| `--fm-dir-row-bg` | 文件列表目录行底色（比文件行略亮）：浅色 `rgba(255,255,255,.72)`、暗色 `rgba(255,255,255,.04)`、Liquid Glass `rgba(255,255,255,.1)`；独立文件窗口跟随主题，使用同一套深浅值 |
 | `--traffic-size` / `--traffic-glyph-size` | 9px / 6px（头栏自绘小红绿灯的圆点直径与悬浮符号尺寸） |
 | `--traffic-close` / `--traffic-minimize` / `--traffic-zoom` / `--traffic-inactive` | `#ff5f57` / `#febc2e` / `#28c840` / 失焦灰（浅色 `rgba(0,0,0,.18)`、深色 `rgba(255,255,255,.28)`） |
 | `--radius-window` | 10px |

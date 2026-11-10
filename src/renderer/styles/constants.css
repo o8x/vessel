@@ -110,6 +110,7 @@
   color-scheme: dark;
   --color-bg: #0e1116;
   --term-bg: #0e1116;
+  --file-window-bg: #0e1116;
   /* 终端光标所在行的淡淡底色（暗色模式）。 */
   --term-cursor-line: rgba(255, 255, 255, 0.07);
   --color-surface: #161a21;
@@ -175,7 +176,3 @@
   --shadow-raise: none;
 }
 
-/* 独立文件窗口固定纯白底：目录行改用极淡的中性底色与文件行区分（无法比纯白更亮）。 */
-body.file-window {
-  --fm-dir-row-bg: rgba(15, 23, 42, 0.035);
-}
