@@ -29,6 +29,7 @@
         splitHorizontal: '水平分割',
         splitVertical: '垂直分割',
         splitClose: '关闭副终端',
+        splitToggleLayout: '切换分割布局',
         splitToggleVertical: '左右分割',
         splitToggleHorizontal: '切换为上下分割',
         splitToggleClose: '关闭副终端',
@@ -72,6 +73,7 @@
         splitHorizontal: 'Split horizontally',
         splitVertical: 'Split vertically',
         splitClose: 'Close split terminal',
+        splitToggleLayout: 'Toggle split layout',
         splitToggleVertical: 'Split left/right',
         splitToggleHorizontal: 'Switch to top/bottom split',
         splitToggleClose: 'Close split terminal',
@@ -1654,6 +1656,12 @@
             icon: 'splitVertical',
             disabled: splitActive(),
             run: () => splitTerminal('vertical'),
+          },
+          {
+            label: i18n.t('terminalWin.splitToggleLayout'),
+            icon: 'swap',
+            disabled: !splitActive(),
+            run: () => setSplitOrientation(splitOrientation === 'horizontal' ? 'vertical' : 'horizontal'),
           },
           {
             label: i18n.t('terminalWin.splitClose'),
