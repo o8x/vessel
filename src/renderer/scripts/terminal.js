@@ -785,7 +785,7 @@
     linesBtn.setAttribute('data-tip', i18n.t(showLines ? 'terminalWin.linesOn' : 'terminalWin.linesOff'));
     filesBtn.innerHTML = Icons.folder(15);
     itermBtn.innerHTML = Icons.terminal(15);
-    splitBtn.innerHTML = Icons.split(15);
+    splitBtn.innerHTML = Icons.newWindow(15);
     splitBtn.setAttribute('data-tip', i18n.t('terminalWin.newWindow'));
     if (pinBtn) {
       pinBtn.innerHTML = (ballPinned ? Icons.pin : Icons.pinOff)(15);
