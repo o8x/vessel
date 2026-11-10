@@ -17,6 +17,27 @@ function findHost(alias) {
   return configService.list().find((host) => host.alias === alias) || null;
 }
 
+/* 「在终端打开」：优先用别名命中 ~/.ssh/config，否则用手动连接字段构造主机。 */
+function hostForTerminal(payload) {
+  const target = String((payload && payload.target) || '').trim();
+  const explicitAlias = String((payload && payload.alias) || '').trim();
+  const alias =
+    explicitAlias ||
+    (target && !target.includes('@') && !target.includes(':') ? target : '');
+  const configured = findHost(alias);
+  if (configured) return configured;
+  const hostName = String((payload && payload.host) || '').trim();
+  if (!hostName) return null;
+  return {
+    alias: explicitAlias || target || hostName,
+    hostName,
+    user: String((payload && payload.username) || '').trim(),
+    port: Number(payload && payload.port) || 22,
+    identityFile: String((payload && payload.identityFile) || '').trim() || '~/.ssh/id_ed25519',
+    proxyJump: '',
+  };
+}
+
 /* 给主机列表附上「是否已存密码」（非机密标记；密码本体加密存本地）。 */
 function withPassword(hosts) {
   return hosts.map((host) => Object.assign({}, host, { hasPassword: credentials.has(host.alias) }));
@@ -50,6 +71,36 @@ function registerSshIpc(ipcMain) {
     logger.file(`[ssh] connect(alias=${host.alias}) -> terminal: ${command}${secret ? ' (+password)' : ''}`);
     if (!runInTerminal(command, secret, host.alias)) return { ok: false, error: 'terminal unavailable', command };
     return { ok: true, command };
+  });
+
+  // 文件管理（独立文件窗口）目录右键「在终端打开」：新建一扇终端，SSH 连接该主机，
+  // 并让远端 shell 直接进入指定目录（ssh -t 'cd … && exec $SHELL -l'）。
+  ipcMain.handle(IPC.SSH_OPEN_IN_TERMINAL, async (_event, payload) => {
+    requestLocalNetworkAccess();
+    const request = payload || {};
+    const dir = String(request.path || '').trim();
+    if (!dir) return { ok: false, error: 'path required' };
+    const host = hostForTerminal(request);
+    if (!host) return { ok: false, error: 'host not found' };
+    const socksProxy = await proxyService.resolveSocks(host.hostName, Number(host.port) || 22);
+    const remote = `cd ${sshService.shellQuote(dir)} && exec $SHELL -l`;
+    const command = sshService.buildCommand(host, {
+      socksProxy,
+      forceTty: true,
+      command: sshService.shellQuote(remote),
+    });
+    const typedPassword = typeof request.password === 'string' ? request.password : '';
+    const secret =
+      typedPassword ||
+      (host.alias && credentials.has(host.alias) ? credentials.get(host.alias) : '');
+    logger.file(
+      `[ssh] open-in-terminal ${host.alias || host.hostName} dir=${dir} ` +
+        `auth=${secret ? 'password' : 'key'}: ${command}`
+    );
+    const started = runInNewTerminal(command, secret, host.alias || host.hostName);
+    return started
+      ? { ok: true, command }
+      : { ok: false, error: 'terminal unavailable', command };
   });
 
   // 「快速连接」：地址必填；有密码用密码，无密码回退到 ~/.ssh/id_ed25519 密钥。

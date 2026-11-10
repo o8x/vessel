@@ -44,6 +44,7 @@
         home: '家目录',
         refresh: '刷新',
         cdEnter: '进入该目录',
+        openInTerminal: '在终端打开',
         popOut: '分离为独立窗口',
         pathPlaceholder: '输入远端路径，回车进入',
         name: '文件名',
@@ -101,6 +102,7 @@
         home: 'Home',
         refresh: 'Refresh',
         cdEnter: 'Enter this directory (cd in terminal)',
+        openInTerminal: 'Open in terminal',
         popOut: 'Open in a separate window',
         pathPlaceholder: 'Type a remote path, press Enter',
         name: 'Name',
@@ -316,6 +318,9 @@
     const onLayout = typeof opts.onLayout === 'function' ? opts.onLayout : () => {};
     const onCd = typeof opts.onCd === 'function' ? opts.onCd : null;
     const onPopOut = typeof opts.onPopOut === 'function' ? opts.onPopOut : null;
+    // 独立文件窗口：目录右键「在终端打开」（新开终端、SSH 连接到当前主机并进入该目录）。
+    const onOpenInTerminal =
+      typeof opts.onOpenInTerminal === 'function' ? opts.onOpenInTerminal : null;
     const onConnectionState =
       typeof opts.onConnectionState === 'function' ? opts.onConnectionState : () => {};
     const layoutData = Object.assign({}, DEFAULT_LAYOUT, opts.layout || {});
@@ -560,6 +565,14 @@
       const items = [];
       if (onCd) {
         items.push({ label: i18n.t('filesUi.cdEnter'), icon: 'arrowRight', run: () => enterDirectory(path) });
+      }
+      if (onOpenInTerminal) {
+        items.push({
+          label: i18n.t('filesUi.openInTerminal'),
+          icon: 'terminal',
+          run: () =>
+            onOpenInTerminal({ path, target: state.target, connection: state.connection || {} }),
+        });
       }
       items.push(
         { label: i18n.t('filesUi.upload'), icon: 'arrowUp', run: () => chooseAndUpload(path) },

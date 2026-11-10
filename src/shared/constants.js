@@ -179,6 +179,7 @@ const IPC = {
   SSH_EDIT: 'ssh:edit',
   SSH_CONNECT: 'ssh:connect',
   SSH_QUICK_CONNECT: 'ssh:quick-connect',
+  SSH_OPEN_IN_TERMINAL: 'ssh:open-in-terminal',
   SSH_DETECT: 'ssh:detect',
   SSH_DETECT_HOST: 'ssh:detect-host',
   SSH_GET_DETECTED: 'ssh:get-detected',

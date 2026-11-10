@@ -142,6 +142,7 @@ const api = {
     list: () => ipcRenderer.invoke(IPC.SSH_LIST),
     edit: (alias) => ipcRenderer.invoke(IPC.SSH_EDIT, { alias }),
     connect: (payload) => ipcRenderer.invoke(IPC.SSH_CONNECT, payload),
+    openInTerminal: (payload) => ipcRenderer.invoke(IPC.SSH_OPEN_IN_TERMINAL, payload),
     quickConnect: (payload) => ipcRenderer.invoke(IPC.SSH_QUICK_CONNECT, payload),
     detect: (payload) => ipcRenderer.invoke(IPC.SSH_DETECT, payload),
     onDetected: (cb) => on(IPC.SSH_DETECTED, cb),

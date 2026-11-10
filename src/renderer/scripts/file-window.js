@@ -379,6 +379,24 @@
         if (state === 'connecting') dirty = false;
         updateConnectButton();
       },
+      // 目录右键「在终端打开」：新开一扇终端，SSH 连接当前主机并自动进入该目录。
+      onOpenInTerminal: (info) => {
+        const conn = (info && info.connection) || {};
+        const payload = {
+          alias: currentTarget || '',
+          target: String(conn.target || (info && info.target) || currentTarget || '').trim(),
+          host: conn.host || hostInput.value.trim(),
+          username: conn.username || userInput.value.trim(),
+          port: conn.port || Number(portInput.value) || 22,
+          identityFile:
+            conn.auth === 'key'
+              ? conn.identityFile || credentialInput.value.trim()
+              : conn.identityFile || '',
+          path: info && info.path,
+        };
+        if (conn.auth !== 'key' && conn.password) payload.password = conn.password;
+        window.ships.ssh.openInTerminal(payload).catch(() => {});
+      },
     });
     if (currentTarget) {
       fillFromAlias(currentTarget);
