@@ -2,6 +2,12 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.8.0 - 2026-11-11
+
+### 新增
+
+- Terminal search with Command+F and context menu
+
 ## v6.7.0 - 2026-11-11
 
 ### 新增
