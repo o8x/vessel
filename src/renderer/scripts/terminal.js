@@ -35,6 +35,12 @@
         splitToggleClose: '关闭副终端',
         menuCopy: '复制',
         menuPaste: '粘贴',
+        menuFind: '查找',
+        searchPlaceholder: '查找…',
+        searchFind: '查找',
+        searchNext: '下一个',
+        searchPrev: '上一个',
+        searchClose: '关闭',
         menuQuickConnect: '快速连接',
         menuIterm: '从 iTerm 打开',
         menuConnect: '连接到服务器',
@@ -79,6 +85,12 @@
         splitToggleClose: 'Close split terminal',
         menuCopy: 'Copy',
         menuPaste: 'Paste',
+        menuFind: 'Find',
+        searchPlaceholder: 'Find…',
+        searchFind: 'Find',
+        searchNext: 'Next',
+        searchPrev: 'Previous',
+        searchClose: 'Close',
         menuQuickConnect: 'Quick connect',
         menuIterm: 'Open in iTerm',
         menuConnect: 'Connect to server',
@@ -189,6 +201,7 @@
       lastHostKey: '',
       typedLine: '',
       cursorEl: null,
+      search: null,
     };
   }
 
@@ -284,6 +297,11 @@
     refreshCursorLineHighlights();
     if (rec.sessionId) window.ships.terminal.setActiveSession(rec.sessionId);
     scheduleGutter();
+    // 查找面板开着时切换分屏：在新聚焦的终端上重新执行同一个查找。
+    if (searchPanelEl && searchQuery) {
+      if (searchCountEl) searchCountEl.textContent = '';
+      doSearch('next');
+    }
   }
 
   function findRecordBySession(id) {
@@ -688,6 +706,7 @@
     document.documentElement.style.setProperty('--term-header-font-size', `${headerFont}px`);
     document.documentElement.style.setProperty('--term-header-height', `${headerHeight}px`);
     document.documentElement.style.setProperty('--file-font-size', `${value}px`);
+    positionSearchPanel();
   }
 
   function fontFamilyValue(family) {
@@ -1021,6 +1040,15 @@
       t.loadAddon(addon);
       fitRecord(rec, true);
     }
+    // 查找：每块终端一个 SearchAddon（命中高亮 + 总数 / 当前序号）。
+    if (window.SearchAddon && window.SearchAddon.SearchAddon) {
+      const searchAddon = new window.SearchAddon.SearchAddon();
+      rec.search = searchAddon;
+      t.loadAddon(searchAddon);
+      searchAddon.onDidChangeResults((event) => {
+        if (rec === activeRecord) updateSearchCount(event.resultIndex, event.resultCount);
+      });
+    }
     if (!observer) {
       observer = new ResizeObserver(() => {
         if (ballMode) return; // 悬浮球缩放动画期间不重绘 / 不显示尺寸徽标
@@ -1264,6 +1292,186 @@
     window.addEventListener('blur', closeMenu);
     window.addEventListener('resize', closeMenu);
   }
+
+  /* ---------------------------- 查找 ----------------------------
+     Command + F 或右键「查找」弹出小悬浮窗：输入字符串后点「查找」自动搜索并定位到命中项，
+     所有命中用 decoration 高亮；「上一个 / 下一个」在命中之间跳转，右侧显示「当前/总数」。
+     每块终端各有一个 SearchAddon，面板作用于当前聚焦的终端。 */
+  let searchPanelEl = null;
+  let searchInput = null;
+  let searchCountEl = null;
+  let searchQuery = '';
+
+  function activeSearchAddon() {
+    return activeRecord && activeRecord.search ? activeRecord.search : null;
+  }
+
+  function updateSearchCount(resultIndex, resultCount) {
+    if (!searchCountEl) return;
+    if (!searchQuery) {
+      searchCountEl.textContent = '';
+      return;
+    }
+    if (!resultCount) {
+      searchCountEl.textContent = '0/0';
+      return;
+    }
+    const current = resultIndex >= 0 ? resultIndex + 1 : '-';
+    searchCountEl.textContent = `${current}/${resultCount}`;
+  }
+
+  function clearSearchDecorations() {
+    for (const rec of paneRecords) {
+      if (!rec.search) continue;
+      try {
+        rec.search.clearDecorations();
+      } catch (err) {
+        /* ignore */
+      }
+    }
+  }
+
+  function doSearch(direction) {
+    if (!searchInput) return;
+    const query = searchInput.value;
+    if (!query) {
+      searchQuery = '';
+      clearSearchDecorations();
+      updateSearchCount(0, 0);
+      return;
+    }
+    const addon = activeSearchAddon();
+    if (!addon) return;
+    searchQuery = query;
+    const options = { decorations: C.TERMINAL_SEARCH_DECORATIONS, incremental: false };
+    if (direction === 'prev') addon.findPrevious(query, options);
+    else addon.findNext(query, options);
+  }
+
+  function onSearchKeyDown(event) {
+    if (!searchPanelEl) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSearchPanel(true);
+      return;
+    }
+    if (event.key === 'Enter' && event.target === searchInput) {
+      event.preventDefault();
+      doSearch('next');
+    }
+  }
+
+  function onSearchWindowBlur() {
+    if (searchPanelEl) closeSearchPanel(false);
+  }
+
+  function positionSearchPanel() {
+    if (!searchPanelEl) return;
+    const headerEl = document.getElementById('term-header');
+    const top = headerEl ? headerEl.getBoundingClientRect().bottom : 0;
+    searchPanelEl.style.top = `${Math.max(4, top + 8)}px`;
+  }
+
+  function closeSearchPanel(restoreFocus) {
+    if (!searchPanelEl) return;
+    searchQuery = '';
+    clearSearchDecorations();
+    document.removeEventListener('keydown', onSearchKeyDown, true);
+    window.removeEventListener('resize', positionSearchPanel);
+    window.removeEventListener('blur', onSearchWindowBlur);
+    searchPanelEl.remove();
+    searchPanelEl = null;
+    searchInput = null;
+    searchCountEl = null;
+    searchQuery = '';
+    if (restoreFocus && document.hasFocus() && term && !ballMode) term.focus();
+  }
+
+  function openSearchPanel() {
+    if (ballMode) return;
+    if (searchPanelEl) {
+      searchInput.focus();
+      searchInput.select();
+      return;
+    }
+    const pop = el('div', { class: 'term-search' });
+
+    const row1 = el('div', { class: 'term-search-row' });
+    const icon = el('span', { class: 'term-search-icon' });
+    icon.innerHTML = Icons.search(14);
+    const input = el('input', {
+      class: 'field term-search-input',
+      type: 'text',
+      placeholder: i18n.t('terminalWin.searchPlaceholder'),
+      spellcheck: 'false',
+      autocomplete: 'off',
+    });
+    const count = el('span', { class: 'term-search-count' });
+    const closeBtn = el('button', {
+      class: 'icon-btn term-search-close',
+      type: 'button',
+      'data-tip': i18n.t('terminalWin.searchClose'),
+    });
+    closeBtn.innerHTML = Icons.x(12);
+    row1.append(icon, input, count, closeBtn);
+
+    const row2 = el('div', { class: 'term-search-actions' });
+    const findBtn = el('button', { class: 'term-search-btn accent', type: 'button' }, i18n.t('terminalWin.searchFind'));
+    const prevBtn = el('button', { class: 'term-search-btn', type: 'button' }, i18n.t('terminalWin.searchPrev'));
+    const nextBtn = el('button', { class: 'term-search-btn', type: 'button' }, i18n.t('terminalWin.searchNext'));
+    row2.append(findBtn, prevBtn, nextBtn);
+
+    pop.append(row1, row2);
+
+    findBtn.addEventListener('click', () => doSearch('next'));
+    prevBtn.addEventListener('click', () => doSearch('prev'));
+    nextBtn.addEventListener('click', () => doSearch('next'));
+    closeBtn.addEventListener('click', () => closeSearchPanel(true));
+    input.addEventListener('input', () => {
+      // 关键词变化后先清掉旧命中的高亮与计数，等点「查找」再重新搜索。
+      if (input.value === searchQuery) return;
+      searchQuery = '';
+      clearSearchDecorations();
+      if (searchCountEl) searchCountEl.textContent = '';
+    });
+
+    // 有单行选区时预填，方便直接查找选中的内容。
+    const selection = term && typeof term.getSelection === 'function' ? term.getSelection() : '';
+    if (selection && selection.indexOf('\n') === -1) input.value = selection;
+
+    document.body.appendChild(pop);
+    searchPanelEl = pop;
+    searchInput = input;
+    searchCountEl = count;
+    searchQuery = '';
+    positionSearchPanel();
+    window.addEventListener('resize', positionSearchPanel);
+    window.addEventListener('blur', onSearchWindowBlur);
+    document.addEventListener('keydown', onSearchKeyDown, true);
+    setTimeout(() => {
+      if (!searchInput) return;
+      searchInput.focus();
+      searchInput.select();
+    }, 0);
+  }
+
+  // Command + F：在终端窗口内任意位置都能打开查找悬浮窗。
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.defaultPrevented) return;
+      const isMac = /Mac/i.test(navigator.platform || '');
+      const modifier = isMac ? event.metaKey : event.ctrlKey;
+      if (!modifier || event.altKey || event.shiftKey) return;
+      if (String(event.key).toLowerCase() !== 'f') return;
+      if (ballMode) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openSearchPanel();
+    },
+    true
+  );
 
   /* 粘贴：读取系统剪贴板并注入当前 shell（遵循 bracketed paste 与 \n → \r 转换）。 */
   function pasteFromClipboard() {
@@ -1759,6 +1967,11 @@
         label: i18n.t('terminalWin.menuPaste'),
         icon: 'clipboard',
         run: pasteFromClipboard,
+      },
+      {
+        label: i18n.t('terminalWin.menuFind'),
+        icon: 'search',
+        run: openSearchPanel,
       },
       {
         label: i18n.t('terminalWin.menuQuickConnect'),

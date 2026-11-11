@@ -17,6 +17,15 @@ window.ShipsConstants = {
   TERMINAL_HEADER_FONT_MAX: 20,
   TERMINAL_HEADER_HEIGHT_MIN: 16,
   TERMINAL_HEADER_HEIGHT_MAX: 32,
+  // 终端查找（@xterm/addon-search）：命中高亮与当前命中的配色（必须为 #RRGGBB）。
+  TERMINAL_SEARCH_DECORATIONS: {
+    matchBackground: '#f7d774',
+    matchBorder: '#e0a800',
+    matchOverviewRuler: '#f7d774',
+    activeMatchBackground: '#ff9632',
+    activeMatchBorder: '#ff7a00',
+    activeMatchColorOverviewRuler: '#ff9632',
+  },
   // 工具标题收起动画期间先锁住内容滚动，动画完成后再滚动内容。
   HEADER_COLLAPSE_LOCK_MS: 190,
   // Liquid Glass 表面透明度：glassOpacity(0–100，越大越透明) 映射到表面填充 alpha。
