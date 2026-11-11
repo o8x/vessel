@@ -2,6 +2,16 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.7.0 - 2026-11-11
+
+### 新增
+
+- Open file-manager folder in a new terminal
+
+### 修复
+
+- Follow app theme in the detached file window
+
 ## v6.6.1 - 2026-11-10
 
 ### 修复
