@@ -17,15 +17,17 @@ window.ShipsConstants = {
   TERMINAL_HEADER_FONT_MAX: 20,
   TERMINAL_HEADER_HEIGHT_MIN: 16,
   TERMINAL_HEADER_HEIGHT_MAX: 32,
-  // 终端查找（@xterm/addon-search）：命中高亮与当前命中的配色（必须为 #RRGGBB）。
-  TERMINAL_SEARCH_DECORATIONS: {
-    matchBackground: '#f7d774',
-    matchBorder: '#e0a800',
-    matchOverviewRuler: '#f7d774',
-    activeMatchBackground: '#ff9632',
-    activeMatchBorder: '#ff7a00',
-    activeMatchColorOverviewRuler: '#ff9632',
-  },
+  // 终端查找（@xterm/addon-search）：高亮配色由当前主题强调色（--color-accent）压深得到，
+  // 以下为压深比例（0 = 原色，1 = 全黑）。
+  TERMINAL_SEARCH_MATCH_DARKEN: 0.45,
+  TERMINAL_SEARCH_ACTIVE_DARKEN: 0.25,
+  TERMINAL_SEARCH_BORDER_DARKEN: 0.6,
+  // 多行查找时最多标记的命中数量（与 @xterm/addon-search 默认 highlightLimit 一致）。
+  TERMINAL_SEARCH_HIGHLIGHT_LIMIT: 1000,
+  // 终端查找关键词写回 settings.json 的防抖时长（毫秒）。
+  TERMINAL_SEARCH_PERSIST_MS: 400,
+  // 终端查找：输入后自动执行查找的延迟（毫秒）。
+  TERMINAL_SEARCH_DEBOUNCE_MS: 100,
   // 工具标题收起动画期间先锁住内容滚动，动画完成后再滚动内容。
   HEADER_COLLAPSE_LOCK_MS: 190,
   // Liquid Glass 表面透明度：glassOpacity(0–100，越大越透明) 映射到表面填充 alpha。

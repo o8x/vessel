@@ -718,6 +718,9 @@ input[type='color'].swatch::-webkit-color-swatch {
 [data-ball='on'] #term-shell {
   display: none;
 }
+[data-ball='on'] .term-search {
+  display: none;
+}
 #term-ball:active {
   cursor: grabbing;
 }
@@ -1418,8 +1421,8 @@ body.file-window .fm-status {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border-radius: var(--radius-control-sm);
   border: 1px solid var(--color-border);
   background: var(--color-control);
@@ -2458,70 +2461,82 @@ body.file-window .fm-tree-row {
 /* --------------------------- 终端查找悬浮窗 --------------------------- */
 .term-search {
   position: fixed;
-  right: 12px;
+  left: 0;
+  right: 0;
   z-index: 125;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 316px;
-  padding: 8px;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface-3);
-  box-shadow: var(--shadow-popover);
-}
-.term-search-row {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.term-search-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  color: var(--color-fg-muted);
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--color-border-strong);
+  background: var(--color-surface-3);
+  box-shadow: var(--shadow-popover);
 }
 .term-search-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 28px;
-  padding: 0 8px;
+  height: 24px;
+  padding: 1px 8px;
   font-size: 12px;
+  line-height: 22px;
+  resize: none;
+  overflow-y: hidden;
+}
+.term-search-input--multiline {
+  overflow-y: auto;
+}
+.term-search-opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+.term-search-opt:hover {
+  color: var(--color-fg);
+}
+.term-search-opt[aria-pressed='true'] {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
 }
 .term-search-count {
   flex: 0 0 auto;
-  min-width: 40px;
-  text-align: right;
+  width: 12ch;
+  white-space: nowrap;
+  text-align: center;
   font-size: 11px;
   color: var(--color-fg-muted);
   font-variant-numeric: tabular-nums;
 }
-.term-search-close {
+.term-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   width: 22px;
   height: 22px;
-}
-.term-search-actions {
-  display: flex;
-  gap: 6px;
-}
-.term-search-btn {
-  flex: 1 1 0;
-  height: 26px;
-  padding: 0 8px;
+  padding: 0;
   border-radius: var(--radius-control);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-fg);
-  font-size: 12px;
   cursor: pointer;
 }
 .term-search-btn:hover {
   border-color: var(--color-border-strong);
 }
-.term-search-btn.accent {
-  color: var(--color-accent);
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
+.term-search-close {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
 }
 /* 快速连接报错：输入框红色边框闪烁（不额外显示错误文字行）。 */
 @keyframes ssh-quick-flash {

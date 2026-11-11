@@ -37,9 +37,12 @@
         menuPaste: '粘贴',
         menuFind: '查找',
         searchPlaceholder: '查找…',
-        searchFind: '查找',
         searchNext: '下一个',
         searchPrev: '上一个',
+        searchNoResults: '0 个结果',
+        searchMultiline: '匹配换行',
+        searchCaseSensitive: '区分大小写',
+        searchWholeWord: '完整单词',
         searchClose: '关闭',
         menuQuickConnect: '快速连接',
         menuIterm: '从 iTerm 打开',
@@ -87,9 +90,12 @@
         menuPaste: 'Paste',
         menuFind: 'Find',
         searchPlaceholder: 'Find…',
-        searchFind: 'Find',
         searchNext: 'Next',
         searchPrev: 'Previous',
+        searchNoResults: '0 results',
+        searchMultiline: 'Match line breaks',
+        searchCaseSensitive: 'Match case',
+        searchWholeWord: 'Whole word',
         searchClose: 'Close',
         menuQuickConnect: 'Quick connect',
         menuIterm: 'Open in iTerm',
@@ -1017,6 +1023,8 @@
     const t = new window.Terminal({
       convertEol: true,
       cursorBlink: true,
+      // 查找用到的 decoration / marker 属 xterm 的 proposed API，必须显式开启。
+      allowProposedApi: true,
       scrollback: opts.scrollback || 10000,
       fontSize: opts.fontSize || FONT_DEFAULT,
       fontFamily: opts.fontFamily || mono || 'monospace',
@@ -1294,13 +1302,44 @@
   }
 
   /* ---------------------------- 查找 ----------------------------
-     Command + F 或右键「查找」弹出小悬浮窗：输入字符串后点「查找」自动搜索并定位到命中项，
+     Command + F 或右键「查找」弹出查找条：输入字符串后延迟 100ms 自动搜索并定位到命中项，
      所有命中用 decoration 高亮；「上一个 / 下一个」在命中之间跳转，右侧显示「当前/总数」。
      每块终端各有一个 SearchAddon，面板作用于当前聚焦的终端。 */
   let searchPanelEl = null;
   let searchInput = null;
   let searchCountEl = null;
   let searchQuery = '';
+  // 查找选项：多行（允许换行）、大小写敏感、完整单词。
+  let searchMultiline = false;
+  let searchCaseSensitive = false;
+  let searchWholeWord = false;
+  // 多行查找（关键词含换行）由本地扫描 buffer 实现；单行仍走 @xterm/addon-search。
+  let mlMatches = [];
+  let mlActive = -1;
+  let mlDecorations = [];
+  let mlMarkers = [];
+  // 上次查找关键词：关闭 / 重启后再次打开时回填并自动重新搜索。
+  let lastSearchQuery = '';
+  let searchPersistTimer = 0;
+  let searchTimer = 0;
+
+  function persistSearchQuery(value) {
+    if (searchPersistTimer) {
+      clearTimeout(searchPersistTimer);
+      searchPersistTimer = 0;
+    }
+    window.ships.setSettings({ terminalSearchQuery: value });
+  }
+
+  function schedulePersistSearchQuery(value) {
+    lastSearchQuery = value;
+    if (searchPersistTimer) clearTimeout(searchPersistTimer);
+    const delay = C.TERMINAL_SEARCH_PERSIST_MS || 400;
+    searchPersistTimer = setTimeout(() => {
+      searchPersistTimer = 0;
+      window.ships.setSettings({ terminalSearchQuery: value });
+    }, delay);
+  }
 
   function activeSearchAddon() {
     return activeRecord && activeRecord.search ? activeRecord.search : null;
@@ -1308,19 +1347,15 @@
 
   function updateSearchCount(resultIndex, resultCount) {
     if (!searchCountEl) return;
-    if (!searchQuery) {
-      searchCountEl.textContent = '';
-      return;
-    }
-    if (!resultCount) {
-      searchCountEl.textContent = '0/0';
+    if (!searchQuery || !resultCount) {
+      searchCountEl.textContent = i18n.t('terminalWin.searchNoResults');
       return;
     }
     const current = resultIndex >= 0 ? resultIndex + 1 : '-';
-    searchCountEl.textContent = `${current}/${resultCount}`;
+    searchCountEl.textContent = `${current} / ${resultCount}`;
   }
 
-  function clearSearchDecorations() {
+  function clearAddonSearchDecorations() {
     for (const rec of paneRecords) {
       if (!rec.search) continue;
       try {
@@ -1329,6 +1364,172 @@
         /* ignore */
       }
     }
+  }
+
+  function clearSearchDecorations() {
+    clearAddonSearchDecorations();
+    resetMultilineSearch();
+  }
+
+  function disposeMultilineDecorations() {
+    for (const deco of mlDecorations) {
+      try {
+        deco.dispose();
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    for (const marker of mlMarkers) {
+      try {
+        marker.dispose();
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    mlDecorations = [];
+    mlMarkers = [];
+  }
+
+  function resetMultilineSearch() {
+    disposeMultilineDecorations();
+    mlMatches = [];
+    mlActive = -1;
+  }
+
+  /* 查找高亮配色：取当前主题强调色（--color-accent）并压深，作为命中 / 当前命中的背景。 */
+  function accentHex() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim();
+    return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : '#2e6bfc';
+  }
+
+  function darkenHex(hex, amount) {
+    const n = parseInt(hex.slice(1), 16);
+    const factor = 1 - Math.max(0, Math.min(1, amount));
+    const r = Math.round(((n >> 16) & 0xff) * factor);
+    const g = Math.round(((n >> 8) & 0xff) * factor);
+    const b = Math.round((n & 0xff) * factor);
+    return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+  }
+
+  function searchDecorations() {
+    const accent = accentHex();
+    const match = darkenHex(accent, C.TERMINAL_SEARCH_MATCH_DARKEN || 0.45);
+    const active = darkenHex(accent, C.TERMINAL_SEARCH_ACTIVE_DARKEN || 0.25);
+    return {
+      matchBackground: match,
+      matchBorder: darkenHex(accent, C.TERMINAL_SEARCH_BORDER_DARKEN || 0.6),
+      matchOverviewRuler: match,
+      activeMatchBackground: active,
+      activeMatchBorder: accent,
+      activeMatchColorOverviewRuler: active,
+    };
+  }
+
+  /* 多行查找：把 buffer 各行拼成带 \n 的文本按全局偏移匹配，再拆回每行的片段做 decoration。
+     仅当关键词包含换行时启用（@xterm/addon-search 只支持单行匹配）。 */
+  function isWordChar(ch) {
+    return /[\p{L}\p{N}]/u.test(ch || '');
+  }
+
+  function buildBufferTextIndex(term) {
+    const buf = term.buffer.active;
+    const rows = [];
+    let text = '';
+    for (let row = 0; row < buf.length; row++) {
+      const line = buf.getLine(row);
+      const str = line ? String(line.translateToString(true)) : '';
+      const wrapped = Boolean(line && line.isWrapped && row > 0);
+      if (!wrapped && row > 0 && text.length) text += '\n';
+      rows.push({ row, start: text.length, text: str });
+      text += str;
+    }
+    return { text, rows, buf };
+  }
+
+  function matchToSegments(rows, start, end) {
+    const segments = [];
+    for (const r of rows) {
+      const rowStart = r.start;
+      const rowEnd = rowStart + r.text.length;
+      if (rowEnd <= start) continue;
+      if (rowStart >= end) break;
+      const s = Math.max(start, rowStart);
+      const e = Math.min(end, rowEnd);
+      if (e > s) segments.push({ row: r.row, col: s - rowStart, width: e - s });
+    }
+    return segments;
+  }
+
+  function findMultilineMatches(query) {
+    const term = activeRecord && activeRecord.term;
+    if (!term) return null;
+    const index = buildBufferTextIndex(term);
+    const limit = C.TERMINAL_SEARCH_HIGHLIGHT_LIMIT || 1000;
+    const haystack = searchCaseSensitive ? index.text : index.text.toLowerCase();
+    const needle = searchCaseSensitive ? query : query.toLowerCase();
+    const matches = [];
+    let from = 0;
+    while (matches.length < limit) {
+      const at = haystack.indexOf(needle, from);
+      if (at === -1) break;
+      const end = at + needle.length;
+      const before = at > 0 ? index.text[at - 1] : '';
+      const after = end < index.text.length ? index.text[end] : '';
+      if (!searchWholeWord || (!isWordChar(before) && !isWordChar(after))) {
+        const segments = matchToSegments(index.rows, at, end);
+        if (segments.length) matches.push({ segments });
+      }
+      from = at + Math.max(1, needle.length);
+    }
+    return matches;
+  }
+
+  function renderMultilineDecorations(activeIndex) {
+    const term = activeRecord && activeRecord.term;
+    if (!term) return;
+    disposeMultilineDecorations();
+    const colors = searchDecorations();
+    const buf = term.buffer.active;
+    const cursorAbs = buf.baseY + buf.cursorY;
+    const total = mlMatches.length;
+    for (let m = 0; m < total; m++) {
+      const color = m === activeIndex ? colors.activeMatchBackground : colors.matchBackground;
+      for (const seg of mlMatches[m].segments) {
+        try {
+          const marker = term.registerMarker(seg.row - cursorAbs);
+          if (!marker) continue;
+          const deco = term.registerDecoration({
+            marker,
+            x: seg.col,
+            width: seg.width,
+            backgroundColor: color,
+            layer: 'top',
+          });
+          mlMarkers.push(marker);
+          if (deco) mlDecorations.push(deco);
+        } catch (err) {
+          /* ignore individual decoration failures */
+        }
+      }
+    }
+  }
+
+  function runMultilineSearch(query, direction, fresh) {
+    mlMatches = findMultilineMatches(query) || [];
+    if (!mlMatches.length) {
+      mlActive = -1;
+      renderMultilineDecorations(-1);
+      updateSearchCount(-1, 0);
+      return;
+    }
+    const total = mlMatches.length;
+    if (fresh || mlActive < 0) mlActive = 0;
+    else if (direction === 'prev') mlActive = (mlActive - 1 + total) % total;
+    else mlActive = (mlActive + 1) % total;
+    renderMultilineDecorations(mlActive);
+    updateSearchCount(mlActive, total);
+    const first = mlMatches[mlActive].segments[0];
+    if (first && activeRecord.term) activeRecord.term.scrollToLine(first.row);
   }
 
   function doSearch(direction) {
@@ -1340,46 +1541,63 @@
       updateSearchCount(0, 0);
       return;
     }
+    const prevQuery = searchQuery;
+    searchQuery = query;
+    // 换行匹配或「完整单词」都走本地扫描：完整单词按「相邻字符非字母 / 数字 / 下划线」
+    // 判定边界，比 addon 的固定符号白名单更通用（/ - . : 等都可作为边界）。
+    if ((searchMultiline && query.indexOf('\n') !== -1) || searchWholeWord) {
+      clearAddonSearchDecorations();
+      runMultilineSearch(query, direction, prevQuery !== query);
+      return;
+    }
+    // 单行：先清掉可能残留的多行高亮，再交给 addon。
+    resetMultilineSearch();
     const addon = activeSearchAddon();
     if (!addon) return;
-    searchQuery = query;
-    const options = { decorations: C.TERMINAL_SEARCH_DECORATIONS, incremental: false };
+    const options = {
+      decorations: searchDecorations(),
+      incremental: false,
+      caseSensitive: searchCaseSensitive,
+      wholeWord: searchWholeWord,
+    };
     if (direction === 'prev') addon.findPrevious(query, options);
     else addon.findNext(query, options);
   }
 
   function onSearchKeyDown(event) {
     if (!searchPanelEl) return;
+    // Esc 不再关闭悬浮窗，吞掉按键避免落到终端上；仅在点击关闭按钮时关闭。
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      closeSearchPanel(true);
       return;
     }
     if (event.key === 'Enter' && event.target === searchInput) {
+      // 多行模式下 Enter 用于换行，交给输入框默认行为。
+      if (searchMultiline) return;
       event.preventDefault();
       doSearch('next');
     }
-  }
-
-  function onSearchWindowBlur() {
-    if (searchPanelEl) closeSearchPanel(false);
   }
 
   function positionSearchPanel() {
     if (!searchPanelEl) return;
     const headerEl = document.getElementById('term-header');
     const top = headerEl ? headerEl.getBoundingClientRect().bottom : 0;
-    searchPanelEl.style.top = `${Math.max(4, top + 8)}px`;
+    searchPanelEl.style.top = `${Math.max(0, top)}px`;
   }
 
   function closeSearchPanel(restoreFocus) {
     if (!searchPanelEl) return;
+    if (searchTimer) {
+      clearTimeout(searchTimer);
+      searchTimer = 0;
+    }
+    if (searchInput) persistSearchQuery(searchInput.value);
     searchQuery = '';
     clearSearchDecorations();
     document.removeEventListener('keydown', onSearchKeyDown, true);
     window.removeEventListener('resize', positionSearchPanel);
-    window.removeEventListener('blur', onSearchWindowBlur);
     searchPanelEl.remove();
     searchPanelEl = null;
     searchInput = null;
@@ -1397,57 +1615,124 @@
     }
     const pop = el('div', { class: 'term-search' });
 
-    const row1 = el('div', { class: 'term-search-row' });
-    const icon = el('span', { class: 'term-search-icon' });
-    icon.innerHTML = Icons.search(14);
-    const input = el('input', {
+    const input = el('textarea', {
       class: 'field term-search-input',
-      type: 'text',
+      rows: '1',
       placeholder: i18n.t('terminalWin.searchPlaceholder'),
       spellcheck: 'false',
       autocomplete: 'off',
     });
-    const count = el('span', { class: 'term-search-count' });
+    const count = el('span', { class: 'term-search-count' }, i18n.t('terminalWin.searchNoResults'));
+
+    const makeOpt = (icon, tip, pressed) => {
+      const btn = el('button', {
+        class: 'term-search-opt',
+        type: 'button',
+        'data-tip': tip,
+        'aria-pressed': pressed ? 'true' : 'false',
+      });
+      btn.innerHTML = icon;
+      return btn;
+    };
+    const multilineBtn = makeOpt(Icons.enter(14), i18n.t('terminalWin.searchMultiline'), searchMultiline);
+    const caseBtn = makeOpt(Icons.caseSensitive(14), i18n.t('terminalWin.searchCaseSensitive'), searchCaseSensitive);
+    const wholeWordBtn = makeOpt(Icons.wholeWord(14), i18n.t('terminalWin.searchWholeWord'), searchWholeWord);
+
+    const prevBtn = el('button', {
+      class: 'term-search-btn',
+      type: 'button',
+      'data-tip': i18n.t('terminalWin.searchPrev'),
+    });
+    prevBtn.innerHTML = Icons.chevronUp(14);
+    const nextBtn = el('button', {
+      class: 'term-search-btn',
+      type: 'button',
+      'data-tip': i18n.t('terminalWin.searchNext'),
+    });
+    nextBtn.innerHTML = Icons.chevronDown(14);
     const closeBtn = el('button', {
       class: 'icon-btn term-search-close',
       type: 'button',
       'data-tip': i18n.t('terminalWin.searchClose'),
     });
     closeBtn.innerHTML = Icons.x(12);
-    row1.append(icon, input, count, closeBtn);
 
-    const row2 = el('div', { class: 'term-search-actions' });
-    const findBtn = el('button', { class: 'term-search-btn accent', type: 'button' }, i18n.t('terminalWin.searchFind'));
-    const prevBtn = el('button', { class: 'term-search-btn', type: 'button' }, i18n.t('terminalWin.searchPrev'));
-    const nextBtn = el('button', { class: 'term-search-btn', type: 'button' }, i18n.t('terminalWin.searchNext'));
-    row2.append(findBtn, prevBtn, nextBtn);
+    pop.append(input, multilineBtn, caseBtn, wholeWordBtn, count, prevBtn, nextBtn, closeBtn);
 
-    pop.append(row1, row2);
+    const syncInputMode = () => {
+      input.classList.toggle('term-search-input--multiline', searchMultiline);
+      if (!searchMultiline) input.style.height = '';
+      autoGrowSearchInput();
+    };
+    const autoGrowSearchInput = () => {
+      if (!searchMultiline) return;
+      input.style.height = '24px';
+      const max = 24 * 4;
+      input.style.height = `${Math.min(max, Math.max(24, input.scrollHeight))}px`;
+    };
+    const toggleOpt = (btn) => {
+      if (btn === multilineBtn) {
+        searchMultiline = !searchMultiline;
+        btn.setAttribute('aria-pressed', searchMultiline ? 'true' : 'false');
+        syncInputMode();
+      } else if (btn === caseBtn) {
+        searchCaseSensitive = !searchCaseSensitive;
+        btn.setAttribute('aria-pressed', searchCaseSensitive ? 'true' : 'false');
+      } else {
+        searchWholeWord = !searchWholeWord;
+        btn.setAttribute('aria-pressed', searchWholeWord ? 'true' : 'false');
+      }
+      if (input.value) {
+        // 选项变化后强制重算：addon 会先把新选项写入 lastSearchOptions，同关键词下
+        // 无法自动感知选项变化；先 clearDecorations 清掉缓存词与结果再搜。
+        clearAddonSearchDecorations();
+        resetMultilineSearch();
+        searchQuery = '';
+        doSearch('next');
+      }
+      input.focus();
+    };
 
-    findBtn.addEventListener('click', () => doSearch('next'));
+    multilineBtn.addEventListener('click', () => toggleOpt(multilineBtn));
+    caseBtn.addEventListener('click', () => toggleOpt(caseBtn));
+    wholeWordBtn.addEventListener('click', () => toggleOpt(wholeWordBtn));
     prevBtn.addEventListener('click', () => doSearch('prev'));
     nextBtn.addEventListener('click', () => doSearch('next'));
     closeBtn.addEventListener('click', () => closeSearchPanel(true));
     input.addEventListener('input', () => {
-      // 关键词变化后先清掉旧命中的高亮与计数，等点「查找」再重新搜索。
-      if (input.value === searchQuery) return;
-      searchQuery = '';
-      clearSearchDecorations();
-      if (searchCountEl) searchCountEl.textContent = '';
+      schedulePersistSearchQuery(input.value);
+      autoGrowSearchInput();
+      // 输入后延迟自动查找（防抖），不再需要单独的「查找」按钮。
+      if (searchTimer) clearTimeout(searchTimer);
+      const delay = C.TERMINAL_SEARCH_DEBOUNCE_MS || 100;
+      searchTimer = setTimeout(() => {
+        searchTimer = 0;
+        doSearch('next');
+      }, delay);
     });
 
-    // 有单行选区时预填，方便直接查找选中的内容。
+    // 有单行选区时预填选区内容（并记住）；否则回填上一次查找的关键词。
     const selection = term && typeof term.getSelection === 'function' ? term.getSelection() : '';
-    if (selection && selection.indexOf('\n') === -1) input.value = selection;
+    if (selection) {
+      input.value = selection;
+      schedulePersistSearchQuery(selection);
+    } else if (lastSearchQuery) {
+      input.value = lastSearchQuery;
+    }
+    // 回填含换行的关键词时自动进入多行模式。
+    if (input.value.indexOf('\n') !== -1) {
+      searchMultiline = true;
+      multilineBtn.setAttribute('aria-pressed', 'true');
+    }
 
     document.body.appendChild(pop);
     searchPanelEl = pop;
     searchInput = input;
     searchCountEl = count;
     searchQuery = '';
+    syncInputMode();
     positionSearchPanel();
     window.addEventListener('resize', positionSearchPanel);
-    window.addEventListener('blur', onSearchWindowBlur);
     document.addEventListener('keydown', onSearchKeyDown, true);
     setTimeout(() => {
       if (!searchInput) return;
@@ -1456,7 +1741,7 @@
     }, 0);
   }
 
-  // Command + F：在终端窗口内任意位置都能打开查找悬浮窗。
+  // Command + F：打开查找条；已打开时再按一次关闭并清除查找结果。
   window.addEventListener(
     'keydown',
     (event) => {
@@ -1468,7 +1753,8 @@
       if (ballMode) return;
       event.preventDefault();
       event.stopPropagation();
-      openSearchPanel();
+      if (searchPanelEl) closeSearchPanel(true);
+      else openSearchPanel();
     },
     true
   );
@@ -2313,6 +2599,8 @@
     if (size) document.documentElement.style.setProperty('--term-ball-size', `${size}px`);
     if (active && phase === 'enter') {
       // 收缩：终端保持可见，用 CSS transform 缩到右上角球大小（窗口尺寸不动 → 不跳）。
+      // 查找条随球态关闭（关键词已写入 settings，重新打开时可回填），还原后不再恢复。
+      if (searchPanelEl) closeSearchPanel(false);
       ballMode = true;
       document.documentElement.dataset.ball = 'off';
       applyBallShellScale(scaleX, scaleY, duration);
@@ -2375,6 +2663,7 @@
     const initialFontFamily = fontFamilyValue(settingsFontFamily);
     document.documentElement.style.setProperty('--term-font-family', initialFontFamily);
     shellPath = (settings && settings.terminalShell) || '';
+    lastSearchQuery = String((settings && settings.terminalSearchQuery) || '');
     initTerminal({
       scrollback: (settings && settings.terminalScrollback) || (info && info.terminalScrollback) || 10000,
       fontSize: fontSize,
