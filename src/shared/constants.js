@@ -34,6 +34,7 @@ const IPC = {
   UPDATE_CANCEL: 'update:cancel',
   UPDATE_INSTALL: 'update:install',
   UPDATE_CHOICE: 'update:choice',
+  UPDATE_OPEN_RELEASE: 'update:open-release',
   UPDATE_PROGRESS: 'update:progress',
   UPDATE_DOWNLOADED: 'update:downloaded',
   UPDATE_COUNTDOWN: 'update:countdown',

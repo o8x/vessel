@@ -5,7 +5,7 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 const { spawn } = require('child_process');
-const { app } = require('electron');
+const { app, shell } = require('electron');
 const settings = require('./settings-service');
 const proxyService = require('./proxy-service');
 const logger = require('../utils/logger');
@@ -1036,12 +1036,23 @@ function getUpdateState() {
   return Object.assign({}, snapshot(), { prompt: getPromptState() });
 }
 
+/* 在系统浏览器打开指定版本的 GitHub Release 页面（更新窗口的「下载安装包」按钮）。 */
+async function openReleasePage(version) {
+  const target = String(version || '').trim().replace(/^v/i, '');
+  if (!/^\d+\.\d+\.\d+/.test(target)) return { ok: false, error: 'invalid version' };
+  const { owner, repo } = publishConfig();
+  if (!owner || !repo) return { ok: false, error: 'publish repo unavailable' };
+  await shell.openExternal(`https://github.com/${owner}/${repo}/releases/tag/v${target}`);
+  return { ok: true };
+}
+
 module.exports = {
   initUpdater,
   maybeAutoCheck,
   isChecking,
   checkForUpdatesInteractive,
   getUpdateState,
+  openReleasePage,
   answerPrompt,
   cancelUpdate,
   installNow,

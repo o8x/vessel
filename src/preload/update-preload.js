@@ -16,6 +16,7 @@ const api = {
     state: () => ipcRenderer.invoke(IPC.UPDATE_STATE),
     cancel: () => ipcRenderer.invoke(IPC.UPDATE_CANCEL),
     install: () => ipcRenderer.invoke(IPC.UPDATE_INSTALL),
+    openRelease: (version) => ipcRenderer.invoke(IPC.UPDATE_OPEN_RELEASE, version),
     choose: (payload) => ipcRenderer.invoke(IPC.UPDATE_CHOICE, payload),
     onProgress: (cb) => on(IPC.UPDATE_PROGRESS, cb),
     onDownloaded: (cb) => on(IPC.UPDATE_DOWNLOADED, cb),

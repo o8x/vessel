@@ -26,6 +26,12 @@ function registerUpdateIpc(ipcMain) {
     return { ok: true };
   });
 
+  // 在系统浏览器打开该版本的 Release 页面。
+  ipcMain.handle(IPC.UPDATE_OPEN_RELEASE, async (event, version) => {
+    if (!isUpdateWindow(BrowserWindow.fromWebContents(event.sender))) return { ok: false };
+    return updater.openReleasePage(version);
+  });
+
   // 应用内提示框：渲染层回传用户选择的按钮下标。
   ipcMain.handle(IPC.UPDATE_CHOICE, (event, payload) => {
     if (!isUpdateWindow(BrowserWindow.fromWebContents(event.sender))) return { ok: false };

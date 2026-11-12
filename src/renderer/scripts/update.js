@@ -20,6 +20,7 @@
         countdownPkg: '{s} 秒后自动退出并打开安装器',
         readyHint: '下载完成，可立即重启更新（或等待自动重启）',
         cancel: '取消',
+        downloadPkg: '下载安装包',
         install: '重启更新',
         installPkg: '退出并安装',
       },
@@ -36,6 +37,7 @@
         countdownPkg: 'Opening the installer in {s}s',
         readyHint: 'Download complete. Restart now or wait for the auto restart',
         cancel: 'Cancel',
+        downloadPkg: 'Download installer',
         install: 'Restart & update',
         installPkg: 'Quit & install',
       },
@@ -53,6 +55,7 @@
     changelog: document.getElementById('update-changelog'),
     changelogBody: document.getElementById('update-changelog-body'),
     cancel: document.getElementById('update-cancel'),
+    download: document.getElementById('update-download'),
     install: document.getElementById('update-install'),
   };
 
@@ -137,6 +140,7 @@
   }
 
   dom.cancel.textContent = i18n.t('updateWin.cancel');
+  dom.download.textContent = i18n.t('updateWin.downloadPkg');
   dom.install.textContent = i18n.t('updateWin.install');
   dom.title.textContent = i18n.t('updateWin.idle');
   dom.status.textContent = i18n.t('updateWin.connecting');
@@ -144,6 +148,10 @@
   dom.cancel.addEventListener('click', () => {
     dom.cancel.disabled = true;
     window.ships.update.cancel();
+  });
+  dom.download.addEventListener('click', () => {
+    if (!current.version) return;
+    window.ships.update.openRelease(current.version);
   });
   dom.install.addEventListener('click', () => {
     // 重启开始：立即禁用「重启更新」与「取消」。
@@ -186,6 +194,8 @@
     // 重启进行中（点了安装按钮或倒计时到 0）：取消按钮一并禁用。
     const restarting = state.restarting === true;
     dom.cancel.disabled = restarting;
+    // 「下载安装包」仅在已知目标版本时显示（跳转该版本的 Release 页面）。
+    dom.download.style.display = state.version ? '' : 'none';
     if (state.phase === 'downloaded') {
       dom.title.textContent = `${i18n.t('updateWin.downloaded')}${version}`;
       dom.bar.style.width = '100%';

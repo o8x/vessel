@@ -55,6 +55,7 @@
 | `update:state` | — | `{ phase, mode, version, percent, transferred, total, bytesPerSecond, countdown, changelog, prompt }` 或 `null` | 更新窗口查询当前状态（`phase` ∈ `idle` / `downloading` / `downloaded`；`changelog` = 当前版本到最新版之间的 Markdown 更新日志（可能为空）；`prompt` = 待处理的提示框 `{ id, title, message, buttons, defaultId, cancelId, changelog }` 或 `null`，窗口加载完成时据此补显示）；只接受来自**更新窗口**的请求 |
 | `update:cancel` | — | `{ ok }` | 下载窗口「取消」：下载阶段中止下载（`CancellationToken`），已完成则停止倒计时、不立即重启（退出本次更新）；只接受来自更新窗口的请求 |
 | `update:install` | — | `{ ok }` | 下载窗口「重启更新」：`quitAndInstall()` 立即重启并安装；只接受来自更新窗口的请求 |
+| `update:open-release` | `version` | `{ ok, error? }` | 下载窗口「下载安装包」：在系统浏览器打开该版本的 GitHub Release 页面（版本非法或缺少发布仓库配置时返回 `{ ok:false }`）；只接受来自更新窗口的请求 |
 | `update:choice` | `{ id, index }` | `{ ok }` | 应用内提示框：渲染层回传用户点击的按钮下标（`id` 由主进程下发）；`id` 过期 / 不匹配返回 `{ ok:false }`，只接受来自更新窗口的请求 |
 | `settings:get` | — | `settings` | |
 | `settings:set` | `patch` | 合并后的 `settings` | 副作用：写盘 + 广播 + 可能修改登录项 |
