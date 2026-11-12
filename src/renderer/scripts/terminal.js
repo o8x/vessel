@@ -2329,7 +2329,64 @@
   // 终端窗口禁用「最小化」（关闭按钮在「隐藏」配置下已改为缩成悬浮球）。
   lightMinimize.classList.add('traffic-disabled');
   lightMinimize.setAttribute('aria-disabled', 'true');
-  lightZoom.addEventListener('click', () => window.ships.windowControl('zoom'));
+  lightZoom.addEventListener('click', () => window.ships.terminal.toggleZoom());
+
+  /* 自定义标题栏拖动 + 双击放大：无边框窗口不再使用 -webkit-app-region: drag（否则收不到双击）。
+     拖动由主进程按屏幕光标位移移动窗口；双击在「默认尺寸 ↔ 之前几何」之间切换。 */
+  const headerEl = document.getElementById('term-header');
+  let headerDown = null;
+  let headerDragging = false;
+  let suppressHeaderDblUntil = 0;
+  const isHeaderInteractive = (target) =>
+    Boolean(target && target.closest && target.closest('#term-actions, #term-lights, #term-pin, #term-size'));
+  const resetHeaderDrag = () => {
+    headerDown = null;
+    headerDragging = false;
+  };
+  if (headerEl) {
+    headerEl.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || headerDown) return;
+      if (isHeaderInteractive(event.target)) return;
+      headerDown = {
+        id: event.pointerId,
+        screenX: event.screenX,
+        screenY: event.screenY,
+      };
+      try {
+        headerEl.setPointerCapture(event.pointerId);
+      } catch (err) {
+        /* ignore */
+      }
+    });
+    // 超过 3px 才算拖动：普通单击 / 双击（可能轻微抖动）不会移动窗口。
+    headerEl.addEventListener('pointermove', (event) => {
+      if (!headerDown || event.pointerId !== headerDown.id || headerDragging) return;
+      if (Math.hypot(event.screenX - headerDown.screenX, event.screenY - headerDown.screenY) <= 3) return;
+      headerDragging = true;
+      window.ships.terminal.dragStart();
+    });
+    const stopHeaderDrag = (event) => {
+      if (!headerDown) return;
+      if (event && event.pointerId !== undefined && event.pointerId !== headerDown.id) return;
+      if (headerDragging) {
+        // 拖动过就不当作双击（避免拖完紧接着的一次点击误触发放大）。
+        suppressHeaderDblUntil = Date.now() + 400;
+        window.ships.terminal.dragStop();
+      }
+      resetHeaderDrag();
+    };
+    headerEl.addEventListener('pointerup', stopHeaderDrag);
+    headerEl.addEventListener('pointercancel', stopHeaderDrag);
+    window.addEventListener('blur', () => {
+      if (headerDragging) window.ships.terminal.dragStop();
+      resetHeaderDrag();
+    });
+    headerEl.addEventListener('dblclick', (event) => {
+      if (isHeaderInteractive(event.target)) return;
+      if (Date.now() < suppressHeaderDblUntil) return;
+      window.ships.terminal.toggleZoom();
+    });
+  }
   window.addEventListener('focus', () => {
     syncWindowFocus();
     if (term && !ballMode) term.focus();

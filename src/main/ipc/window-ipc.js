@@ -14,6 +14,7 @@ const {
   getSettingsWindow,
   getTerminalWindow,
   isTerminalWindow,
+  toggleTerminalZoom,
   openTerminalWindow,
   terminalCloseAction,
   destroyTerminalWindow,
@@ -55,6 +56,8 @@ function registerWindowIpc(ipcMain) {
       return { ok: true, action, fullscreen: win.isFullScreen() };
     }
     if (action === 'zoom') {
+      // 终端窗口：绿灯与双击标题栏一致，在默认尺寸与之前几何之间切换。
+      if (isTerminalWindow(win)) return toggleTerminalZoom(win);
       if (win.isMaximized()) win.unmaximize();
       else win.maximize();
       return { ok: true, action };

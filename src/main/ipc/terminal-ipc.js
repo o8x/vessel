@@ -189,6 +189,22 @@ function registerTerminalIpc(ipcMain) {
     return wm.ensureTerminalContentSize(wm.getTerminalWindowForWebContents(event.sender.id), payload || {});
   });
 
+  /* 双击标题栏：默认尺寸 ↔ 之前的几何。 */
+  ipcMain.handle(IPC.TERMINAL_TOGGLE_ZOOM, (event) => {
+    if (!isOverlaySender(event)) return { ok: false };
+    return wm.toggleTerminalZoom(wm.getTerminalWindowForWebContents(event.sender.id));
+  });
+
+  /* 自定义标题栏拖动：主进程按屏幕光标位移移动窗口（无边框窗口不再用 app-region drag）。 */
+  ipcMain.handle(IPC.TERMINAL_DRAG_START, (event) => {
+    if (!isOverlaySender(event)) return { ok: false };
+    return wm.startTerminalDrag(wm.getTerminalWindowForWebContents(event.sender.id));
+  });
+  ipcMain.handle(IPC.TERMINAL_DRAG_STOP, (event) => {
+    if (!isOverlaySender(event)) return { ok: false };
+    return wm.stopTerminalDrag(wm.getTerminalWindowForWebContents(event.sender.id));
+  });
+
   /* 重置：终端相关设置回到默认值（写设置即可让开着的终端窗口跟着变），并清掉记住的
      屏幕 / 位置 / 尺寸。 */
   ipcMain.handle(IPC.TERMINAL_RESET, () => {

@@ -313,7 +313,7 @@ function rememberTerminalSize(size) {
 }
 
 function saveTerminalWindowSize(win) {
-  if (!isTerminalWindow(win) || suppressTerminalSizeSave || win.isMaximized() || win.isFullScreen()) return;
+  if (!isTerminalWindow(win) || suppressTerminalSizeSave || win.__customZoom || win.isMaximized() || win.isFullScreen()) return;
   const [width, height] = win.getSize();
   if (settings.get('terminalWindowWidth') === width && settings.get('terminalWindowHeight') === height) return;
   settings.set({ terminalWindowWidth: width, terminalWindowHeight: height });
@@ -326,6 +326,8 @@ function saveTerminalGeometry(win) {
   if (!isTerminalWindow(win) || win.isMaximized() || win.isFullScreen()) return;
   // 悬浮球模式下的尺寸 / 位置不入记忆（否则会把球的大小记进 terminal-window.json）。
   if (win.__ballActive) return;
+  // 自定义「双击标题栏放大」期间的尺寸也不入记忆：恢复后仍是用户原来的尺寸。
+  if (win.__customZoom) return;
   // 设置写回自带 suppress 保护（避免程序化 setSize 触发回写循环），
   // 几何记忆不受影响：位置 / 尺寸总是记窗口此刻的真实值（多窗口共用一份记忆，最后动的那扇为准）。
   saveTerminalWindowSize(win);
@@ -338,6 +340,100 @@ function saveTerminalGeometry(win) {
   if (JSON.stringify(next) === JSON.stringify(terminalState)) return;
   terminalState = next;
   writeJson(TERMINAL_WINDOW_FILE, terminalState);
+}
+
+/* 双击标题栏：在「默认 1024×768」与「之前的大小 / 位置」之间切换。
+   首次双击保存当前几何（可能是用户手动改过的尺寸）再放大到默认尺寸；
+   再次双击恢复保存的几何。放大期间不写入几何记忆 / 设置，恢复后才保存。 */
+function toggleTerminalZoom(win) {
+  if (!isTerminalWindow(win) || win.isDestroyed() || win.isFullScreen()) return { ok: false };
+  if (isBallMode(win)) return { ok: false };
+  const min = { width: TERMINAL_WINDOW.minWidth, height: TERMINAL_WINDOW.minHeight };
+  let display;
+  try {
+    display = screen.getDisplayMatching(win.getBounds());
+  } catch (err) {
+    display = screen.getPrimaryDisplay();
+  }
+  if (win.__customZoom) {
+    const prev = win.__customZoomPrev;
+    win.__customZoom = false;
+    win.__customZoomPrev = null;
+    if (prev) {
+      markZoomAnimating(win);
+      win.setBounds(clampBounds(prev, display, terminalWindowSize(), min), true);
+    }
+    return { ok: true, zoomed: false };
+  }
+  const prev = win.getBounds();
+  // 以当前窗口的右上角为基准放大：右边 / 上边保持不动，不把窗口移到屏幕中心；
+  // 仅在超出屏幕工作区时夹回，保证仍可见。
+  const area = (display && display.workArea) || { x: 0, y: 0, width: prev.width, height: prev.height };
+  const width = Math.min(TERMINAL_WINDOW.width, area.width);
+  const height = Math.min(TERMINAL_WINDOW.height, area.height);
+  // 当前窗口已经比目标尺寸大（任一方向）时不做任何操作，避免「放大」反而缩小。
+  if (prev.width > width || prev.height > height) {
+    return { ok: true, zoomed: false, skipped: true };
+  }
+  win.__customZoomPrev = Object.assign({}, prev);
+  win.__customZoom = true;
+  const x = Math.max(area.x, Math.min(prev.x + prev.width - width, area.x + area.width - width));
+  const y = Math.max(area.y, Math.min(prev.y, area.y + area.height - height));
+  markZoomAnimating(win);
+  win.setBounds({ x, y, width, height }, true);
+  return { ok: true, zoomed: true };
+}
+
+/* 双击放大 / 还原的动画期间忽略用户缩放判定（原生 setBounds 动画也会触发 resize 事件）。 */
+function markZoomAnimating(win) {
+  if (win.__zoomAnimTimer) clearTimeout(win.__zoomAnimTimer);
+  win.__zoomAnimating = true;
+  win.__zoomAnimTimer = setTimeout(() => {
+    win.__zoomAnimTimer = null;
+    win.__zoomAnimating = false;
+  }, 500);
+}
+
+/* 自定义标题栏拖动（无边框窗口不再使用 -webkit-app-region: drag，否则收不到双击事件）：
+   渲染层 pointerdown 时开始，主进程按屏幕光标位移实时 setPosition；pointerup 时结束。 */
+function startTerminalDrag(win) {
+  if (!isTerminalWindow(win) || win.isDestroyed()) return { ok: false };
+  stopTerminalDrag(win);
+  // 安全兜底：窗口失焦 / 被隐藏时立刻停止，避免渲染层漏发 drag-stop 后窗口一直跟随光标。
+  const stopOnBlur = () => stopTerminalDrag(win);
+  win.once('blur', stopOnBlur);
+  win.once('hide', stopOnBlur);
+  win.__dragStopOnBlur = stopOnBlur;
+  const startCursor = screen.getCursorScreenPoint();
+  const [startX, startY] = win.getPosition();
+  let lastX = startX;
+  let lastY = startY;
+  win.__dragTimer = setInterval(() => {
+    if (win.isDestroyed() || !win.isVisible()) {
+      stopTerminalDrag(win);
+      return;
+    }
+    const point = screen.getCursorScreenPoint();
+    const nextX = startX + (point.x - startCursor.x);
+    const nextY = startY + (point.y - startCursor.y);
+    if (nextX === lastX && nextY === lastY) return;
+    lastX = nextX;
+    lastY = nextY;
+    win.setPosition(nextX, nextY);
+  }, 16);
+  return { ok: true };
+}
+
+function stopTerminalDrag(win) {
+  if (win && win.__dragStopOnBlur) {
+    win.removeListener('blur', win.__dragStopOnBlur);
+    win.removeListener('hide', win.__dragStopOnBlur);
+    win.__dragStopOnBlur = null;
+  }
+  if (!win || !win.__dragTimer) return { ok: true };
+  clearInterval(win.__dragTimer);
+  win.__dragTimer = null;
+  return { ok: true };
 }
 
 /* 拖动 / 缩放：停顿 400ms 落盘；窗口关闭时立刻落盘（见 openTerminalWindow 的 close）。 */
@@ -1278,7 +1374,14 @@ function openTerminalWindow(options) {
     scheduleTerminalGeometrySave(win);
   });
   // 只用来标记「正在拖动」：不拦截、不改尺寸，松手后再执行挂起的对齐请求
-  win.on('will-resize', () => markTerminalResizing(win));
+  win.on('will-resize', () => {
+    // 用户在放大态下手动改尺寸：视为新的普通尺寸，退出双击放大态并按新尺寸记录。
+    if (win.__customZoom && !win.__zoomAnimating) {
+      win.__customZoom = false;
+      win.__customZoomPrev = null;
+    }
+    markTerminalResizing(win);
+  });
   // 实际生效的几何（恢复时可能被夹取过）也记下来，保证记忆与窗口一致。
   scheduleTerminalGeometrySave(win);
   win.once('ready-to-show', () => {
@@ -2113,6 +2216,9 @@ module.exports = {
   forgetTerminalGeometry,
   requestTerminalSnap,
   ensureTerminalContentSize,
+  toggleTerminalZoom,
+  startTerminalDrag,
+  stopTerminalDrag,
   terminalCloseAction,
   closeTerminalWindow,
   destroyTerminalWindow,

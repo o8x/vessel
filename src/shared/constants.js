@@ -92,6 +92,10 @@ const IPC = {
   TERMINAL_RESET: 'terminal:reset',
   TERMINAL_SNAP_SIZE: 'terminal:snap-size',
   TERMINAL_ENSURE_SIZE: 'terminal:ensure-size',
+  // 双击标题栏放大 / 还原 + 自定义标题栏拖动（无边框窗口不再用 -webkit-app-region: drag）。
+  TERMINAL_TOGGLE_ZOOM: 'terminal:toggle-zoom',
+  TERMINAL_DRAG_START: 'terminal:drag-start',
+  TERMINAL_DRAG_STOP: 'terminal:drag-stop',
   TERMINAL_RECALIBRATE: 'terminal:recalibrate',
   TERMINAL_DRAG_ACTIVE: 'terminal:drag-active',
   TERMINAL_ZOOM: 'terminal:zoom',
