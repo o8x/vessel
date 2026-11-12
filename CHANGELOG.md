@@ -2,6 +2,19 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.9.0 - 2026-11-12
+
+### 新增
+
+- Toggle terminal window to 1024x768 on title bar double click
+- Hide terminal header SSH, iTerm and files icons
+- Show loading spinner on file tree folders while loading
+
+### 修复
+
+- Keep terminal context menu off the window edges
+- Refine terminal search panel to icon buttons and full-width input
+
 ## v6.8.0 - 2026-11-11
 
 ### 新增
