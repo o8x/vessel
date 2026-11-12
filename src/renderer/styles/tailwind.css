@@ -1507,6 +1507,16 @@ body.file-window .fm-tree-row {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.fm-tree-spinner {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-left: 2px;
+  border: 1.5px solid var(--color-border-strong);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: ships-term-files-spin 0.7s linear infinite;
+}
 .fm-tree-hint,
 .fm-list-hint {
   padding: 8px 10px;

@@ -355,6 +355,8 @@
       sortDir: layoutData.sortDir === 'desc' ? 'desc' : 'asc',
       expanded: new Set(),
       children: new Map(),
+      // 正在加载子目录 / 导航的路径 → 计数：目录树行右侧显示旋转 loading。
+      loading: new Map(),
       progress: null,
     };
 
@@ -541,8 +543,23 @@
     }
 
     /* -------------------------------- tree -------------------------------- */
+    function beginLoading(path) {
+      if (!path) return;
+      state.loading.set(path, (state.loading.get(path) || 0) + 1);
+      renderTree();
+    }
+
+    function endLoading(path) {
+      if (!path) return;
+      const count = (state.loading.get(path) || 0) - 1;
+      if (count > 0) state.loading.set(path, count);
+      else state.loading.delete(path);
+      renderTree();
+    }
+
     function ensureChildren(path) {
       if (state.children.has(path)) return Promise.resolve(state.children.get(path));
+      beginLoading(path);
       return window.ships.sftp
         .list(state.id, path)
         .then((result) => {
@@ -557,7 +574,8 @@
         .catch(() => {
           state.children.set(path, []);
           return [];
-        });
+        })
+        .finally(() => endLoading(path));
     }
 
     /* 目录右键菜单：目录树节点与文件列表里的目录行共用。 */
@@ -596,6 +614,8 @@
       const label = el('span', { class: 'fm-tree-label' }, '');
       label.textContent = name;
       row.append(caret, icon, label);
+      // 正在加载该目录的子项 / 导航：名称右侧显示旋转 loading。
+      if (state.loading.has(path)) row.appendChild(el('span', { class: 'fm-tree-spinner' }));
       row.addEventListener('click', () => navigate(path));
       // 目录节点右键：进入该目录（仅内嵌面板：在当前终端 cd 过去）/ 上传 / 复制路径 / 复制传输命令。
       row.addEventListener('contextmenu', (event) => {
@@ -613,10 +633,7 @@
         treeEl.appendChild(makeTreeRow(name, path, depth));
         if (!state.expanded.has(path)) return;
         const kids = state.children.get(path);
-        if (!kids) {
-          treeEl.appendChild(el('div', { class: 'fm-tree-hint', style: `padding-left:${20 + depth * 14}px` }, i18n.t('filesUi.loading')));
-          return;
-        }
+        if (!kids) return;
         for (const child of kids) render(child.name, child.path, depth + 1);
       };
       render('/', '/', 0);
@@ -970,6 +987,7 @@
     function navigate(path, quiet) {
       if (!state.connected) return Promise.resolve(false);
       state.expanded.add(path);
+      beginLoading(path);
       if (!state.children.has(path)) {
         ensureChildren(path).then(() => {
           if (state.expanded.has(path)) renderTree();
@@ -977,13 +995,15 @@
       }
       // 任何导航（目录树 / 路径输入 / cd 跟随 / 历史）成功后都展开到当前目录并滚动定位，
       // 保证目录树里一定出现该节点、点文件时能定位到它所在的目录。
-      return loadList(path, quiet).then((ok) => {
-        if (!ok) return ok;
-        return expandTo(state.cwd).then(() => {
-          scrollTreeToSelected();
-          return true;
-        });
-      });
+      return loadList(path, quiet)
+        .then((ok) => {
+          if (!ok) return ok;
+          return expandTo(state.cwd).then(() => {
+            scrollTreeToSelected();
+            return true;
+          });
+        })
+        .finally(() => endLoading(path));
     }
 
     /* 终端里输入 `cd <arg>` 且成功时跟随：把参数解析成远端绝对路径后导航。
@@ -1228,6 +1248,7 @@
       state.shellCwd = state.home;
       state.children = new Map();
       state.expanded = new Set();
+      state.loading = new Map();
       state.entries = [];
       state.cwd = state.home;
       state.selection = new Set();
@@ -1278,6 +1299,7 @@
       state.cellSelection = null;
       state.expanded = new Set();
       state.children = new Map();
+      state.loading = new Map();
       treeEl.innerHTML = '';
       listEl.innerHTML = '';
       setProgress(null);
