@@ -1041,6 +1041,12 @@ body.show-lines #term-host {
 #term-actions {
   gap: calc(var(--term-header-font-size) * 0.6);
 }
+/* 头栏不再显示 SSH 下拉 / 文件 / iTerm 图标（功能保留在终端右键菜单）。 */
+#term-actions .term-ssh-picker,
+#term-actions #btn-files,
+#term-actions #btn-iterm {
+  display: none !important;
+}
 #term-actions .icon-btn {
   width: calc(var(--term-header-font-size) + 6px);
   height: calc(var(--term-header-font-size) + 6px);

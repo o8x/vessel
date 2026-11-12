@@ -60,7 +60,7 @@
 | `settings:set` | `patch` | 合并后的 `settings` | 副作用：写盘 + 广播 + 可能修改登录项 |
 | `ssh:list` | — | `{ hosts, detected }` | 读 `~/.ssh/config`；每个 host 含 `group`（分组名，未分组为 `''`）与 `hasPassword`（是否已存密码，见 §5.1）字段 |
 | `ssh:edit` | `{ alias }` | `{ ok, error? }` | 主面板 SSH 条目的编辑图标：隐藏主面板、打开设置窗口的 SSH 分区，并让该主机直接进入编辑表单（设置窗口未打开时等渲染层挂载后再发 `settings:edit-ssh`）；别名缺失返回错误 |
-| `ssh:connect` | `{ alias, inTerminal? }` | `{ ok, command?, error? }` | 按 alias 查表并拼 `ssh …`：`inTerminal: true`（终端窗口头部的 SSH 下拉）**强制注入当前悬浮终端窗口**、不受 `sshBuiltinTerminal` 影响；省略时按 `settings.sshBuiltinTerminal` 决定走悬浮终端或 iTerm |
+| `ssh:connect` | `{ alias, inTerminal? }` | `{ ok, command?, error? }` | 按 alias 查表并拼 `ssh …`：`inTerminal: true`（终端内发起，如右键「连接到服务器」；头部下拉已隐藏但仍兼容）**强制注入当前悬浮终端窗口**、不受 `sshBuiltinTerminal` 影响；省略时按 `settings.sshBuiltinTerminal` 决定走悬浮终端或 iTerm |
 | `ssh:quick-connect` | `{ hostName, user?, port?, password?, inCurrentTerminal? }` | `{ ok, command?, alias?, hosts?, error? }` | SSH 管理 / 终端右键「快速连接」：`hostName` **必填**（缺省返回 `{ ok:false, error:'hostName required' }`），`port` 默认 `22`。有 `password` 则加密保存，否则清除该别名旧密码并使用 `~/.ssh/id_ed25519`。**无论连接成败**都写入 `~/.ssh/config` 的「快速连接」分组并置于最前，随后广播 `ssh-config:changed` 并触发探测。连接目标：省略 / `inCurrentTerminal: false` → **始终新开一扇终端**再注入（`runInNewTerminal`）；`inCurrentTerminal: true`（终端右键菜单）→ 在**发起请求的那个终端窗口**注入（`runInTerminal` 指定窗口，不新开）。成功返回 `command` / `alias` |
 | `ssh:open-in-terminal` | `{ path, alias?, target?, host?, username?, port?, identityFile?, password? }` | `{ ok, command?, error? }` | 独立文件窗口目录右键「在终端打开」：按 `alias` 命中 `~/.ssh/config`（否则用手动字段构造主机），**新开一扇终端**执行 `ssh -t 'cd <path> && exec $SHELL -l'`，让远端 shell 直接进入该目录；有显式密码 / 该别名已保存密码时交给终端在密码提示处自动输入（同 §3.4-4），否则用密钥 |
 | `ssh:detect` | `{ alias }` | `{ queued }` | 异步，结果经 `ssh:detected` 回传（兼容保留） |

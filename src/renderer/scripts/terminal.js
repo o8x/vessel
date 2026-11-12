@@ -918,6 +918,7 @@
         void connectSshHost(alias);
       },
     });
+    picker.el.classList.add('term-ssh-picker');
     actions.insertBefore(picker.el, actions.firstChild);
     return picker;
   }
