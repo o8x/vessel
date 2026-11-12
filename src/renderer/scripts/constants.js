@@ -28,6 +28,8 @@ window.ShipsConstants = {
   TERMINAL_SEARCH_PERSIST_MS: 400,
   // 终端查找：输入后自动执行查找的延迟（毫秒）。
   TERMINAL_SEARCH_DEBOUNCE_MS: 100,
+  // 终端右键菜单与窗口边缘的最小间距（px，避免菜单贴边）。
+  TERMINAL_MENU_EDGE_MARGIN: 10,
   // 工具标题收起动画期间先锁住内容滚动，动画完成后再滚动内容。
   HEADER_COLLAPSE_LOCK_MS: 190,
   // Liquid Glass 表面透明度：glassOpacity(0–100，越大越透明) 映射到表面填充 alpha。

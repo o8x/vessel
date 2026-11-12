@@ -1236,12 +1236,14 @@
     document.body.appendChild(sub);
     submenuEl = sub;
     const rect = btn.getBoundingClientRect();
-    const subRect = sub.getBoundingClientRect();
+    const subWidth = sub.offsetWidth;
+    const subHeight = sub.offsetHeight;
+    const m = C.TERMINAL_MENU_EDGE_MARGIN || 10;
     const left =
-      rect.right + 4 + subRect.width <= window.innerWidth - 4
-        ? rect.right + 4
-        : Math.max(4, rect.left - 4 - subRect.width);
-    const top = Math.max(4, Math.min(rect.top, window.innerHeight - subRect.height - 4));
+      rect.right + m + subWidth <= window.innerWidth - m
+        ? rect.right + m
+        : Math.max(m, rect.left - m - subWidth);
+    const top = Math.max(m, Math.min(rect.top, window.innerHeight - subHeight - m));
     sub.style.left = `${left}px`;
     sub.style.top = `${top}px`;
   }
@@ -1291,9 +1293,13 @@
     closeMenu();
     const menu = buildMenu(items);
     document.body.appendChild(menu);
-    const rect = menu.getBoundingClientRect();
-    menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - rect.width - 4))}px`;
-    menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - rect.height - 4))}px`;
+    // 用 offsetWidth/offsetHeight：菜单有入场 scale 动画，getBoundingClientRect 会拿到
+    // 动画中的缩放尺寸，导致按偏小的尺寸定位、动画结束后底部贴边。
+    const width = menu.offsetWidth;
+    const height = menu.offsetHeight;
+    const m = C.TERMINAL_MENU_EDGE_MARGIN || 10;
+    menu.style.left = `${Math.max(m, Math.min(x, window.innerWidth - width - m))}px`;
+    menu.style.top = `${Math.max(m, Math.min(y, window.innerHeight - height - m))}px`;
     menuEl = menu;
     document.addEventListener('mousedown', onMenuDocDown, true);
     document.addEventListener('keydown', onMenuKeyDown, true);

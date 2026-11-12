@@ -1699,7 +1699,7 @@ body.file-window .fm-tree-row {
 /* 终端内容区右键菜单：复用 .fm-menu 的外观，追加右侧子菜单（SSH 主机）。 */
 .term-menu {
   min-width: 180px;
-  max-height: calc(100vh - 8px);
+  max-height: calc(100vh - 20px);
   overflow-y: auto;
 }
 .term-menu-item {
@@ -1736,7 +1736,7 @@ body.file-window .fm-tree-row {
   z-index: 301;
   min-width: 180px;
   max-width: 320px;
-  max-height: min(360px, calc(100vh - 8px));
+  max-height: min(360px, calc(100vh - 20px));
   overflow-y: auto;
 }
 .fm-list.drag-over {
