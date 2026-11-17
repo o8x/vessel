@@ -1344,6 +1344,8 @@ function openTerminalWindow(options) {
   const windowId = win.id;
   terminalWindows.add(win);
   lastTerminalWindow = win;
+  // 新开的终端窗口**默认固定**：失焦时不缩成悬浮球（渲染层可用头栏图钉按钮取消）。
+  win.__ballPin = true;
   logger.file(`[terminal] window created (${windowId})`);
   // 创建时（页面还没加载完、窗口尚未 show）就读取并记录所在 Space：读取值代表「打开时」的桌面，
   // 避免 ready-to-show / focus 时用户已切换桌面，把切换后的桌面误记成原桌面。

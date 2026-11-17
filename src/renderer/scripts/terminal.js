@@ -191,8 +191,8 @@
   let filesApi = null;
   // 悬浮球模式（失去焦点缩成圆形小窗；期间不 fit、不把尺寸同步给 PTY）
   let ballMode = false;
-  // 「固定」：开启后本窗口失焦不缩成悬浮球（仅当前窗口，默认关，不持久）
-  let ballPinned = false;
+  // 「固定」：开启后本窗口失焦不缩成悬浮球（仅当前窗口，**默认开**，不持久）
+  let ballPinned = true;
 
   /* ------------------------------- 分屏状态 -------------------------------
      全局的 term / fit / host / sessionId / sshTarget / lastCols / lastRows / typedLine
@@ -2729,6 +2729,10 @@
     applyBallTransparent((settings && settings.terminalBallTransparent) !== false);
     applyTerminalOpacity(settings && settings.terminalOpacity);
     renderHeader();
+    // 新窗口默认「固定」（不缩成悬浮球）：同步给主进程，失焦时不缩球。
+    if (window.ships.terminal && window.ships.terminal.setBallPin) {
+      window.ships.terminal.setBallPin(ballPinned);
+    }
     sshPicker = setupSshPicker();
     refreshSshPicker();
     // 设置页增删改 SSH 主机 / 分组后实时刷新下拉。
