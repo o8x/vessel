@@ -15,6 +15,7 @@
     dev: document.getElementById('footer-dev'),
     terminal: document.getElementById('btn-terminal'),
     files: document.getElementById('btn-files'),
+    transfer: document.getElementById('btn-transfer'),
     theme: document.getElementById('btn-theme'),
     settings: document.getElementById('btn-settings'),
   };
@@ -242,6 +243,8 @@
     dom.terminal.setAttribute('data-tip', i18n.t('terminal'));
     dom.files.innerHTML = Icons.folder(15);
     dom.files.setAttribute('data-tip', i18n.t('fileManager'));
+    dom.transfer.innerHTML = Icons.swap(15);
+    dom.transfer.setAttribute('data-tip', i18n.t('transfer'));
     renderThemeButton();
   }
 
@@ -301,6 +304,8 @@
     dom.terminal.addEventListener('click', () => window.ships.openTerminal({ randomBallIcon: true }));
     // 打开独立文件管理窗口，不选中任何连接（target 传空串）。
     dom.files.addEventListener('click', () => window.ships.fileWindow.open(''));
+    // 文件传输窗口（穿梭框）：左右两栏各一个 SSH 连接。
+    dom.transfer.addEventListener('click', () => window.ships.transferWindow.open({}));
     dom.theme.addEventListener('click', cycleTheme);
 
     window.ships.onSettingsChanged((next) => {

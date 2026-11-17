@@ -79,6 +79,13 @@
           hide({ destroy: true });
           window.ships.fileWindow.open(t, dir);
         },
+        // 右键「文件传输」：打开穿梭框窗口，左侧定位到当前 SSH 连接与该目录。
+        onOpenTransfer: (info) => {
+          const conn = (info && info.connection) || {};
+          const sshTarget = String((info && info.target) || conn.target || '').trim();
+          if (!sshTarget) return;
+          window.ships.transferWindow.open({ target: sshTarget, path: (info && info.path) || '' });
+        },
         onLayout: (patch) => {
           Object.assign(layout, patch);
           window.ships.filesLayout.set('panel', patch);

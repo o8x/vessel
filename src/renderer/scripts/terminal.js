@@ -16,6 +16,7 @@
         ungrouped: '未分组',
         linesOn: '隐藏行号',
         linesOff: '显示行号',
+        fileWindow: '文件管理窗口',
         newWindow: '新建窗口',
         pinBallOn: '取消固定（失焦会缩成悬浮球）',
         pinBallOff: '固定：本窗口失焦不缩成悬浮球',
@@ -69,6 +70,7 @@
         ungrouped: 'Ungrouped',
         linesOn: 'Hide line numbers',
         linesOff: 'Show line numbers',
+        fileWindow: 'File manager window',
         newWindow: 'New window',
         pinBallOn: 'Unpin (shrink to a ball when unfocused)',
         pinBallOff: 'Pin: keep this window open when it loses focus',
@@ -137,6 +139,7 @@
   const panesWrap = document.getElementById('term-panes');
   const gutterEl = document.getElementById('term-gutter');
   const linesBtn = document.getElementById('btn-lines');
+  const fileWindowBtn = document.getElementById('btn-file-window');
   const filesBtn = document.getElementById('btn-files');
   const itermBtn = document.getElementById('btn-iterm');
   const splitBtn = document.getElementById('btn-split');
@@ -868,6 +871,10 @@
     linesBtn.style.color = showLines ? 'var(--color-accent)' : '';
     linesBtn.setAttribute('data-tip', i18n.t(showLines ? 'terminalWin.linesOn' : 'terminalWin.linesOff'));
     filesBtn.innerHTML = Icons.folder(15);
+    if (fileWindowBtn) {
+      fileWindowBtn.innerHTML = Icons.folder(15);
+      fileWindowBtn.setAttribute('data-tip', i18n.t('terminalWin.fileWindow'));
+    }
     itermBtn.innerHTML = Icons.terminal(15);
     splitBtn.innerHTML = Icons.newWindow(15);
     splitBtn.setAttribute('data-tip', i18n.t('terminalWin.newWindow'));
@@ -2394,6 +2401,12 @@
   window.addEventListener('blur', syncWindowFocus);
   window.addEventListener('resize', onWindowResize);
   syncWindowFocus();
+  if (fileWindowBtn) {
+    // 独立文件管理窗口：带上当前 SSH 目标，未连接时留空（窗口内自行选择主机）。
+    fileWindowBtn.addEventListener('click', () => {
+      window.ships.fileWindow.open(sshTarget || '', '');
+    });
+  }
   if (linesBtn) {
     linesBtn.addEventListener('click', toggleLineNumbers);
   }

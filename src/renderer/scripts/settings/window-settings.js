@@ -15,6 +15,7 @@
         windowTypeMain: '主界面',
         windowTypeTerminal: '终端',
         windowTypeFile: '文件管理',
+        windowTypeTransfer: '文件传输',
         windowTypeEditor: '编辑器',
         windowTypeGame: '游戏',
         windowLoadFailed: '读取窗口列表失败：{error}',
@@ -30,6 +31,7 @@
         windowTypeMain: 'Main window',
         windowTypeTerminal: 'Terminal',
         windowTypeFile: 'File manager',
+        windowTypeTransfer: 'File transfer',
         windowTypeEditor: 'Editor',
         windowTypeGame: 'Game',
         windowLoadFailed: 'Cannot load windows: {error}',
@@ -51,6 +53,7 @@
         main: 'settingsPage.windowTypeMain',
         terminal: 'settingsPage.windowTypeTerminal',
         file: 'settingsPage.windowTypeFile',
+        transfer: 'settingsPage.windowTypeTransfer',
         editor: 'settingsPage.windowTypeEditor',
         game: 'settingsPage.windowTypeGame',
       };
@@ -67,13 +70,15 @@
       const iconName =
         item.type === 'terminal'
           ? 'terminal'
-          : item.type === 'file'
-            ? 'folder'
-            : item.type === 'editor'
-              ? 'doc'
-              : item.type === 'game'
-                ? 'gamepad'
-                : 'monitor';
+          : item.type === 'transfer'
+            ? 'swap'
+            : item.type === 'file'
+              ? 'folder'
+              : item.type === 'editor'
+                ? 'doc'
+                : item.type === 'game'
+                  ? 'gamepad'
+                  : 'monitor';
       icon.innerHTML = Icons[iconName] ? Icons[iconName](16) : Icons.monitor(16);
 
       const info = el('div', { class: 'min-w-0 flex-1' });

@@ -9,6 +9,7 @@ const {
   TERMINAL_WINDOW,
   FILE_WINDOW,
   FILE_EDITOR_WINDOW,
+  TRANSFER_WINDOW,
   GAME_WINDOW,
   UPDATE_WINDOW,
   CENTER_SNAP,
@@ -17,7 +18,13 @@ const {
   SPACE_CONFIRM_DELAY_MS,
 } = require('../shared/constants');
 const settings = require('./services/settings-service');
-const { TERMINAL_WINDOW_FILE, FILE_WINDOW_FILE, GAME_WINDOW_FILE, MAIN_WINDOW_FILE } = require('./utils/paths');
+const {
+  TERMINAL_WINDOW_FILE,
+  FILE_WINDOW_FILE,
+  GAME_WINDOW_FILE,
+  MAIN_WINDOW_FILE,
+  TRANSFER_WINDOW_FILE,
+} = require('./utils/paths');
 const { readJson, writeJson } = require('./utils/json-store');
 const { clampNumber, displaySignature, displayBySignature, clampBounds } = require('./utils/window-geometry');
 const logger = require('./utils/logger');
@@ -70,6 +77,13 @@ let updateWindow = null;
 let fileWindowTarget = '';
 let fileWindowPath = '';
 let fileWindowOwnerId = null;
+// 文件传输窗口（穿梭框）：独立窗口，左右两栏各一个 SSH 连接。
+let transferWindow = null;
+let transferWindowOwnerId = null;
+let transferWindowTarget = '';
+let transferWindowPath = '';
+let transferWindowState = readJson(TRANSFER_WINDOW_FILE, null);
+let transferWindowGeometryTimer = null;
 // 内置编辑器窗口：可多开，记录归属的文件管理器窗口与服务端文件，随文件管理器销毁而关闭。
 const fileEditorWindows = new Set();
 // ownerId -> 该窗口销毁时关闭其所有编辑器的清理函数（每个 owner 只挂一个监听，避免多开时监听器堆积）。
@@ -1589,6 +1603,159 @@ function openFileWindow(target, pathArg) {
   return fileWindow;
 }
 
+/* ------------------------------ 文件传输窗口 -------------------------------
+   穿梭框：左右两栏各一个 SSH 连接，用于把远端文件 / 目录在两台主机之间传输。
+   独立标准窗口（可缩放），几何记忆在 transfer-window.json。 */
+
+function transferWindowSize() {
+  return {
+    width: clampNumber(TRANSFER_WINDOW.width, TRANSFER_WINDOW.minWidth, 10000, 1100),
+    height: clampNumber(TRANSFER_WINDOW.height, TRANSFER_WINDOW.minHeight, 10000, 700),
+  };
+}
+
+function transferWindowBoundsForOpen() {
+  const size = transferWindowSize();
+  const saved = transferWindowState && transferWindowState.bounds ? transferWindowState : null;
+  const min = { width: TRANSFER_WINDOW.minWidth, height: TRANSFER_WINDOW.minHeight };
+  const matched = saved ? displayBySignature(screen.getAllDisplays(), saved.display) : null;
+  if (matched) return clampBounds(saved.bounds, matched, size, min);
+  return clampBounds(null, anchorDisplay(), size, min);
+}
+
+function saveTransferWindowGeometry() {
+  const win = getTransferWindow();
+  if (!win || win.isMaximized() || win.isFullScreen()) return;
+  const bounds = win.getBounds();
+  const next = {
+    display: displaySignature(screen.getDisplayMatching(bounds)),
+    bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+  };
+  if (!next.display) return;
+  if (JSON.stringify(next) === JSON.stringify(transferWindowState)) return;
+  transferWindowState = next;
+  writeJson(TRANSFER_WINDOW_FILE, transferWindowState);
+}
+
+function scheduleTransferWindowGeometrySave() {
+  if (transferWindowGeometryTimer) clearTimeout(transferWindowGeometryTimer);
+  transferWindowGeometryTimer = setTimeout(() => {
+    transferWindowGeometryTimer = null;
+    saveTransferWindowGeometry();
+  }, 400);
+}
+
+function getTransferWindow() {
+  if (!transferWindow || transferWindow.isDestroyed()) return null;
+  return transferWindow;
+}
+
+function isTransferWindow(win) {
+  return Boolean(win) && win === transferWindow && !win.isDestroyed();
+}
+
+/* 传输窗口的 webContents id：SFTP 会话归属校验用。 */
+function isTransferWebContents(id) {
+  const win = getTransferWindow();
+  return Boolean(win && win.webContents.id === id);
+}
+
+function getTransferWindowTarget() {
+  return transferWindowTarget;
+}
+
+function getTransferWindowPath() {
+  return transferWindowPath;
+}
+
+/* 打开（或聚焦）文件传输窗口；target / path 用于定位左侧连接与目录。 */
+function openTransferWindow(target, pathArg) {
+  if (target != null) {
+    transferWindowTarget = String(target || '');
+    transferWindowPath = pathArg != null ? String(pathArg || '') : '';
+  }
+  if (transferWindow && !transferWindow.isDestroyed()) {
+    transferWindow.show();
+    transferWindow.focus();
+    if (target != null) {
+      transferWindow.webContents.send(IPC.TRANSFER_WINDOW_LOCATE, {
+        target: transferWindowTarget,
+        path: transferWindowPath,
+      });
+    }
+    return transferWindow;
+  }
+
+  const bounds = transferWindowBoundsForOpen();
+  transferWindow = new BrowserWindow({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    minWidth: TRANSFER_WINDOW.minWidth,
+    minHeight: TRANSFER_WINDOW.minHeight,
+    title: 'Vessel Transfer',
+    titleBarStyle: 'default',
+    backgroundColor: themeBackgroundColor(),
+    show: false,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
+    fullscreenable: false,
+    webPreferences: {
+      preload: path.join(PRELOAD_DIR, 'transfer-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      spellcheck: false,
+    },
+  });
+  const windowId = transferWindow.id;
+  logger.file(`[transfer-window] window created (${windowId})`);
+  transferWindowOwnerId = transferWindow.webContents.id;
+  transferWindow.webContents.setVisualZoomLevelLimits(1, 1);
+  transferWindow.webContents.setZoomFactor(1);
+  transferWindow.webContents.on('did-finish-load', () => {
+    try {
+      transferWindow.webContents.setZoomFactor(1);
+    } catch (err) {
+      /* ignore */
+    }
+  });
+  transferWindow.webContents.on('zoom-changed', (event) => {
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    transferWindow.webContents.setZoomLevel(0);
+  });
+  transferWindow.loadFile(path.join(RENDERER_DIR, 'transfer-window.html'));
+  transferWindow.on('resize', scheduleTransferWindowGeometrySave);
+  transferWindow.on('move', scheduleTransferWindowGeometrySave);
+  scheduleTransferWindowGeometrySave();
+  transferWindow.once('ready-to-show', () => {
+    transferWindow.show();
+    transferWindow.focus();
+  });
+  transferWindow.on('close', () => saveTransferWindowGeometry());
+  transferWindow.on('closed', () => {
+    logger.file(`[transfer-window] window destroyed (${windowId})`);
+    require('./services/sftp-service').closeForOwner(transferWindowOwnerId);
+    transferWindowOwnerId = null;
+    transferWindow = null;
+    if (transferWindowGeometryTimer) {
+      clearTimeout(transferWindowGeometryTimer);
+      transferWindowGeometryTimer = null;
+    }
+  });
+  return transferWindow;
+}
+
+function closeTransferWindow() {
+  const win = getTransferWindow();
+  if (!win) return null;
+  saveTransferWindowGeometry();
+  win.destroy();
+  return null;
+}
+
 function isFileWindow(win) {
   return Boolean(win) && win === fileWindow && !win.isDestroyed();
 }
@@ -2127,7 +2294,14 @@ function sendToUpdateWindow(channel, payload) {
 function broadcast(channel, payload) {
   // The always-on-top terminal windows mirror settings too (font size / scrollback /
   // theme / locale); every open terminal window gets the broadcast.
-  const wins = [getMainWindow(), getSettingsWindow(), getFileWindow(), getGameWindow(), ...terminalWindowsList()];
+  const wins = [
+    getMainWindow(),
+    getSettingsWindow(),
+    getFileWindow(),
+    getTransferWindow(),
+    getGameWindow(),
+    ...terminalWindowsList(),
+  ];
   for (const win of wins) {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
   }
@@ -2161,6 +2335,7 @@ function listManagedWindows() {
   push(getMainWindow(), 'main', '');
   for (const win of terminalWindowsList()) push(win, 'terminal', '');
   push(getFileWindow(), 'file', '');
+  push(getTransferWindow(), 'transfer', '');
   for (const win of fileEditorWindows) push(win, 'editor', win.getTitle());
   push(getGameWindow(), 'game', '');
   return items;
@@ -2201,6 +2376,10 @@ function destroyManagedWindow(id) {
   }
   if (win === fileWindow) {
     closeFileWindow();
+    return true;
+  }
+  if (win === transferWindow) {
+    closeTransferWindow();
     return true;
   }
   win.destroy();
@@ -2259,6 +2438,13 @@ module.exports = {
   forgetGameWindowGeometry,
   openFileWindow,
   getFileWindow,
+  openTransferWindow,
+  getTransferWindow,
+  isTransferWindow,
+  isTransferWebContents,
+  getTransferWindowTarget,
+  getTransferWindowPath,
+  closeTransferWindow,
   getFileWindowTarget,
   getFileWindowPath,
   isFileWindow,

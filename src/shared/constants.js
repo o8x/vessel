@@ -155,6 +155,14 @@ const IPC = {
   FILE_EDITOR_DOWNLOAD: 'file-editor:download',
   FILE_EDITOR_CLOSE_ALL: 'file-editor:close-all',
 
+  // 文件传输窗口（穿梭框）：独立窗口 + 传输任务（远端 → 远端）。
+  TRANSFER_WINDOW_OPEN: 'transfer-window:open',
+  TRANSFER_WINDOW_INFO: 'transfer-window:info',
+  TRANSFER_WINDOW_CLOSE: 'transfer-window:close',
+  TRANSFER_WINDOW_LOCATE: 'transfer-window:locate',
+  TRANSFER_RUN: 'transfer:run',
+  TRANSFER_PROGRESS: 'transfer:progress',
+
   GAME_SCAN: 'games:scan',
   GAME_OPEN: 'games:open',
   GAME_WINDOW_INFO: 'games:window-info',
@@ -244,6 +252,17 @@ const TERMINAL_WINDOW = Object.assign(
     ballTransparent: true,
   },
   appConfig.terminalWindow || {}
+);
+
+// 文件传输窗口（穿梭框）：左右两栏各一个 SSH 连接，独立窗口。
+const TRANSFER_WINDOW = Object.assign(
+  {
+    width: 1100,
+    height: 700,
+    minWidth: 880,
+    minHeight: 560,
+  },
+  appConfig.transferWindow || {}
 );
 
 // Detached file-manager window (floats like the terminal window).
@@ -427,6 +446,7 @@ module.exports = {
   TERMINAL_WINDOW,
   FILE_WINDOW,
   FILE_EDITOR_WINDOW,
+  TRANSFER_WINDOW,
   GAME_WINDOW,
   UPDATE_WINDOW,
   UPDATE_WINDOW_PROGRESS,

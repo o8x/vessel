@@ -3061,3 +3061,86 @@ body.editor-window {
   gap: 8px;
   margin-top: 12px;
 }
+
+/* ------------------------------ 文件传输窗口 ------------------------------
+   穿梭框：左右两栏各一个 SSH 连接（顶部下拉）+ 目录 / 文件列表 + 中间控制区。
+   列表行 / 路径行 / 状态栏复用文件管理器（.fm-*）的样式。 */
+.transfer-pane-host {
+  display: flex;
+  flex: 1 1 50%;
+  min-width: 0;
+  min-height: 0;
+}
+.transfer-pane {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--file-window-bg);
+}
+.transfer-pane-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+.transfer-pane-picker {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.transfer-ssh-select {
+  width: 100%;
+}
+.transfer-mid {
+  display: flex;
+  flex: 0 0 auto;
+  width: 84px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-left: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.transfer-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control-sm);
+  background: var(--color-control);
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.transfer-sync.on {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+.transfer-move {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control-sm);
+  background: var(--color-control);
+  color: var(--color-fg);
+  cursor: pointer;
+}
+.transfer-move:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.transfer-move:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

@@ -45,6 +45,7 @@
         refresh: '刷新',
         cdEnter: '进入该目录',
         openInTerminal: '在终端打开',
+        openTransfer: '文件传输',
         popOut: '分离为独立窗口',
         pathPlaceholder: '输入远端路径，回车进入',
         name: '文件名',
@@ -103,6 +104,7 @@
         refresh: 'Refresh',
         cdEnter: 'Enter this directory (cd in terminal)',
         openInTerminal: 'Open in terminal',
+        openTransfer: 'File Transfer',
         popOut: 'Open in a separate window',
         pathPlaceholder: 'Type a remote path, press Enter',
         name: 'Name',
@@ -321,6 +323,8 @@
     // 独立文件窗口：目录右键「在终端打开」（新开终端、SSH 连接到当前主机并进入该目录）。
     const onOpenInTerminal =
       typeof opts.onOpenInTerminal === 'function' ? opts.onOpenInTerminal : null;
+    // 打开文件传输窗口（穿梭框）：传入当前连接与目录，传输窗口左侧据此定位。
+    const onOpenTransfer = typeof opts.onOpenTransfer === 'function' ? opts.onOpenTransfer : null;
     const onConnectionState =
       typeof opts.onConnectionState === 'function' ? opts.onConnectionState : () => {};
     const layoutData = Object.assign({}, DEFAULT_LAYOUT, opts.layout || {});
@@ -590,6 +594,14 @@
           icon: 'terminal',
           run: () =>
             onOpenInTerminal({ path, target: state.target, connection: state.connection || {} }),
+        });
+      }
+      if (onOpenTransfer) {
+        items.push({
+          label: i18n.t('filesUi.openTransfer'),
+          icon: 'swap',
+          run: () =>
+            onOpenTransfer({ path, target: state.target, connection: state.connection || {} }),
         });
       }
       items.push(
@@ -939,6 +951,18 @@
               icon: 'globe',
               disabled: !selectedEntries.every((item) => isWiresharkEntry(item)),
               run: () => openFilesWireshark(paths),
+            });
+          }
+          if (onOpenTransfer) {
+            items.push({
+              label: i18n.t('filesUi.openTransfer'),
+              icon: 'swap',
+              run: () =>
+                onOpenTransfer({
+                  path: parentPath(path),
+                  target: state.target,
+                  connection: state.connection || {},
+                }),
             });
           }
           items.push(

@@ -397,6 +397,12 @@
         if (conn.auth !== 'key' && conn.password) payload.password = conn.password;
         window.ships.ssh.openInTerminal(payload).catch(() => {});
       },
+      // 右键「文件传输」：打开穿梭框窗口，左侧定位到当前连接与该目录。
+      onOpenTransfer: (info) => {
+        const conn = (info && info.connection) || {};
+        const target = String((info && info.target) || currentTarget || conn.target || '').trim();
+        window.ships.transferWindow.open({ target, path: (info && info.path) || '' });
+      },
     });
     if (currentTarget) {
       fillFromAlias(currentTarget);

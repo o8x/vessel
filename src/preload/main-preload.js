@@ -135,6 +135,9 @@ const api = {
     download: (payload) => ipcRenderer.invoke(IPC.FILE_EDITOR_DOWNLOAD, payload),
     closeAll: () => ipcRenderer.invoke(IPC.FILE_EDITOR_CLOSE_ALL),
   },
+  transferWindow: {
+    open: (payload) => ipcRenderer.invoke(IPC.TRANSFER_WINDOW_OPEN, payload || {}),
+  },
   fileWindow: {
     open: (target, path) => ipcRenderer.invoke(IPC.FILE_WINDOW_OPEN, { target, path }),
     info: () => ipcRenderer.invoke(IPC.FILE_WINDOW_INFO),

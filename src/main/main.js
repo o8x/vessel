@@ -43,6 +43,7 @@ const { registerShortcutIpc } = require('./ipc/shortcut-ipc');
 const { registerSftpIpc } = require('./ipc/sftp-ipc');
 const { registerFileWindowIpc } = require('./ipc/file-window-ipc');
 const { registerFileEditorIpc } = require('./ipc/file-editor-ipc');
+const { registerTransferIpc } = require('./ipc/transfer-ipc');
 const { registerGameIpc } = require('./ipc/game-ipc');
 const { registerUpdateIpc } = require('./ipc/update-ipc');
 const { registerBackupIpc } = require('./ipc/backup-ipc');
@@ -139,6 +140,7 @@ function onReady() {
   registerSftpIpc(ipcMain);
   registerFileWindowIpc(ipcMain);
   registerFileEditorIpc(ipcMain);
+  registerTransferIpc(ipcMain);
   registerGameIpc(ipcMain);
   registerUpdateIpc(ipcMain);
   gameService.registerGameProtocol();

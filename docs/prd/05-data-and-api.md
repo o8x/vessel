@@ -17,6 +17,7 @@
 | `terminal-window.json` | 同上目录 | `{ display: { id, scaleFactor, bounds: { x, y, width, height } }, bounds: { x, y, width, height } }`（悬浮终端窗口最近一次的所在屏幕 + 位置 + 尺寸） | 持久；打开 / 拖动 / 缩放 / 关闭时写入（含「实际生效」的几何，恢复时被夹取过也记夹取后的值）；同一块屏幕再次打开即沿用，换屏 / 拔屏 / 无记录则改用默认尺寸居中 |
 | `file-window.json` | 同上目录 | 同 `terminal-window.json` 的结构（独立文件窗口的屏幕 + 位置 + 尺寸） | 持久；记忆方式与终端窗口一致 |
 | `game-window.json` | 同上目录 | 同 `terminal-window.json` 的结构（独立游戏窗口的屏幕 + 位置 + 尺寸） | 持久；记忆方式与终端窗口一致 |
+| `transfer-window.json` | 同上目录 | 同 `terminal-window.json` 的结构（文件传输窗口 / 穿梭框的屏幕 + 位置 + 尺寸） | 持久；记忆方式与终端窗口一致 |
 | `<workDir>/roms/{fc,gbc,gba,n64,sfc}/` | 游戏工作目录（未打包默认 `assets/games`，打包默认 `应用数据目录/games`；可在设置 → 游戏修改） | 用户 ROM 文件，应用只读；封面为 ROM 同目录同名 `.png/.jpg/.jpeg/.webp` | 用户文件，应用不修改 |
 | `<workDir>/bios/disksys.rom` | 同上 | 用户选择的 FDS BIOS 副本（见 `games:set-bios`） | 持久；清除配置不删除文件 |
 | `<workDir>/profiles/<gameId>/` | 同上 | `battery.srm`（电池存档）、`state.slot1`（即时存档）、`state.slot1.png`（截图）、`meta.json`（引擎 / ROM 相对路径 / 游玩时间）；每游戏独立目录 | 持久；存档写入为临时文件 + rename；旧目录 `profile/` 兼容读取 |
@@ -179,6 +180,8 @@
 | `settings:changed` | `settings` | 设置变更后广播到两个窗口 |
 | `theme:changed` | `{ shouldUseDarkColors }` | 系统主题变化 |
 | `tray:show-tool` | `toolId` | 托盘右键菜单点击某个工具：主进程显示主界面后通知渲染层切换到该工具（渲染层未启动完成时先暂存，boot 后应用） |
+| `transfer:progress` | `{ phase, name, path?, transferred, total, files?, error? }` | 传输任务的实时进度（`phase` ∈ `start` / `download` / `upload` / `done` / `error`），供传输窗口状态栏进度条使用 |
+| `transfer-window:locate` | `{ target, path }` | 传输窗口已打开时，主进程通知它把**左侧栏**定位到指定 SSH 目标与目录 |
 | `ssh:detected` | `{ alias, os, family, label, at }` | 探测完成 |
 | `clipboard:changed` | `item[]` | 剪贴板历史变化（主进程每约 1.2s 轮询系统剪贴板） |
 | `terminal:data` | `{ id, type: 'data', data }` | PTY 输出（原样文本，含 ANSI），只发给拥有该会话的窗口 |
@@ -192,6 +195,10 @@
 | `terminal:drag-active` | — | 主进程检测到终端窗口开始被拖动（`will-resize`）：渲染层据此在拖动期间不发对齐请求 |
 | `terminal:zoom` | `'in' \| 'out' \| 'reset'` | 焦点在终端窗口时 `Cmd +/-/0` 的字号缩放（见 §5.3）；独立文件窗口不支持缩放 |
 | `sftp:progress` | `{ id, direction: 'upload' \| 'download', name, transferred, total }` | SFTP 上传 / 下载进度，只发给发起该操作、拥有该会话的窗口（渲染层在状态栏显示进度条） |
+| `transfer-window:open` | `{ target?, path? }` | `{ ok }` | 打开 / 聚焦文件传输窗口（穿梭框）；`target` = **左侧栏**的 SSH 目标，`path` = 左侧栏初始目录（文件管理器右键「文件传输」时传入当前连接与目录）；窗口已打开时改为向其下发 `transfer-window:locate` 定位 |
+| `transfer-window:info` | — | `{ ok, target, path, settings }` | 传输窗口读取自身的初始连接 / 目录与当前设置（仅传输窗口可调用） |
+| `transfer-window:close` | — | `{ ok }` | 关闭传输窗口（仅传输窗口可调用） |
+| `transfer:run` | `{ fromId, toId, path, destDir, type? }` | `{ ok, transferred?, total?, files?, error? }` | 执行一次**远端 → 远端**传输（文件或目录，目录递归复制）；源端 / 目标端为两端 SFTP 会话 id；**同一时刻只允许一个任务**，并发请求返回 `error: 'busy'`；进度经 `transfer:progress` 实时回传 |
 | `file-window:target` | `{ target, path }` | 独立文件窗口已打开时，`file-window:open` 带目标再次调用 → 请它切换连接并进入 `path` |
 | `games:load` | `{ game }` | 复用游戏窗口时切换游戏；渲染层先 flush 旧游戏再重新加载 |
 | `games:prepare-close` | — | 请求游戏窗口暂停、flush 电池存档后调用 `games:close-now` |

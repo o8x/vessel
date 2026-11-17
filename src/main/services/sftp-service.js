@@ -352,6 +352,88 @@ function listDir(id, dir) {
   });
 }
 
+/* 远端路径属性（类型 / 体积）：文件传输窗口判定「文件还是目录」时使用。 */
+function stat(id, remotePath) {
+  const entry = get(id);
+  if (!entry) return Promise.resolve({ ok: false, error: 'not-connected', code: 'not-connected' });
+  const target = String(remotePath || '');
+  if (!target) return Promise.resolve({ ok: false, error: 'no-path' });
+  return new Promise((resolve) => {
+    entry.sftp.stat(target, (err, attrs) => {
+      if (err) {
+        resolve({ ok: false, error: err.message, code: 'stat' });
+        return;
+      }
+      resolve({
+        ok: true,
+        path: target,
+        name: path.posix.basename(target),
+        type: entryType(attrs),
+        size: Number(attrs && attrs.size) || 0,
+      });
+    });
+  });
+}
+
+/* 递归创建远端目录（已存在则忽略）：文件传输传目录时按层级建目录。 */
+function mkdir(id, remotePath) {
+  const entry = get(id);
+  if (!entry) return Promise.resolve({ ok: false, error: 'not-connected' });
+  const target = String(remotePath || '');
+  if (!target || target === '/') return Promise.resolve({ ok: true, path: '/' });
+  const parts = target.split('/').filter(Boolean);
+  let current = '';
+  const steps = parts.map((part) => {
+    current = `${current}/${part}`;
+    return current;
+  });
+  return steps.reduce(
+    (promise, step) =>
+      promise.then((prev) =>
+        new Promise((resolve) => {
+          entry.sftp.mkdir(step, (err) => {
+            if (!err) {
+              resolve({ ok: true, path: step });
+              return;
+            }
+            // 已存在时 stat 一下确认（mkdir 对已存在目录会报错）。
+            entry.sftp.stat(step, (statErr, attrs) => {
+              if (!statErr && attrs) {
+                resolve({ ok: true, path: step, existed: true });
+                return;
+              }
+              resolve({ ok: false, error: err.message, code: 'mkdir' });
+            });
+          });
+        })
+      ),
+    Promise.resolve({ ok: true, path: '/' })
+  );
+}
+
+/* 下载到指定本地路径（文件传输用：先落到临时目录，再上传到目标主机）。 */
+function downloadTo(id, remotePath, localPath, onProgress) {
+  const entry = get(id);
+  if (!entry) return Promise.resolve({ ok: false, error: 'not-connected' });
+  const target = String(remotePath || '');
+  if (!target) return Promise.resolve({ ok: false, error: 'no-path' });
+  const name = path.posix.basename(target);
+  const options = {};
+  if (typeof onProgress === 'function') {
+    options.step = (transferred, _chunk, total) => onProgress({ direction: 'download', name, transferred, total });
+  }
+  return new Promise((resolve) => {
+    entry.sftp.fastGet(target, localPath, options, (err) => {
+      if (err) {
+        logger.error(`[sftp] download failed (${target} -> ${localPath}): ${err.message}`);
+        resolve({ ok: false, error: err.message });
+        return;
+      }
+      resolve({ ok: true, path: localPath, name });
+    });
+  });
+}
+
 function uniqueLocalPath(baseDir, name) {
   let candidate = path.join(baseDir, name);
   if (!fs.existsSync(candidate)) return candidate;
@@ -562,7 +644,10 @@ function writeText(id, remotePath, content) {
 module.exports = {
   connect,
   listDir,
+  stat,
+  mkdir,
   download,
+  downloadTo,
   upload,
   transferCommand,
   saveLocalText,

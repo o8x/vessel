@@ -21,6 +21,8 @@ const MAIN_WINDOW_FILE = path.join(DATA_DIR, 'main-window.json');
 const TERMINAL_WINDOW_FILE = path.join(DATA_DIR, 'terminal-window.json');
 const FILE_WINDOW_FILE = path.join(DATA_DIR, 'file-window.json');
 const GAME_WINDOW_FILE = path.join(DATA_DIR, 'game-window.json');
+// 文件传输窗口（穿梭框）的屏幕 / 位置 / 尺寸记忆。
+const TRANSFER_WINDOW_FILE = path.join(DATA_DIR, 'transfer-window.json');
 const FILE_LAYOUT_FILE = path.join(DATA_DIR, 'file-layout.json');
 const FILE_WINDOW_LAYOUT_FILE = path.join(DATA_DIR, 'file-window-layout.json');
 // 文件面板按 ssh 目标（用户名@主机）记录最近 cd 到的目录（见 cd-history-service）。
@@ -60,6 +62,7 @@ const DATA_FILES = [
   TERMINAL_WINDOW_FILE,
   FILE_WINDOW_FILE,
   GAME_WINDOW_FILE,
+  TRANSFER_WINDOW_FILE,
   FILE_LAYOUT_FILE,
   FILE_WINDOW_LAYOUT_FILE,
   CD_HISTORY_FILE,
@@ -83,6 +86,7 @@ module.exports = {
   TERMINAL_WINDOW_FILE,
   FILE_WINDOW_FILE,
   GAME_WINDOW_FILE,
+  TRANSFER_WINDOW_FILE,
   FILE_LAYOUT_FILE,
   FILE_WINDOW_LAYOUT_FILE,
   CD_HISTORY_FILE,
