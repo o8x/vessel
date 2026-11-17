@@ -1383,9 +1383,17 @@ body.file-window .fm-status {
 
 /* 顶部 SSH 连接表单：主机下拉 + 用户名 / 地址 / 端口 + 密码 / 密钥 + 连接按钮平铺一行。 */
 #file-toolbar {
-  /* 与第二行路径行（`.fm-path-row`）同高 32px，上下不留内边距。 */
+  /* 与第二行路径行（`.fm-path-row`）同高 32px，上下不留内边距。
+     模态式标题栏（hiddenInset）：左侧留白避开系统红绿灯，整行为拖动区。 */
   padding-top: 0;
   padding-bottom: 0;
+  padding-left: 74px;
+  -webkit-app-region: drag;
+}
+#file-toolbar button,
+#file-toolbar input,
+#file-toolbar .select-trigger {
+  -webkit-app-region: no-drag;
 }
 /* 第一行（连接栏 / 传输栏头）与第二行（路径行）严格一致：行高 32px，
    行内所有控件（输入框 / 下拉触发器 / 按钮）一律 22px。 */
@@ -2975,10 +2983,16 @@ body.editor-window {
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
+  /* 模态式标题栏（hiddenInset）：左侧留白避开系统红绿灯，整行为拖动区。 */
+  padding: 5px 8px 5px 74px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
   overflow-x: auto;
+  -webkit-app-region: drag;
+}
+.editor-toolbar button,
+.editor-toolbar input {
+  -webkit-app-region: no-drag;
 }
 .editor-btn {
   flex: 0 0 auto;
@@ -3153,6 +3167,16 @@ body.editor-window {
 }
 .transfer-ssh-select {
   width: 100%;
+}
+/* 左栏第一行是窗口最顶部：模态式标题栏（hiddenInset）的红绿灯落在这里，
+   左侧留白避让、整行为拖动区（行内按钮不拦截）。 */
+body.file-window #transfer-pane-left .transfer-pane-head {
+  padding-left: 74px;
+  -webkit-app-region: drag;
+}
+body.file-window .transfer-pane-head button,
+body.file-window .transfer-pane-head input {
+  -webkit-app-region: no-drag;
 }
 /* 树里的「当前目录」行：加粗 + 强调色（传输的目标目录）。 */
 .fm-tree-row.current {

@@ -1551,7 +1551,9 @@ function openFileWindow(target, pathArg) {
     minWidth: FILE_WINDOW.minWidth,
     minHeight: FILE_WINDOW.minHeight,
     title: 'Vessel Files',
-    titleBarStyle: 'default',
+    // 模态式标题栏（hiddenInset）：不占独立标题栏高度，系统红绿灯落在第一行（32px）内。
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 14, y: 10 },
     backgroundColor: themeBackgroundColor(),
     show: false,
     resizable: true,
@@ -1711,7 +1713,9 @@ function openTransferWindow(target, pathArg) {
     maxWidth: TRANSFER_WINDOW.maxWidth,
     maxHeight: TRANSFER_WINDOW.maxHeight,
     title: 'Vessel Transfer',
-    titleBarStyle: 'default',
+    // 模态式标题栏（hiddenInset）：红绿灯落在左栏第一行（32px）内。
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 14, y: 10 },
     backgroundColor: themeBackgroundColor(),
     show: false,
     resizable: true,
@@ -1811,7 +1815,9 @@ function openFileEditorWindow(ownerSender, payload) {
     minWidth: FILE_EDITOR_WINDOW.minWidth,
     minHeight: FILE_EDITOR_WINDOW.minHeight,
     title: 'Vessel Editor',
-    titleBarStyle: 'default',
+    // 模态式标题栏（hiddenInset）：红绿灯落在工具栏行内。
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 14, y: 13 },
     backgroundColor: themeBackgroundColor(),
     show: false,
     resizable: true,
