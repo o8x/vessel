@@ -1184,11 +1184,12 @@ body.term-window:not(.file-window) .select-menu .select-group-title {
   font-size: max(10px, calc(var(--term-header-font-size) - 2px));
 }
 
-/* 文件管理 / 文件传输窗口的 SSH 下拉：触发器行高 32px；菜单条目与右键菜单（`.fm-menu-item`）
-   规格一致 —— 高 25px、上下各 1px 边距、左右 10px 内边距、圆角 5px、12px 字号。
+/* 文件管理 / 文件传输窗口的 SSH 下拉：触发器高 26px（与同一行的连接表单输入框
+   `.file-conn-input` 等高）；菜单条目与右键菜单（`.fm-menu-item`）规格一致 ——
+   高 25px、上下各 1px 边距、左右 10px 内边距、圆角 5px、12px 字号。
    分组标题行高沿用基础样式不变。 */
 body.file-window .select-trigger {
-  height: 32px;
+  height: 26px;
   font-size: 13px;
 }
 body.file-window .select-menu {
