@@ -1379,9 +1379,9 @@ body.file-window .fm-status {
 
 /* 顶部 SSH 连接表单：主机下拉 + 用户名 / 地址 / 端口 + 密码 / 密钥 + 连接按钮平铺一行。 */
 #file-toolbar {
-  /* SSH 下拉高 32px（见下方 file-window 下拉规则）：顶栏 40px = 32px 控件 + 上下各 4px 内边距。 */
-  padding-top: 4px;
-  padding-bottom: 4px;
+  /* 与第二行路径行（`.fm-path-row`，文件窗口内 32px）同高：SSH 下拉同为 32px，上下不留内边距。 */
+  padding-top: 0;
+  padding-bottom: 0;
 }
 .file-conn-form {
   display: flex;
@@ -3116,7 +3116,8 @@ body.editor-window {
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
-  height: 40px;
+  /* 与第二行路径行（`.fm-path-row`，32px）同高。 */
+  height: 32px;
   padding: 0 8px;
   border-bottom: 1px solid var(--color-border);
 }
