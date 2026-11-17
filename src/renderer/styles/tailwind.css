@@ -1184,12 +1184,12 @@ body.term-window:not(.file-window) .select-menu .select-group-title {
   font-size: max(10px, calc(var(--term-header-font-size) - 2px));
 }
 
-/* 文件管理 / 文件传输窗口的 SSH 下拉：触发器高 26px（与同一行的连接表单输入框
-   `.file-conn-input` 等高）；菜单条目与右键菜单（`.fm-menu-item`）规格一致 ——
+/* 文件管理 / 文件传输窗口的 SSH 下拉：触发器高 22px（`--fm-control-height`，
+   与该行其它输入框 / 按钮严格等高）；菜单条目与右键菜单（`.fm-menu-item`）规格一致 ——
    高 25px、上下各 1px 边距、左右 10px 内边距、圆角 5px、12px 字号。
    分组标题行高沿用基础样式不变。 */
 body.file-window .select-trigger {
-  height: 26px;
+  height: var(--fm-control-height);
   font-size: 13px;
 }
 body.file-window .select-menu {
@@ -1371,6 +1371,9 @@ body.file-window {
   --file-font-size: 14px;
   --term-header-font-size: 15px;
   --term-header-height: 32px;
+  /* 文件管理 / 文件传输窗口的严格尺寸：行高 32px，行内控件（输入框 / 下拉 / 按钮）高 22px。 */
+  --fm-row-height: 32px;
+  --fm-control-height: 22px;
   background: var(--file-window-bg);
 }
 body.file-window .fm-root,
@@ -1380,9 +1383,31 @@ body.file-window .fm-status {
 
 /* 顶部 SSH 连接表单：主机下拉 + 用户名 / 地址 / 端口 + 密码 / 密钥 + 连接按钮平铺一行。 */
 #file-toolbar {
-  /* 与第二行路径行（`.fm-path-row`，文件窗口内 32px）同高：SSH 下拉同为 32px，上下不留内边距。 */
+  /* 与第二行路径行（`.fm-path-row`）同高 32px，上下不留内边距。 */
   padding-top: 0;
   padding-bottom: 0;
+}
+/* 第一行（连接栏 / 传输栏头）与第二行（路径行）严格一致：行高 32px，
+   行内所有控件（输入框 / 下拉触发器 / 按钮）一律 22px。 */
+body.file-window #file-toolbar,
+body.file-window .fm-path-row {
+  height: var(--fm-row-height);
+}
+body.file-window .file-conn-input,
+body.file-window .file-conn-btn,
+body.file-window .file-conn-icon,
+body.file-window .file-conn-auth,
+body.file-window .file-conn-select,
+body.file-window .fm-path-input,
+body.file-window .transfer-sync {
+  height: var(--fm-control-height);
+}
+body.file-window .fm-path-btn {
+  width: var(--fm-control-height);
+  height: var(--fm-control-height);
+}
+body.file-window .file-conn-form .file-conn-auth button {
+  line-height: calc(var(--fm-control-height) - 2px);
 }
 .file-conn-form {
   display: flex;
