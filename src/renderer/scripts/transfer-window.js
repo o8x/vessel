@@ -26,7 +26,10 @@
         left: '左侧',
         right: '右侧',
         sync: '同步',
-        syncTip: '勾选后立即把两边定位到同一目录；之后双击进入目录时另一侧同步跟随',
+        syncTip: '勾选后立即把两边定位到同一目录；之后单击进入目录时另一侧同步跟随',
+        syncOn: '已开启同步：进入目录时另一侧跟随',
+        syncOff: '已关闭同步',
+        syncNeedBoth: '请先连接两侧主机，再开启同步',
         toRight: '传输到右侧',
         toLeft: '传输到左侧',
         name: '文件名',
@@ -74,7 +77,10 @@
         left: 'Left',
         right: 'Right',
         sync: 'Sync',
-        syncTip: 'When enabled both sides jump to the same folder right away; later, entering a folder on one side moves the other one too',
+        syncTip: 'When enabled both sides jump to the same folder right away; entering a folder on one side then moves the other one too',
+        syncOn: 'Sync on: the other side follows when you enter a folder',
+        syncOff: 'Sync turned off',
+        syncNeedBoth: 'Connect both sides before enabling sync',
         toRight: 'Transfer to right',
         toLeft: 'Transfer to left',
         name: 'Name',
@@ -300,6 +306,8 @@
       loading: new Map(),
       selected: null,
       picker: null,
+      // 目录行上一次单击的时间戳（用于忽略双击的第 2 次点击）。
+      lastClick: null,
     };
 
     const head = el('div', { class: 'transfer-pane-head' });
@@ -349,16 +357,23 @@
 
       row.addEventListener('click', () => {
         selectEntry({ path, name: entry.name, type: entry.type, size: entry.size });
-        // 点击目录 = 展开 / 折叠（**不触发同步**；同步只在双击「进入」时发生）。
-        if (isDir) toggleExpand(path);
-      });
-      row.addEventListener('dblclick', () => {
-        if (isDir) {
-          // 子项还在加载时**不响应双击**（避免重复进入 / 进入未加载完的目录）。
-          if (pane.loading.has(path)) return;
-          enter(path);
+        if (!isDir) return;
+        // 目录：单击即进入（展开并设为当前目录，同步开启时另一侧跟随）。
+        // 同一目录的连续点击（双击的第 2 下）忽略，避免「打开再关闭」与重复加载。
+        const now = Date.now();
+        if (pane.lastClick && pane.lastClick.path === path && now - pane.lastClick.ts < 400) {
+          pane.lastClick.ts = now;
           return;
         }
+        pane.lastClick = { path, ts: now };
+        if (pane.loading.has(path)) return;
+        enter(path);
+      });
+      // 目录**不响应双击**（进入只由单击触发，避免双击导致展开后又折叠）；
+      // 双击只对文件生效：≤ 8M 用内置编辑器打开，其余下载到本地。
+      row.addEventListener('dblclick', (event) => {
+        event.preventDefault();
+        if (isDir) return;
         openEntry(pane, { path, name: entry.name, type: entry.type, size: entry.size });
       });
       row.addEventListener('contextmenu', (event) => {
@@ -564,8 +579,14 @@
       syncBtn.addEventListener('click', async () => {
         state.sync = !state.sync;
         syncBtn.classList.toggle('on', state.sync);
-        // 勾选后立即把两边定位到同一目录。
-        if (state.sync) await syncNow();
+        if (!state.sync) {
+          setStatus(i18n.t('transferWin.syncOff'), false);
+          return;
+        }
+        // 勾选后立即把两边定位到同一目录；两侧都未连接时给出明确反馈。
+        const aligned = await syncNow();
+        if (aligned) setStatus(i18n.t('transferWin.syncOn'), false);
+        else setStatus(i18n.t('transferWin.syncNeedBoth'), true);
       });
       pane.syncBtn = syncBtn;
       head.appendChild(syncBtn);
@@ -698,19 +719,22 @@
     });
   }
 
-  /* 勾选同步：立即把两边定位到同一目录。 */
+  /* 勾选同步：立即把两边定位到同一目录。
+     返回是否「两侧都已连接」（false 表示当前无法同步，调用方据此提示）。 */
   async function syncNow() {
     const left = state.panes.left;
     const right = state.panes.right;
-    const path = left && left.connected && left.cwd ? left.cwd : right && right.connected ? right.cwd : '';
-    if (!path) return;
+    if (!left || !right || !left.connected || !right.connected) return false;
+    const path = left.cwd || right.cwd;
+    if (!path) return false;
     syncing = true;
     try {
-      if (left && left.connected) await left.enter(path);
-      if (right && right.connected) await right.enter(path);
+      await left.enter(path);
+      await right.enter(path);
     } finally {
       syncing = false;
     }
+    return true;
   }
 
   /* 穿梭：把 source 栏选中的对象传到 dest 栏的当前目录。 */

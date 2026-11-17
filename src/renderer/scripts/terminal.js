@@ -2263,6 +2263,11 @@
         run: openTerminalWithNewBall,
       },
       {
+        label: i18n.t('terminalWin.menuConnect'),
+        icon: 'server',
+        submenu: sshMenuItems(),
+      },
+      {
         label: i18n.t('terminalWin.menuSplit'),
         icon: 'split',
         submenu: [
@@ -2328,11 +2333,6 @@
         label: i18n.t('terminalWin.menuQuickConnect'),
         icon: 'plug',
         run: openQuickConnect,
-      },
-      {
-        label: i18n.t('terminalWin.menuConnect'),
-        icon: 'server',
-        submenu: sshMenuItems(),
       },
       {
         label: i18n.t('terminalWin.menuFiles'),

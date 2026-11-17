@@ -338,6 +338,10 @@ const TRAY_CLICK_ACTIONS = {
   WINDOW: 'window',
 };
 
+// 托盘右键菜单**不展示**的工具（游戏 / 营养成分 / 剪贴板）：这些工具仍留在主界面 TAB 里，
+// 只是不在托盘菜单里重复出现。
+const TRAY_HIDDEN_TOOL_IDS = ['games', 'nutrient', 'clipboard'];
+
 // 拖动窗口时，窗口中心与屏幕（工作区）**垂直中线**（x 方向）对齐的「磁性吸附」（px，滞回）：
 // 进入吸附的阈值 / 脱离吸附的释放阈值。用于终端窗口与主窗口；
 // 只比较 x，不要求上下也居中。
@@ -459,6 +463,7 @@ module.exports = {
   SHORTCUT_DOUBLE_TAP_MS,
   SSH_QUICK_CONNECT_GROUP,
   TRAY_CLICK_ACTIONS,
+  TRAY_HIDDEN_TOOL_IDS,
   CENTER_SNAP,
   SPACE_CONFIRM_DELAY_MS,
   SSH_EXIT_MARKER,

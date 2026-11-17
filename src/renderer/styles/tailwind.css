@@ -1145,12 +1145,13 @@ body.term-window {
   /* SSH 下拉 / 条目字号：头栏字号 - 2px（默认 14 → 12）。 */
   --term-dropdown-font-size: calc(var(--term-header-font-size) - 2px);
 }
-body.term-window .select-menu {
+body.term-window:not(.file-window) .select-menu {
   width: 120px;
   padding: 3px;
   border-radius: var(--radius-card);
 }
-body.term-window .select-menu .select-option {
+/* 终端头栏的 SSH 下拉走「紧凑」规格；文件管理 / 文件传输窗口用自己的规格（见下方 file-window 规则）。 */
+body.term-window:not(.file-window) .select-menu .select-option {
   width: 100%;
   height: max(22px, calc(var(--term-header-font-size) + 8px));
   margin: 0;
@@ -1162,10 +1163,10 @@ body.term-window .select-menu .select-option .select-option-label {
   min-width: 0;
 }
 /* 条目之间留 3px（与四周留白一致）。 */
-body.term-window .select-menu .select-option + .select-option {
+body.term-window:not(.file-window) .select-menu .select-option + .select-option {
   margin-top: 3px;
 }
-body.term-window .select-menu .select-option svg {
+body.term-window:not(.file-window) .select-menu .select-option svg {
   width: var(--term-dropdown-font-size);
   height: var(--term-dropdown-font-size);
 }
@@ -1178,9 +1179,39 @@ body.term-window:not(.file-window) .select-menu .select-option svg {
   height: var(--term-dropdown-font-size);
 }
 /* 终端窗口头栏 SSH 下拉里的分组小标题：更紧凑。 */
-body.term-window .select-menu .select-group-title {
+body.term-window:not(.file-window) .select-menu .select-group-title {
   padding: 3px 8px 1px;
   font-size: max(10px, calc(var(--term-header-font-size) - 2px));
+}
+
+/* 文件管理 / 文件传输窗口的 SSH 下拉：触发器行高 40px，可点击条目行高 35px
+   （上下各 1px 内边距），分组标题行高沿用基础样式不变。 */
+body.file-window .select-trigger {
+  height: 40px;
+  font-size: 13px;
+}
+body.file-window .select-menu {
+  padding: 4px;
+  border-radius: var(--radius-control);
+}
+body.file-window .select-menu .select-option {
+  width: 100%;
+  height: 35px;
+  margin: 0;
+  padding: 1px 8px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+}
+body.file-window .select-menu .select-option + .select-option {
+  margin-top: 0;
+}
+body.file-window .select-menu .select-option svg {
+  width: 14px;
+  height: 14px;
+}
+body.file-window .select-menu .select-group-title {
+  padding: 3px 8px 1px;
+  font-size: 13px;
 }
 
 .xterm .xterm-viewport,
@@ -1350,8 +1381,9 @@ body.file-window .fm-status {
 
 /* 顶部 SSH 连接表单：主机下拉 + 用户名 / 地址 / 端口 + 密码 / 密钥 + 连接按钮平铺一行。 */
 #file-toolbar {
-  padding-top: 5px;
-  padding-bottom: 5px;
+  /* SSH 下拉的行高为 40px（见下方 file-window 下拉规则），顶栏不再留上下内边距以免溢出。 */
+  padding-top: 0;
+  padding-bottom: 0;
 }
 .file-conn-form {
   display: flex;

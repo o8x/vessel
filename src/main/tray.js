@@ -2,7 +2,7 @@
 
 const path = require('path');
 const { Tray, Menu, nativeImage, app } = require('electron');
-const { APP_NAME, TRAY_CLICK_ACTIONS } = require('../shared/constants');
+const { APP_NAME, TRAY_CLICK_ACTIONS, TRAY_HIDDEN_TOOL_IDS } = require('../shared/constants');
 const settings = require('./services/settings-service');
 const logger = require('./utils/logger');
 
@@ -14,8 +14,10 @@ let toolItems = [];
 
 function setTools(list) {
   if (!Array.isArray(list)) return;
+  const hidden = new Set(TRAY_HIDDEN_TOOL_IDS || []);
   toolItems = list
     .filter((item) => item && item.id && typeof item.label === 'string' && item.label)
+    .filter((item) => !hidden.has(String(item.id)))
     .map((item) => ({ id: String(item.id), label: String(item.label) }));
   logger.file(`[tray] tools updated: ${toolItems.map((t) => t.id).join(',') || '(none)'}`);
 }
@@ -117,16 +119,19 @@ function openTool(id) {
 function buildMenuTemplate() {
   const wm = require('./window-manager');
   const template = [
-    { label: label('显示主界面', 'Show Main Window'), click: () => wm.showMainWindow() },
-    { type: 'separator' },
     { label: label('启动终端', 'Open Terminal'), click: () => wm.openTerminalWindow() },
     { label: label('连接到服务器', 'Connect to Server'), submenu: buildSshSubmenu() },
-    { type: 'separator' },
+    { label: label('远程文件管理', 'Remote File Manager'), click: () => wm.openFileWindow() },
+    { label: label('远程文件传输', 'Remote File Transfer'), click: () => wm.openTransferWindow() },
   ];
-  for (const tool of toolItems) {
-    template.push({ label: tool.label, click: () => openTool(tool.id) });
+  if (toolItems.length) {
+    template.push({ type: 'separator' });
+    for (const tool of toolItems) {
+      template.push({ label: tool.label, click: () => openTool(tool.id) });
+    }
   }
   template.push({ type: 'separator' });
+  template.push({ label: label('显示主界面', 'Show Main Window'), click: () => wm.showMainWindow() });
   template.push({ label: label(`重启 ${APP_NAME}`, `Restart ${APP_NAME}`), click: () => restartApp() });
   template.push({ label: label(`退出 ${APP_NAME}`, `Quit ${APP_NAME}`), click: () => app.quit() });
   return template;

@@ -361,6 +361,8 @@
       children: new Map(),
       // 正在加载子目录 / 导航的路径 → 计数：目录树行右侧显示旋转 loading。
       loading: new Map(),
+      // 目录树行上一次单击的时间戳（用于忽略双击的第 2 次点击，避免「打开再关闭」）。
+      lastTreeClick: null,
       progress: null,
     };
 
@@ -628,7 +630,19 @@
       row.append(caret, icon, label);
       // 正在加载该目录的子项 / 导航：名称右侧显示旋转 loading。
       if (state.loading.has(path)) row.appendChild(el('span', { class: 'fm-tree-spinner' }));
-      row.addEventListener('click', () => navigate(path));
+      row.addEventListener('click', () => {
+        // 目录树单击即导航；双击的第 2 次点击直接忽略（否则树重绘后同一次双击会重复导航，
+        // 表现为「打开后又关掉 / 跳到别的目录」）。
+        const now = Date.now();
+        if (state.lastTreeClick && state.lastTreeClick.path === path && now - state.lastTreeClick.ts < 400) {
+          state.lastTreeClick.ts = now;
+          return;
+        }
+        state.lastTreeClick = { path, ts: now };
+        navigate(path);
+      });
+      // 目录**不响应双击**：双击不再产生额外动作（只保留单击导航）。
+      row.addEventListener('dblclick', (event) => event.preventDefault());
       // 目录节点右键：进入该目录（仅内嵌面板：在当前终端 cd 过去）/ 上传 / 复制路径 / 复制传输命令。
       row.addEventListener('contextmenu', (event) => {
         event.preventDefault();
