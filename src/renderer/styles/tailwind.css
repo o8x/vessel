@@ -301,8 +301,8 @@
   flex: 0 0 auto;
   align-items: center;
   height: 28px;
-  /* 左侧留白 96px：红绿灯占约 66px，标题再空出约 30px，避免贴着红绿灯。 */
-  padding: 0 12px 0 96px;
+  /* 左侧留白 85px：红绿灯占约 66px，标题再空出约 19px，避免贴着红绿灯。 */
+  padding: 0 12px 0 85px;
   border-bottom: 1px solid var(--color-border);
   -webkit-app-region: drag;
   user-select: none;
