@@ -2,6 +2,12 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.11.0 - 2026-11-17
+
+### 新增
+
+- Download folder setting, two-stage transfer progress, and tray settings entry
+
 ## v6.10.0 - 2026-11-17
 
 ### 新增
