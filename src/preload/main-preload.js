@@ -26,6 +26,9 @@ const api = {
   openExternal: (url) => ipcRenderer.invoke(IPC.OPEN_EXTERNAL, url),
   openPath: (target) => ipcRenderer.invoke(IPC.OPEN_PATH, target),
   log: (text) => ipcRenderer.send(IPC.LOG_WRITE, text),
+  // 托盘：上报工具清单（托盘右键菜单据此列出各工具）/ 接收「加载某个工具」指令。
+  setTrayTools: (list) => ipcRenderer.send(IPC.TRAY_TOOLS_SET, list),
+  onShowTool: (cb) => on(IPC.TRAY_SHOW_TOOL, cb),
   copyImage: (dataUrl) => ipcRenderer.invoke(IPC.COPY_IMAGE, dataUrl),
   saveImage: (payload) => ipcRenderer.invoke(IPC.SAVE_IMAGE, payload),
   geoLookup: (ip) => ipcRenderer.invoke(IPC.GEO_LOOKUP, ip),

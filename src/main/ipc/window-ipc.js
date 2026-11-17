@@ -126,6 +126,11 @@ function registerWindowIpc(ipcMain) {
   });
   ipcMain.on(IPC.WINDOW_CLOSE_SETTINGS, () => closeSettingsWindow());
 
+  // 托盘右键菜单的工具清单：渲染层上报（工具 id + 当前语言下的名称），主进程缓存。
+  ipcMain.on(IPC.TRAY_TOOLS_SET, (_event, list) => {
+    require('../tray').setTools(list);
+  });
+
   ipcMain.handle(IPC.FONT_PICKER_OPEN, () => {
     openFontPickerWindow();
     return { ok: true };

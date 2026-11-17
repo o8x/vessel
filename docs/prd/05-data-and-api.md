@@ -6,7 +6,7 @@
 
 | 文件 | 位置 | 结构 | 生命周期 |
 | --- | --- | --- | --- |
-| `settings.json` | `app.getPath('userData')`（macOS：`~/Library/Application Support/vessel/settings.json`） | `{ locale, theme, accent, launchAtLogin, vibrancy, glassOpacity, developerMode, clipboardLimit, clipboardPollMs, terminalShell, terminalFontFamily, terminalFontSize, terminalWindowWidth, terminalWindowHeight, terminalAlwaysOnTop（遗留字段，恒为 `false`、启动时归一）, terminalScrollback, terminalSearchQuery（终端查找上次关键词，关闭 / 重启后回填）, terminalOpacity, mainWindowHotkey, terminalHotkey, terminalCloseAction, sshBuiltinTerminal, followSystemProxy, sftpDownloadDir, terminalBallEnabled, terminalBallDelayMs, terminalBallSize, terminalBallIcon, terminalBallDark, terminalBallTransparent, fileWindowAlwaysOnTop, gameWorkDir, gameFdsBios, gameCommonKeys, gameKeymaps, gameHotkeys, gameVolume, gameControlsHidden, logRetentionDays }` | 持久；重启保留 |
+| `settings.json` | `app.getPath('userData')`（macOS：`~/Library/Application Support/vessel/settings.json`） | `{ locale, theme, accent, launchAtLogin, vibrancy, glassOpacity, developerMode, clipboardLimit, clipboardPollMs, terminalShell, terminalFontFamily, terminalFontSize, terminalWindowWidth, terminalWindowHeight, terminalAlwaysOnTop（遗留字段，恒为 `false`、启动时归一）, terminalScrollback, terminalSearchQuery（终端查找上次关键词，关闭 / 重启后回填）, terminalOpacity, mainWindowHotkey, terminalHotkey, terminalCloseAction, sshBuiltinTerminal, followSystemProxy, sftpDownloadDir, terminalBallEnabled, terminalBallDelayMs, terminalBallSize, terminalBallIcon, terminalBallDark, terminalBallTransparent, fileWindowAlwaysOnTop, gameWorkDir, gameFdsBios, gameCommonKeys, gameKeymaps, gameHotkeys, gameVolume, gameControlsHidden, logRetentionDays, trayClickAction（`menu` = 点击托盘图标弹右键菜单（默认）/ `window` = 直接显示主界面，见 §3.2） }` | 持久；重启保留 |
 | `vessel-YYYY-MM-DD.log` | **macOS：`~/Library/Logs/Vessel/`**（Console.app 的「日志报告」会收录该目录，与 JetBrains/CLion 一致，与用户数据目录分离）；其它平台：`app.getPath('userData')` 的 `logs/` 子目录（`src/main/utils/paths.js` 的 `LOG_DIR`，按 `process.platform` 选择） | 按天追加的文本日志（启动信息、SSH 探测 / SFTP / 终端 / 文件管理等）；启动时把数据文件清单也写进去 | 持久；**惰性清理**：每天首次写日志时删除保留期之前的日志文件（保留天数取设置 `logRetentionDays`，默认 **7 天**，来自 `package.json` 的 `vessel.logRetentionDays`） |
 | `ssh-detected.json` | 同上目录 | `{ [alias]: { os, family, label, at } }` | 持久；缓存探测结果 |
 | `ssh-credentials.json` | 同上目录 | `{ entries: { [别名]: { iv, tag, data } } }`（**AES-256-GCM 密文**，全 base64） | 持久；在设置里保存 / 清除 SSH 密码时更新。密钥随机生成、存 `ssh-credentials.key`（0600）；密码明文不落盘，连接时主进程解密后交给内置终端自动输入（见 §3.4） |
@@ -168,6 +168,7 @@
 | `window:hide` | 隐藏主面板 |
 | `window:open-settings` | 隐藏主面板并打开设置窗口；可选参数 `section`（如 `games`）指定初始分区，窗口已打开时直接切换 |
 | `window:close-settings` | 关闭设置窗口 |
+| `tray:tools-set` | 渲染层上报**托盘右键菜单的工具清单**：`[{ id, label }]`（顺序与主界面 TAB 一致，`label` 为当前语言下的工具名）；主进程缓存后据此生成菜单条目，切换语言后重新上报 |
 | `font-picker:close` | 关闭当前字体选择子窗口（仅关闭发起请求的窗口） |
 | `terminal:ball-drag` | 悬浮球拖动（见 §3.8-12）：`{ phase: 'start', x, y }` 开始（主进程记下光标相对窗口的偏移后按光标移动窗口）／ `{ phase: 'end' }` 结束 |
 
@@ -177,6 +178,7 @@
 | --- | --- | --- |
 | `settings:changed` | `settings` | 设置变更后广播到两个窗口 |
 | `theme:changed` | `{ shouldUseDarkColors }` | 系统主题变化 |
+| `tray:show-tool` | `toolId` | 托盘右键菜单点击某个工具：主进程显示主界面后通知渲染层切换到该工具（渲染层未启动完成时先暂存，boot 后应用） |
 | `ssh:detected` | `{ alias, os, family, label, at }` | 探测完成 |
 | `clipboard:changed` | `item[]` | 剪贴板历史变化（主进程每约 1.2s 轮询系统剪贴板） |
 | `terminal:data` | `{ id, type: 'data', data }` | PTY 输出（原样文本，含 ANSI），只发给拥有该会话的窗口 |

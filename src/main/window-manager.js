@@ -1084,6 +1084,25 @@ function showMainWindow() {
   }, 60);
 }
 
+/* 显示主界面并加载指定工具（托盘右键菜单点击某个工具时使用）。
+   窗口尚未加载完成时，等 did-finish-load 再投递，避免渲染层还没注册监听就丢失。 */
+function showMainWindowWithTool(toolId) {
+  const id = String(toolId || '').trim();
+  if (!id) {
+    showMainWindow();
+    return false;
+  }
+  showMainWindow();
+  const win = getMainWindow();
+  if (!win) return false;
+  const send = () => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.TRAY_SHOW_TOOL, id);
+  };
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send);
+  else send();
+  return true;
+}
+
 // Toggle the native frosted glass. `vibrancy` / `roundedCorners` are
 // creation-time only (and must match so the material is clipped correctly),
 // so rebuild the window — it is hidden while the settings window is open.
@@ -2193,6 +2212,7 @@ module.exports = {
   createMainWindow,
   getMainWindow,
   showMainWindow,
+  showMainWindowWithTool,
   hideMainWindow,
   toggleMainWindow,
   forgetMainWindowGeometry,

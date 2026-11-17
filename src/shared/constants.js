@@ -55,6 +55,10 @@ const IPC = {
   SAVE_IMAGE: 'app:save-image',
   THEME_CHANGED: 'theme:changed',
 
+  // 托盘：渲染层上报工具清单（托盘右键菜单按此列出各工具），主进程回传「加载某个工具」。
+  TRAY_TOOLS_SET: 'tray:tools-set',
+  TRAY_SHOW_TOOL: 'tray:show-tool',
+
   GEO_LOOKUP: 'geo:lookup',
   LOCAL_ADDRESS: 'app:local-address',
   DEVTOOLS_OPEN: 'devtools:open',
@@ -307,6 +311,12 @@ const SHORTCUT_DOUBLE_TAP_MS = 260;
 // SSH「快速连接」写入 ~/.ssh/config 的分组名（该分组始终排在分组列表最前面）。
 const SSH_QUICK_CONNECT_GROUP = '快速连接';
 
+// 点击托盘图标的默认行为：'menu' = 弹出右键菜单（默认），'window' = 显示主界面。
+const TRAY_CLICK_ACTIONS = {
+  MENU: 'menu',
+  WINDOW: 'window',
+};
+
 // 拖动窗口时，窗口中心与屏幕（工作区）**垂直中线**（x 方向）对齐的「磁性吸附」（px，滞回）：
 // 进入吸附的阈值 / 脱离吸附的释放阈值。用于终端窗口与主窗口；
 // 只比较 x，不要求上下也居中。
@@ -403,6 +413,8 @@ const DEFAULT_SETTINGS = {
   // 日志：日志文件保留天数（macOS 下日志写到 ~/Library/Logs/Vessel，Console.app 的
   //「日志报告」会直接收录，无需再做统一日志同步）。
   logRetentionDays: LOG_RETENTION_DAYS,
+  // 点击托盘图标的行为：'menu' 弹出右键菜单（默认）/ 'window' 显示主界面。
+  trayClickAction: TRAY_CLICK_ACTIONS.MENU,
 };
 
 module.exports = {
@@ -424,6 +436,7 @@ module.exports = {
   UPDATE_CHANGELOG_TIMEOUT_MS,
   SHORTCUT_DOUBLE_TAP_MS,
   SSH_QUICK_CONNECT_GROUP,
+  TRAY_CLICK_ACTIONS,
   CENTER_SNAP,
   SPACE_CONFIRM_DELAY_MS,
   SSH_EXIT_MARKER,

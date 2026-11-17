@@ -25,6 +25,8 @@
     platform: null,
     activeId: null,
     cleanup: null,
+    booted: false,
+    pendingTool: null,
   };
 
   function emptyState(message) {
@@ -152,6 +154,22 @@
     mountTool(id);
   }
 
+  /* 托盘右键菜单点击某个工具：主进程显示主界面并要求加载该工具。
+     消息可能在启动流程完成前到达，先暂存，boot 结束后再应用。 */
+  function selectTool(id) {
+    const toolId = String(id || '');
+    if (!toolId || !registry.get(toolId)) return;
+    if (!state.booted) {
+      state.pendingTool = toolId;
+      return;
+    }
+    setActive(toolId);
+  }
+
+  if (window.ships && typeof window.ships.onShowTool === 'function') {
+    window.ships.onShowTool(selectTool);
+  }
+
   function orderedTools() {
     const all = registry.all();
     const order = window.ShipsToolOrder;
@@ -176,6 +194,16 @@
       btn.addEventListener('click', () => setActive(tool.id));
       dom.tablist.appendChild(btn);
     }
+  }
+
+  /* 托盘右键菜单需要列出各工具：把（id + 当前语言名称）上报给主进程。 */
+  function reportTrayTools() {
+    if (!window.ships || typeof window.ships.setTrayTools !== 'function') return;
+    const tools = orderedTools().map((tool) => ({
+      id: tool.id,
+      label: i18n.t(`tools.${tool.id}`) || tool.id,
+    }));
+    window.ships.setTrayTools(tools);
   }
 
   function renderBrand() {
@@ -258,9 +286,15 @@
     renderTabs();
     renderFooter();
     renderBrand();
+    reportTrayTools();
 
     const tools = orderedTools();
-    if (tools.length) setActive(tools[0].id);
+    state.booted = true;
+    if (state.pendingTool) {
+      const pending = state.pendingTool;
+      state.pendingTool = null;
+      selectTool(pending);
+    } else if (tools.length) setActive(tools[0].id);
     else dom.content.innerHTML = emptyState(i18n.t('emptyTools'));
 
     dom.settings.addEventListener('click', () => window.ships.openSettings());
@@ -277,6 +311,7 @@
         renderTabs();
         renderFooter();
         renderBrand();
+        reportTrayTools();
         mountTool(state.activeId);
       }
     });

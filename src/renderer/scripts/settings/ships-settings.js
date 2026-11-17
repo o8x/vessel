@@ -33,6 +33,10 @@
         clipboardPollHint: '检测系统剪贴板变化的频率',
         followSystemProxy: '遵循系统代理',
         followSystemProxyHint: '开启后终端命令、SSH / SFTP 与更新请求按 macOS 系统代理 / PAC 转发（SSH / SFTP 仅支持 SOCKS5）',
+        trayClick: '点击托盘图标',
+        trayClickHint: '点击菜单栏图标时弹出右键菜单，或直接显示主界面',
+        trayClickMenu: '显示右键菜单',
+        trayClickWindow: '显示主界面',
         dataFolder: '数据文件夹',
         clearData: '清理数据',
         clearDataHint: '清除窗口位置 / 大小、列宽与 cd 历史等非业务数据',
@@ -81,6 +85,10 @@
         followSystemProxy: 'Follow system proxy',
         followSystemProxyHint:
           'Route terminal commands, SSH / SFTP and update requests through the macOS system proxy / PAC (SSH / SFTP: SOCKS5 only)',
+        trayClick: 'Tray icon click',
+        trayClickHint: 'Pop up the context menu or show the main window when the menu bar icon is clicked',
+        trayClickMenu: 'Show context menu',
+        trayClickWindow: 'Show main window',
         dataFolder: 'Data folder',
         clearData: 'Clear data',
         clearDataHint: 'Remove window position / size, column widths and cd history (non-business data)',
@@ -260,6 +268,22 @@
     );
     generalSection.appendChild(
       row(i18n.t('settingsPage.followSystemProxy'), i18n.t('settingsPage.followSystemProxyHint'), proxySwitch.root)
+    );
+
+    // 点击托盘图标的行为：默认弹出右键菜单，可改为直接显示主界面。
+    const trayClickSegment = segmented(
+      [
+        { value: 'menu', label: i18n.t('settingsPage.trayClickMenu') },
+        { value: 'window', label: i18n.t('settingsPage.trayClickWindow') },
+      ],
+      settings.trayClickAction === 'window' ? 'window' : 'menu',
+      (value) => {
+        trayClickSegment.set(value);
+        patch({ trayClickAction: value });
+      }
+    );
+    generalSection.appendChild(
+      row(i18n.t('settingsPage.trayClick'), i18n.t('settingsPage.trayClickHint'), trayClickSegment.root)
     );
 
     const aboutSection = section(i18n.t('settingsPage.about'));

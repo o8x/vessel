@@ -151,8 +151,7 @@ function onReady() {
   require('./services/updater-service').initUpdater();
 
   const tray = createTray({
-    onLeftClick: () => wm.toggleMainWindow(),
-    onOpenSettings: () => wm.openSettingsWindow(),
+    onLeftClick: () => wm.showMainWindow(),
   });
   wm.setTray(tray);
 
