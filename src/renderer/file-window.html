@@ -12,7 +12,11 @@
   </head>
   <body class="term-window file-window bg-transparent">
     <div class="flex h-full w-full flex-col overflow-hidden" style="background: var(--file-window-bg)">
-      <!-- 原生标题栏 / 红绿灯由系统提供；左侧是平铺的 SSH 连接表单（保存主机 / 用户名 / 地址 / 端口 / 认证 / 连接） -->
+      <!-- 模态标题栏（hiddenInset）：独占一行，显示窗口标题，红绿灯在左侧 -->
+      <header class="modal-titlebar">
+        <span id="file-window-title" class="modal-titlebar-title"></span>
+      </header>
+      <!-- 左侧是平铺的 SSH 连接表单（保存主机 / 用户名 / 地址 / 端口 / 认证 / 连接） -->
       <header
         id="file-toolbar"
         class="flex shrink-0 items-center gap-2 px-3"

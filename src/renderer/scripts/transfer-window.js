@@ -183,6 +183,7 @@
   }
 
   const dom = {
+    title: document.getElementById('transfer-window-title'),
     left: document.getElementById('transfer-pane-left'),
     right: document.getElementById('transfer-pane-right'),
     divider: document.getElementById('transfer-divider'),
@@ -198,6 +199,13 @@
     transferring: false,
     panes: {},
   };
+
+  /* 模态标题栏的文字：跟随界面语言显示窗口标题，并同步浏览器窗口标题。 */
+  function renderWindowTitle() {
+    const title = i18n.t('transferWin.title');
+    if (dom.title) dom.title.textContent = title;
+    document.title = title;
+  }
 
   /* 连接目标的显示名：优先「用户名@地址」（与 SSH 列表一致），否则用别名。 */
   function targetLabel(pane) {
@@ -869,6 +877,7 @@
   async function boot() {
     const settings = await window.ships.getSettings();
     i18n.setLocale((settings && settings.locale) || 'zh');
+    renderWindowTitle();
     window.ShipsTheme.set(settings || {});
 
     state.panes.left = createPane('left', dom.left, { withSync: true });
@@ -896,6 +905,7 @@
 
     window.ships.onSettingsChanged((next) => {
       i18n.setLocale((next && next.locale) || 'zh');
+      renderWindowTitle();
       window.ShipsTheme.set(next || {});
     });
     window.ships.onThemeChanged(() => window.ShipsTheme.apply());

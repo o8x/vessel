@@ -13,6 +13,10 @@
   </head>
   <body class="editor-window">
     <div class="editor-shell">
+      <!-- 模态标题栏（hiddenInset）：独占一行，显示窗口标题（文件名 + 未保存标记），红绿灯在左侧 -->
+      <header class="modal-titlebar">
+        <span id="editor-window-title" class="modal-titlebar-title"></span>
+      </header>
       <header class="editor-toolbar">
         <button id="ed-save" class="icon-btn editor-toolbar-btn primary" type="button"></button>
         <button id="ed-save-as" class="icon-btn editor-toolbar-btn" type="button"></button>

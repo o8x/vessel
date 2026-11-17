@@ -26,6 +26,7 @@
         hidePassword: '隐藏密码',
         listFailed: '读取主机失败',
         ungrouped: '未分组',
+        windowTitle: '文件管理',
       },
     },
     en: {
@@ -44,6 +45,7 @@
         hidePassword: 'Hide password',
         listFailed: 'Cannot read hosts',
         ungrouped: 'Ungrouped',
+        windowTitle: 'File Manager',
       },
     },
   });
@@ -52,6 +54,14 @@
   // 不再跟随终端设置，也不支持 Cmd +/- 缩放（字号变量见 styles/tailwind.css 的 body.file-window）。
   const formEl = document.getElementById('file-ssh-form');
   const rootEl = document.getElementById('file-root');
+  const titleEl = document.getElementById('file-window-title');
+
+  /* 模态标题栏的文字：跟随界面语言显示窗口标题，并同步浏览器窗口标题。 */
+  function renderWindowTitle() {
+    const title = i18n.t('fileWin.windowTitle');
+    if (titleEl) titleEl.textContent = title;
+    document.title = title;
+  }
 
   let manager = null;
   let picker = null;
@@ -361,6 +371,7 @@
   async function boot() {
     const [settings, info] = await Promise.all([window.ships.getSettings(), window.ships.fileWindow.info()]);
     i18n.setLocale((settings && settings.locale) || 'zh');
+    renderWindowTitle();
     // 主题跟随全局设置（跟随系统 / 浅色 / 深色）。
     window.ShipsTheme.set(settings || {});
     setupForm();
@@ -418,6 +429,7 @@
     });
     window.ships.onSettingsChanged((next) => {
       i18n.setLocale((next && next.locale) || 'zh');
+      renderWindowTitle();
       window.ShipsTheme.set(next || {});
       refreshPicker();
     });

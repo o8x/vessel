@@ -156,6 +156,7 @@
   const EXT_LABEL = { ts: 'TypeScript', tsx: 'TSX', kt: 'Kotlin', kts: 'Kotlin', cs: 'C#' };
 
   const dom = {
+    title: document.getElementById('editor-window-title'),
     host: document.getElementById('editor-host'),
     save: document.getElementById('ed-save'),
     saveAs: document.getElementById('ed-save-as'),
@@ -285,7 +286,10 @@
     } else if (dom.pos) {
       dom.pos.textContent = '';
     }
-    document.title = `${state.dirty ? '* ' : ''}${state.name || 'Vessel Editor'} — Vessel Editor`;
+    const windowTitle = `${state.dirty ? '* ' : ''}${state.name || 'Vessel Editor'} — Vessel Editor`;
+    document.title = windowTitle;
+    // 模态标题栏与窗口标题保持一致（文件名 + 未保存标记）。
+    if (dom.title) dom.title.textContent = windowTitle;
   }
 
   function scheduleSize() {
