@@ -120,9 +120,9 @@ function buildMenuTemplate() {
   const wm = require('./window-manager');
   const template = [
     { label: label('启动终端', 'Open Terminal'), click: () => wm.openTerminalWindow() },
+    { label: label('文件管理', 'File Manager'), click: () => wm.openFileWindow() },
+    { label: label('文件传输', 'File Transfer'), click: () => wm.openTransferWindow() },
     { label: label('连接到服务器', 'Connect to Server'), submenu: buildSshSubmenu() },
-    { label: label('远程文件管理', 'Remote File Manager'), click: () => wm.openFileWindow() },
-    { label: label('远程文件传输', 'Remote File Transfer'), click: () => wm.openTransferWindow() },
   ];
   if (toolItems.length) {
     template.push({ type: 'separator' });
