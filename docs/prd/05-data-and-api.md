@@ -124,7 +124,7 @@
 | `terminal:open-iterm` | — | `{ ok, command?, error? }` | 在 iTerm 中重放最后注入的命令并关闭终端窗口 |
 | `terminal:set-top` | `{ value: boolean }` | `{ ok, alwaysOnTop: false }` | **已弃用（兼容保留）**：终端窗口不再置顶（图钉按钮只控制失焦缩成悬浮球），本通道恒返回 `alwaysOnTop: false`、**不写设置** |
 | `shortcut:set` | `{ target: 'terminal', hotkey: string }` | `{ ok, hotkey, error? }` | 设置 → 快捷键 改绑**终端**全局快捷键：先试注册（空串 = 注销），**成功才写 `settings.terminalHotkey`**；失败返回 `{ ok: false, error }`（`unavailable` = 已被占用，`invalid-target` = target 非法 / `main` 已不再支持）并保持原值 |
-| `terminal:reset` | — | `{ ok, settings }` | 设置 → 终端 →「重置」：把终端相关设置（`terminalShell`/`terminalFontSize`/`terminalScrollback`/`terminalOpacity`/`terminalWindowWidth`/`terminalWindowHeight`/`terminalAlwaysOnTop`/`terminalCloseAction`/`sshBuiltinTerminal`/`sftpDownloadDir`/`terminalBallEnabled`/`terminalBallDelayMs`/`terminalBallSize`/`terminalBallIcon`/`terminalBallDark`/`terminalBallTransparent`）恢复为 `package.json` 里的默认值，并删除 `terminal-window.json`（记住的屏幕 / 位置 / 大小）；返回重置后的完整设置 |
+| `terminal:reset` | — | `{ ok, settings }` | 设置 → 终端 →「重置」：把终端相关设置（`terminalShell`/`terminalFontSize`/`terminalScrollback`/`terminalOpacity`/`terminalWindowWidth`/`terminalWindowHeight`/`terminalAlwaysOnTop`/`terminalCloseAction`/`sshBuiltinTerminal`/`terminalBallEnabled`/`terminalBallDelayMs`/`terminalBallSize`/`terminalBallIcon`/`terminalBallDark`/`terminalBallTransparent`）恢复为 `package.json` 里的默认值，并删除 `terminal-window.json`（记住的屏幕 / 位置 / 大小）；返回重置后的完整设置 |
 | `terminal:destroy` | — | `{ ok }` | 会话结束后销毁终端窗口（渲染层在 shell `exit` 时调用）：**始终销毁，不受「关闭按钮行为=隐藏」影响**；只接受来自终端窗口本身的请求 |
 | `terminal:snap-size` | `{ width?, height? }` | `{ ok, size?, deferred? }` | 渲染层按**实测余量**请求把窗口收到「整行 / 整列」：**拖动期间只挂起**（`deferred: true`），松手后由渲染层重新测量再对齐；偏差 > 60px 视为状态异常、不做。只接受来自终端窗口本身的请求 |
 | `terminal:ensure-size` | `{ width, height }` | `{ ok, width?, height? }` | 打开内嵌文件面板时把本窗口**只放大不缩小**到至少给定内容尺寸（首次无布局记录时用，见 §3.8-10）；受屏幕工作区限制，不写回几何记忆；只接受来自终端窗口本身的请求 |
@@ -158,7 +158,7 @@
 | `totp:remove` | `id` | `{ ok }` | 删除该账号（含其加密密钥）；由卡片二次确认后调用 |
 | `totp:codes` | — | `{ [id]: code }` | 返回全部账号**当前时间片**的 TOTP 验证码（主进程用 node `crypto` 计算，密钥不外传）；渲染层每 250ms 刷新倒计时、时间片切换时调用 |
 | `dialog:open-file` | — | `{ path, name, size }` 或 `null` | 打开系统文件选择对话框 |
-| `dialog:open-dir` | `{ defaultPath? }` | `{ path }` 或 `null` | 打开系统目录选择对话框（设置 → 终端 → SFTP 下载目录） |
+| `dialog:open-dir` | `{ defaultPath? }` | `{ path }` 或 `null` | 打开系统目录选择对话框（设置 → 数据 → 文件下载目录） |
 | `dialog:open-files` | — | `{ paths: string[] }` | 多选文件对话框（文件管理「上传」按钮），返回本地绝对路径列表 |
 | `log:write` | `text`（渲染→主 send） | — | 渲染层请求写日志：主进程用 `logger.info` 把文本同时输出到**控制台与当天日志文件**（终端窗口尺寸 / 字体 / 行高度量，见 §3.8-4） |
 
@@ -180,7 +180,7 @@
 | `settings:changed` | `settings` | 设置变更后广播到两个窗口 |
 | `theme:changed` | `{ shouldUseDarkColors }` | 系统主题变化 |
 | `tray:show-tool` | `toolId` | 托盘右键菜单点击某个工具：主进程显示主界面后通知渲染层切换到该工具（渲染层未启动完成时先暂存，boot 后应用） |
-| `transfer:progress` | `{ phase, name, path?, transferred, total, files?, error? }` | 传输任务的实时进度（`phase` ∈ `start` / `download` / `upload` / `done` / `error`），供传输窗口状态栏进度条使用 |
+| `transfer:progress` | `{ phase, name, path?, transferred, total, files?, localPath?, phaseAt?, error? }` | 传输任务的实时进度（`phase` ∈ `start` / `download` / `upload` / `downloaded` / `done` / `error`；`download` / `upload` 两段分别回传 `transferred/total`，`transferred` 为**当前段**已完成的字节；`downloaded` 表示下载段结束、开始上传段；`error` 时 `phaseAt` ∈ `download` / `upload` 指明失败所在段），供传输窗口状态栏的**下载 / 上传两条进度条**使用 |
 | `transfer-window:locate` | `{ target, path }` | 传输窗口已打开时，主进程通知它把**左侧栏**定位到指定 SSH 目标与目录 |
 | `ssh:detected` | `{ alias, os, family, label, at }` | 探测完成 |
 | `clipboard:changed` | `item[]` | 剪贴板历史变化（主进程每约 1.2s 轮询系统剪贴板） |
@@ -198,7 +198,7 @@
 | `transfer-window:open` | `{ target?, path? }` | `{ ok }` | 打开 / 聚焦文件传输窗口（穿梭框）；`target` = **左侧栏**的 SSH 目标，`path` = 左侧栏初始目录（文件管理器右键「文件传输」时传入当前连接与目录）；窗口已打开时改为向其下发 `transfer-window:locate` 定位 |
 | `transfer-window:info` | — | `{ ok, target, path, settings }` | 传输窗口读取自身的初始连接 / 目录与当前设置（仅传输窗口可调用） |
 | `transfer-window:close` | — | `{ ok }` | 关闭传输窗口（仅传输窗口可调用） |
-| `transfer:run` | `{ fromId, toId, path, destDir, type? }` | `{ ok, transferred?, total?, files?, error? }` | 执行一次**远端 → 远端**传输（文件或目录，目录递归复制）；源端 / 目标端为两端 SFTP 会话 id；**同一时刻只允许一个任务**，并发请求返回 `error: 'busy'`；进度经 `transfer:progress` 实时回传 |
+| `transfer:run` | `{ fromId, toId, path, destDir, type? }` | `{ ok, transferred?, total?, files?, name?, localPath?, error? }` | 执行一次**远端 → 远端**传输（文件或目录，目录递归复制）：先把源端下载到**文件下载目录**（保留本地副本，重名加序号，`localPath` 为其路径），再从本地副本上传到目标端；源端 / 目标端为两端 SFTP 会话 id；**同一时刻只允许一个任务**，并发请求返回 `error: 'busy'`；进度经 `transfer:progress` 分「下载 / 上传」两段实时回传 |
 | `file-window:target` | `{ target, path }` | 独立文件窗口已打开时，`file-window:open` 带目标再次调用 → 请它切换连接并进入 `path` |
 | `games:load` | `{ game }` | 复用游戏窗口时切换游戏；渲染层先 flush 旧游戏再重新加载 |
 | `games:prepare-close` | — | 请求游戏窗口暂停、flush 电池存档后调用 `games:close-now` |

@@ -26,9 +26,6 @@
         scrollbackHint: '保留的历史行数，默认 10000',
         opacity: '透明度',
         opacityHint: '0% = 不透明，100% = 完全透明（实时生效）',
-        downloadDir: 'SFTP 下载目录',
-        downloadDirHint: '终端窗口文件面板下载文件的保存位置，默认 ~/Downloads（重名自动加序号）',
-        chooseDir: '选择目录',
         builtinSsh: 'SSH 使用内置终端连接',
         builtinSshHint: '开 = 在悬浮终端执行，关 = 使用 iTerm',
         closeAction: '关闭按钮行为',
@@ -78,9 +75,6 @@
         scrollbackHint: 'History lines to keep, default 10000',
         opacity: 'Transparency',
         opacityHint: '0% = opaque, 100% = fully transparent (live)',
-        downloadDir: 'SFTP download folder',
-        downloadDirHint: 'Where the terminal file panel saves downloads, default ~/Downloads (duplicates get a number)',
-        chooseDir: 'Choose folder',
         builtinSsh: 'Connect SSH in the built-in terminal',
         builtinSshHint: 'On = built-in terminal, Off = iTerm',
         closeAction: 'Close button action',
@@ -308,30 +302,6 @@
       scrollField.input.value = String(next.terminalScrollback || 10000);
     });
     wrap.appendChild(row(i18n.t('terminalSettings.scrollback'), i18n.t('terminalSettings.scrollbackHint'), scrollField.input));
-
-    /* SFTP 下载目录（终端窗口文件面板） */
-    const downloadField = field(null, {
-      class: 'field w-[210px] shrink-0 font-mono text-[12px]',
-      placeholder: '~/Downloads',
-      spellcheck: 'false',
-    });
-    downloadField.input.value = ctx.settings.sftpDownloadDir || '~/Downloads';
-    downloadField.input.addEventListener('change', () => {
-      ctx.patch({ sftpDownloadDir: downloadField.input.value.trim() || '~/Downloads' });
-    });
-    syncers.push((next) => {
-      downloadField.input.value = next.sftpDownloadDir || '~/Downloads';
-    });
-    const chooseDirBtn = el('button', { class: 'btn shrink-0 px-2 py-1.5 text-[12px]', type: 'button' }, i18n.t('terminalSettings.chooseDir'));
-    chooseDirBtn.addEventListener('click', async () => {
-      const info = await window.ships.openDirectory({ defaultPath: downloadField.input.value || '~/Downloads' });
-      if (!info) return;
-      downloadField.input.value = info.path;
-      ctx.patch({ sftpDownloadDir: info.path });
-    });
-    const downloadControls = el('div', { class: 'flex shrink-0 items-center gap-2' });
-    downloadControls.append(downloadField.input, chooseDirBtn);
-    wrap.appendChild(row(i18n.t('terminalSettings.downloadDir'), i18n.t('terminalSettings.downloadDirHint'), downloadControls));
 
     /* SSH in the built-in terminal */
     const sshSwitch = switchControl(ctx.settings.sshBuiltinTerminal !== false, (value) => ctx.patch({ sshBuiltinTerminal: value }));

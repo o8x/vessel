@@ -1,7 +1,7 @@
 'use strict';
 
 (function registerBackupSettings() {
-  const { Icons, el, section } = window.ShipsUI;
+  const { Icons, el, field, section } = window.ShipsUI;
   const i18n = window.ShipsI18n;
 
   i18n.extend({
@@ -9,6 +9,9 @@
       settingsPage: {
         data: '数据',
         dataFolder: '数据文件夹',
+        downloadDir: '文件下载目录',
+        downloadDirHint: '下载到本地、从 VS Code / Wireshark 打开、编辑器下载以及文件传输中转都保存到该目录，默认 ~/Downloads（重名自动加序号）',
+        chooseDir: '选择目录',
         clearData: '清理数据',
         clearDataHint: '清除窗口位置 / 大小、列宽与 cd 历史等非业务数据',
         clearDataAction: '清除',
@@ -32,6 +35,9 @@
       settingsPage: {
         data: 'Data',
         dataFolder: 'Data folder',
+        downloadDir: 'Download folder',
+        downloadDirHint: 'Files downloaded to local, opened from VS Code / Wireshark, saved by the editor, and staged by file transfer all go here; default ~/Downloads (duplicates get a number)',
+        chooseDir: 'Choose folder',
         clearData: 'Clear data',
         clearDataHint: 'Remove window position / size, column widths and cd history (non-business data)',
         clearDataAction: 'Clear',
@@ -75,6 +81,33 @@
     );
     folderBtn.addEventListener('click', () => window.ships.openDataFolder());
     dataSection.appendChild(row(i18n.t('settingsPage.dataFolder'), info.dataDir || '', folderBtn));
+
+    // 文件下载目录：下载到本地 / 从 VS Code / Wireshark 打开 / 编辑器下载 / 文件传输中转都落在这里。
+    const downloadField = field(null, {
+      class: 'field w-[210px] shrink-0 font-mono text-[12px]',
+      placeholder: '~/Downloads',
+      spellcheck: 'false',
+    });
+    downloadField.input.value = ctx.settings.sftpDownloadDir || '~/Downloads';
+    downloadField.input.addEventListener('change', () => {
+      ctx.patch({ sftpDownloadDir: downloadField.input.value.trim() || '~/Downloads' });
+    });
+    const chooseDirBtn = el(
+      'button',
+      { class: 'btn shrink-0 px-2 py-1.5 text-[12px]', type: 'button' },
+      i18n.t('settingsPage.chooseDir')
+    );
+    chooseDirBtn.addEventListener('click', async () => {
+      const chosen = await window.ships.openDirectory({ defaultPath: downloadField.input.value || '~/Downloads' });
+      if (!chosen) return;
+      downloadField.input.value = chosen.path;
+      ctx.patch({ sftpDownloadDir: chosen.path });
+    });
+    const downloadControls = el('div', { class: 'flex shrink-0 items-center gap-2' });
+    downloadControls.append(downloadField.input, chooseDirBtn);
+    dataSection.appendChild(
+      row(i18n.t('settingsPage.downloadDir'), i18n.t('settingsPage.downloadDirHint'), downloadControls)
+    );
 
     // 一键清理「非业务数据」（窗口位置 / 大小、列宽、cd 历史等）：二次确认后执行。
     let clearingData = false;

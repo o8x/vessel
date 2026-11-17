@@ -533,12 +533,13 @@ function transferCommand(id, remotePaths, recursive) {
   return { ok: true, command: parts.join(' ') };
 }
 
-function upload(id, localPath, remoteDir, onProgress) {
+/* 上传本地文件到远端目录；`remoteName` 可覆盖目标文件名（本地暂存名可能与原名不同）。 */
+function uploadAs(id, localPath, remoteDir, remoteName, onProgress) {
   const entry = get(id);
   if (!entry) return Promise.resolve({ ok: false, error: 'not-connected' });
   const from = String(localPath || '');
   if (!from) return Promise.resolve({ ok: false, error: 'no-file' });
-  const name = path.basename(from);
+  const name = String(remoteName || path.basename(from));
   const dir = normalizeRemote(entry.home, remoteDir);
   const to = dir === '/' ? `/${name}` : `${dir}/${name}`;
   const options = {};
@@ -556,6 +557,10 @@ function upload(id, localPath, remoteDir, onProgress) {
       resolve({ ok: true, name, path: to });
     });
   });
+}
+
+function upload(id, localPath, remoteDir, onProgress) {
+  return uploadAs(id, localPath, remoteDir, path.basename(String(localPath || '')), onProgress);
 }
 
 
@@ -643,12 +648,16 @@ function writeText(id, remotePath, content) {
 
 module.exports = {
   connect,
+  get,
   listDir,
   stat,
   mkdir,
   download,
   downloadTo,
+  downloadDir,
+  uniqueLocalPath,
   upload,
+  uploadAs,
   transferCommand,
   saveLocalText,
   reference,

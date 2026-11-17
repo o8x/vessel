@@ -22,7 +22,6 @@ const TERMINAL_SETTING_KEYS = [
   'terminalAlwaysOnTop',
   'terminalCloseAction',
   'sshBuiltinTerminal',
-  'sftpDownloadDir',
   'terminalBallEnabled',
   'terminalBallDelayMs',
   'terminalBallSize',

@@ -1,11 +1,11 @@
 'use strict';
 
 // 文件传输（穿梭框）：把一个远端文件 / 目录从一台主机传到另一台主机。
-// 实现方式：源端 SFTP 下载到本地临时目录 → 目标端 SFTP 上传（目录逐层递归）。
+// 分两段进行：源端 SFTP 先下载到本地下载目录（保留本地副本），再从本地副本
+// 上传到目标端（目录逐层递归）。进度按「下载」「上传」两段分别回传。
 // 全局同一时刻只允许一个传输任务（需求：同时只能传输一个对象）。
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const sftp = require('./sftp-service');
 const logger = require('../utils/logger');
@@ -41,59 +41,97 @@ async function measure(id, dir) {
   return { files, bytes };
 }
 
-/* 递归复制目录：逐个文件「下载到临时目录 → 上传到目标端」。 */
-async function copyDir(fromId, toId, remoteDir, destDir, tempRoot, state, onProgress) {
-  const listing = await sftp.listDir(fromId, remoteDir);
-  if (!listing || !listing.ok) {
-    return { ok: false, error: (listing && listing.error) || 'list-failed' };
-  }
-  const made = await sftp.mkdir(toId, destDir);
-  if (!made || !made.ok) {
-    return { ok: false, error: (made && made.error) || 'mkdir-failed' };
-  }
-  for (const entry of listing.entries || []) {
-    const source = joinRemote(remoteDir, entry.name);
-    const target = joinRemote(destDir, entry.name);
-    if (entry.type === 'dir') {
-      const child = await copyDir(fromId, toId, source, target, tempRoot, state, onProgress);
-      if (!child.ok) return child;
-      continue;
-    }
-    // 每个文件下载到独立的临时子目录（保持原文件名），上传后按原名落到目标目录。
-    const fileTempDir = path.join(tempRoot, String((state.counter += 1)));
-    fs.mkdirSync(fileTempDir, { recursive: true });
-    const localPath = path.join(fileTempDir, entry.name);
-    const downloaded = await sftp.downloadTo(fromId, source, localPath, (progress) => {
-      state.transferred += Number(progress.transferred) || 0;
-      onProgress({
-        phase: 'download',
-        name: entry.name,
-        path: source,
-        transferred: state.transferred,
-        total: state.total,
-      });
-    });
-    if (!downloaded || !downloaded.ok) {
-      return { ok: false, error: (downloaded && downloaded.error) || 'download-failed', name: entry.name };
-    }
-    const uploaded = await sftp.upload(toId, localPath, destDir, (progress) => {
-      onProgress({
-        phase: 'upload',
-        name: entry.name,
-        path: target,
-        transferred: state.transferred,
-        total: state.total,
-      });
-    });
+/* 第一段：把源端文件 / 目录完整下载到本地目录（stats.downloaded 累计进度）。 */
+async function downloadTree(fromId, remotePath, localPath, stats, onProgress) {
+  const info = await sftp.stat(fromId, remotePath);
+  if (!info || !info.ok) return { ok: false, error: (info && info.error) || 'stat-failed' };
+
+  if (info.type === 'dir') {
     try {
-      fs.unlinkSync(localPath);
+      fs.mkdirSync(localPath, { recursive: true });
     } catch (err) {
-      /* ignore */
+      return { ok: false, error: err.message };
     }
-    if (!uploaded || !uploaded.ok) {
-      return { ok: false, error: (uploaded && uploaded.error) || 'upload-failed', name: entry.name };
+    const listing = await sftp.listDir(fromId, remotePath);
+    if (!listing || !listing.ok) {
+      return { ok: false, error: (listing && listing.error) || 'list-failed' };
     }
+    for (const entry of listing.entries || []) {
+      const child = await downloadTree(
+        fromId,
+        joinRemote(remotePath, entry.name),
+        path.join(localPath, entry.name),
+        stats,
+        onProgress
+      );
+      if (!child.ok) return child;
+    }
+    return { ok: true };
   }
+
+  const size = Number(info.size) || 0;
+  const base = stats.downloaded;
+  const name = info.name || path.posix.basename(remotePath);
+  const downloaded = await sftp.downloadTo(fromId, remotePath, localPath, (progress) => {
+    const current = Math.min(Number(progress.transferred) || 0, size);
+    onProgress({
+      phase: 'download',
+      name,
+      path: remotePath,
+      transferred: base + current,
+      total: stats.total,
+    });
+  });
+  if (!downloaded || !downloaded.ok) {
+    return { ok: false, error: (downloaded && downloaded.error) || 'download-failed', name };
+  }
+  stats.downloaded = base + size;
+  return { ok: true };
+}
+
+/* 第二段：把本地副本递归上传到目标端（stats.uploaded 累计进度）。
+   remoteName 为落地的远端文件名（本地暂存名可能带序号后缀，需还原原名）。 */
+async function uploadTree(toId, localPath, remoteDir, remoteName, stats, onProgress) {
+  let info;
+  try {
+    info = fs.statSync(localPath);
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+
+  if (info.isDirectory()) {
+    const target = joinRemote(remoteDir, remoteName);
+    const made = await sftp.mkdir(toId, target);
+    if (!made || !made.ok) return { ok: false, error: (made && made.error) || 'mkdir-failed' };
+    let children;
+    try {
+      children = fs.readdirSync(localPath);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+    for (const child of children) {
+      const result = await uploadTree(toId, path.join(localPath, child), target, child, stats, onProgress);
+      if (!result.ok) return result;
+    }
+    return { ok: true };
+  }
+
+  const size = Number(info.size) || 0;
+  const base = stats.uploaded;
+  const uploaded = await sftp.uploadAs(toId, localPath, remoteDir, remoteName, (progress) => {
+    const current = Math.min(Number(progress.transferred) || 0, size);
+    onProgress({
+      phase: 'upload',
+      name: remoteName,
+      path: joinRemote(remoteDir, remoteName),
+      transferred: base + current,
+      total: stats.total,
+    });
+  });
+  if (!uploaded || !uploaded.ok) {
+    return { ok: false, error: (uploaded && uploaded.error) || 'upload-failed', name: remoteName };
+  }
+  stats.uploaded = base + size;
   return { ok: true };
 }
 
@@ -101,7 +139,7 @@ async function copyDir(fromId, toId, remoteDir, destDir, tempRoot, state, onProg
    - fromId / toId：两端 SFTP 会话 id；
    - path：源端远端绝对路径；destDir：目标端目录；
    - type：'file' | 'dir'（不传则自动 stat 判定）。
-   返回 { ok, transferred, total, files, error }。 */
+   返回 { ok, transferred, total, files, localPath, error }。 */
 async function run(request, onProgress) {
   const fromId = String((request && request.fromId) || '');
   const toId = String((request && request.toId) || '');
@@ -119,13 +157,12 @@ async function run(request, onProgress) {
 
   busy = true;
   const report = typeof onProgress === 'function' ? onProgress : () => {};
-  let tempRoot = '';
   try {
     const info = await sftp.stat(fromId, source);
     if (!info || !info.ok) {
       return { ok: false, error: (info && info.error) || 'stat-failed' };
     }
-    const isDir = (request && request.type) ? request.type === 'dir' : info.type === 'dir';
+    const isDir = request && request.type ? request.type === 'dir' : info.type === 'dir';
     const name = info.name || path.posix.basename(source);
 
     // 进度总量：目录统计所有文件字节，文件直接取体积。
@@ -137,62 +174,33 @@ async function run(request, onProgress) {
       files = measured.files;
     }
 
-    const state = { transferred: 0, total, counter: 0 };
     report({ phase: 'start', name, path: source, transferred: 0, total, files });
 
-    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vessel-transfer-'));
-    if (isDir) {
-      const result = await copyDir(fromId, toId, source, joinRemote(destDir, name), tempRoot, state, report);
-      if (!result.ok) {
-        report({ phase: 'error', name, error: result.error });
-        return { ok: false, error: result.error, transferred: state.transferred, total };
-      }
-    } else {
-      const localPath = path.join(tempRoot, name);
-      const downloaded = await sftp.downloadTo(fromId, source, localPath, (progress) => {
-        state.transferred = Number(progress.transferred) || 0;
-        report({
-          phase: 'download',
-          name,
-          path: source,
-          transferred: state.transferred,
-          total,
-        });
-      });
-      if (!downloaded || !downloaded.ok) {
-        report({ phase: 'error', name, error: (downloaded && downloaded.error) || 'download-failed' });
-        return { ok: false, error: (downloaded && downloaded.error) || 'download-failed' };
-      }
-      const uploaded = await sftp.upload(toId, localPath, destDir, (progress) => {
-        report({
-          phase: 'upload',
-          name,
-          path: joinRemote(destDir, name),
-          transferred: state.transferred,
-          total,
-        });
-      });
-      if (!uploaded || !uploaded.ok) {
-        report({ phase: 'error', name, error: (uploaded && uploaded.error) || 'upload-failed' });
-        return { ok: false, error: (uploaded && uploaded.error) || 'upload-failed' };
-      }
+    // 第一段：下载到本地下载目录（保留副本，重名自动加序号）。
+    const localPath = sftp.uniqueLocalPath(sftp.downloadDir(), name);
+    const stats = { downloaded: 0, uploaded: 0, total };
+    const downloaded = await downloadTree(fromId, source, localPath, stats, report);
+    if (!downloaded.ok) {
+      report({ phase: 'error', phaseAt: 'download', name, error: downloaded.error });
+      return { ok: false, error: downloaded.error, transferred: stats.downloaded, total, localPath };
+    }
+    report({ phase: 'downloaded', name, path: localPath, transferred: total, total, files });
+
+    // 第二段：从本地副本上传到目标端。
+    const uploaded = await uploadTree(toId, localPath, destDir, name, stats, report);
+    if (!uploaded.ok) {
+      report({ phase: 'error', phaseAt: 'upload', name, error: uploaded.error });
+      return { ok: false, error: uploaded.error, transferred: stats.uploaded, total, localPath };
     }
 
-    report({ phase: 'done', name, path: source, transferred: total, total, files });
-    logger.file(`[transfer] ${source} -> ${destDir} done (${total} bytes, ${files} files)`);
-    return { ok: true, transferred: total, total, files, name };
+    report({ phase: 'done', name, path: source, localPath, transferred: total, total, files });
+    logger.file(`[transfer] ${source} -> ${destDir} done (${total} bytes, ${files} files, local: ${localPath})`);
+    return { ok: true, transferred: total, total, files, name, localPath };
   } catch (err) {
     logger.error(`[transfer] failed (${source} -> ${destDir}): ${err.message}`);
     report({ phase: 'error', name: path.posix.basename(source), error: err.message });
     return { ok: false, error: err.message };
   } finally {
-    if (tempRoot) {
-      try {
-        fs.rmSync(tempRoot, { recursive: true, force: true });
-      } catch (err) {
-        /* ignore */
-      }
-    }
     busy = false;
   }
 }

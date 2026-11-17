@@ -134,6 +134,7 @@ function buildMenuTemplate() {
   }
   template.push({ type: 'separator' });
   template.push({ label: label(`重新启动`, `Restart`), click: () => restartApp() });
+  template.push({ label: label(`打开设置`, `Open Settings`), click: () => wm.openSettingsWindow() });
   template.push({ label: label(`退出`, `Quit`), click: () => app.quit() });
   return template;
 }

@@ -92,7 +92,7 @@
 
 - 独立标准窗口 `transfer-window.html`：**模态标题栏**（`titleBarStyle: 'hiddenInset'` + `trafficLightPosition { x: 14, y: 8 }`：**独占一行 28px** 的 `.modal-titlebar` 横跨窗口顶部，显示窗口标题「文件传输」（跟随界面语言），左侧留白 85px 避让红绿灯、整行可拖动；其下才是左右两栏），跟随全局主题（跟随系统 / 浅色 / 深色），背景取 `--file-window-bg`（与独立文件窗口同一套深浅底色）。
 - **默认 / 最小尺寸 640 × 480**、**最大 1024 × 768**（`package.json` 的 `vessel.transferWindow` → `constants.js` 的 `TRANSFER_WINDOW`）；屏幕 / 位置 / 尺寸记入 `transfer-window.json`（旧版本记住的超大尺寸会被夹到上限）。
-- 结构：主体 `main` 为 `左栏（#transfer-pane-left） + 可拖动竖直分隔线（#transfer-divider，宽 6px，`.transfer-divider-v`，拖动改变左右两栏宽度、各不小于 200px） + 右栏（#transfer-pane-right）`，底部为 `.fm-status` 状态栏（路径 + 进度条 + 状态信息，复用文件管理器样式）；**中间没有按钮区**。
+- 结构：主体 `main` 为 `左栏（#transfer-pane-left） + 可拖动竖直分隔线（#transfer-divider，宽 6px，`.transfer-divider-v`，拖动改变左右两栏宽度、各不小于 200px） + 右栏（#transfer-pane-right）`，底部为 `.fm-status` 状态栏（路径 + **下载 / 上传两段进度条** + 状态信息，复用文件管理器样式：两段进度各为一行 `下载 xx%` / `上传 xx%` 的细进度条，均在 `.fm-progress-stack` 内、`.fm-progress-row` 逐行排列，标签宽度自适应、进度条占满剩余宽度）；**中间没有按钮区**。
 - 每栏：`.transfer-pane-head`（**行高 32px**，与第二行路径行 `.fm-path-row` 同高：SSH 主机下拉（**高 22px**）占满栏宽，**左栏**的下拉右侧放**「同步」开关** `.transfer-sync`）→ `.fm-path-row`（家目录 / 刷新 / 路径输入框，显示当前目录）→ **`.fm-tree` 目录树**（复用文件管理器的目录树样式：行高 `1.85em`、缩进 14px/级、`caret-right` 展开旋转 90°、`folder` 图标、目录行可展开、文件为叶子；**只有一列**（图标 + 名称），**不显示体积 / 权限 / 时间列**；读取子项时行内显示 10px 旋转 loading `.fm-tree-spinner`；**当前目录行** `.fm-tree-row.current` 加粗 + 强调色；选中行 `.fm-tree-row.selected` 强调色底 + 左侧色条）。
 - 「同步」开关 `.transfer-sync`：胶囊按钮（`refresh` 图标 + 文字），激活时强调色描边 + 浅色底；**位于左栏 SSH 下拉的右侧**。
 - 目录 / 文件节点右键菜单复用 `.fm-menu`（传输到对侧 / 编辑文件 / 从 Finder 打开 / 从 VS Code 打开 / 从 Wireshark 打开 / 下载到本地 / 复制路径 / 复制引用），左右两栏一致。

@@ -32,6 +32,8 @@
         syncNeedBoth: '请先连接两侧主机，再开启同步',
         toRight: '传输到右侧',
         toLeft: '传输到左侧',
+        phaseDownload: '下载',
+        phaseUpload: '上传',
         name: '文件名',
         empty: '空目录',
         notConnected: '未连接',
@@ -83,6 +85,8 @@
         syncNeedBoth: 'Connect both sides before enabling sync',
         toRight: 'Transfer to right',
         toLeft: 'Transfer to left',
+        phaseDownload: 'Download',
+        phaseUpload: 'Upload',
         name: 'Name',
         empty: 'Empty directory',
         notConnected: 'Not connected',
@@ -190,7 +194,10 @@
     statusPath: document.getElementById('transfer-status-path'),
     statusMsg: document.getElementById('transfer-status-msg'),
     progress: document.getElementById('transfer-progress'),
-    progressFill: document.getElementById('transfer-progress-fill'),
+    downloadFill: document.getElementById('transfer-progress-download-fill'),
+    downloadLabel: document.getElementById('transfer-progress-download-label'),
+    uploadFill: document.getElementById('transfer-progress-upload-fill'),
+    uploadLabel: document.getElementById('transfer-progress-upload-label'),
   };
 
   const state = {
@@ -238,15 +245,36 @@
     }
   }
 
-  function setProgress(value) {
-    if (value == null) {
-      dom.progress.classList.add('hidden');
-      dom.progressFill.style.width = '0%';
+  /* 两段式进度：下载段（源端 → 本地下载目录）与上传段（本地副本 → 目标端）各一条进度条。 */
+  function hideProgress() {
+    dom.progress.classList.add('hidden');
+    dom.downloadFill.style.width = '0%';
+    dom.uploadFill.style.width = '0%';
+  }
+
+  function resetProgress() {
+    dom.progress.classList.remove('hidden');
+    dom.downloadFill.style.width = '0%';
+    dom.uploadFill.style.width = '0%';
+    dom.downloadLabel.textContent = i18n.t('transferWin.phaseDownload');
+    dom.uploadLabel.textContent = i18n.t('transferWin.phaseUpload');
+  }
+
+  function setProgress(phase, value) {
+    if (!phase) {
+      hideProgress();
       return;
     }
     dom.progress.classList.remove('hidden');
-    const percent = value.total ? Math.min(100, Math.max(0, (value.transferred / value.total) * 100)) : 0;
-    dom.progressFill.style.width = `${percent.toFixed(0)}%`;
+    const percent = value && value.total ? Math.min(100, Math.max(0, (value.transferred / value.total) * 100)) : 0;
+    const text = `${Math.round(percent)}%`;
+    if (phase === 'download') {
+      dom.downloadFill.style.width = `${percent.toFixed(0)}%`;
+      dom.downloadLabel.textContent = `${i18n.t('transferWin.phaseDownload')} ${text}`;
+    } else if (phase === 'upload') {
+      dom.uploadFill.style.width = `${percent.toFixed(0)}%`;
+      dom.uploadLabel.textContent = `${i18n.t('transferWin.phaseUpload')} ${text}`;
+    }
   }
 
   /* ------------------------------- 右键菜单 ------------------------------- */
@@ -762,7 +790,7 @@
     }
     const item = source.selected;
     state.transferring = true;
-    setProgress({ transferred: 0, total: 0 });
+    resetProgress();
     setStatus(i18n.t('transferWin.transferStart', { target: targetLabel(source), name: item.name }), false);
     const result = await window.ships.transfer.run({
       fromId: source.id,
@@ -772,7 +800,7 @@
       type: item.type,
     });
     state.transferring = false;
-    setProgress(null);
+    hideProgress();
     if (result && result.ok) {
       setStatus(
         i18n.t('transferWin.transferDone', {
@@ -902,6 +930,16 @@
       if (target) await state.panes.left.select(target);
       if (path) await state.panes.left.enter(path);
       });
+
+    // 传输实时进度：下载段 / 上传段分别驱动各自的进度条。
+    window.ships.transfer.onProgress((progress) => {
+      if (!progress) return;
+      if (progress.phase === 'download') setProgress('download', progress);
+      else if (progress.phase === 'upload') setProgress('upload', progress);
+      else if (progress.phase === 'downloaded') {
+        setProgress('download', { transferred: progress.total, total: progress.total });
+      }
+    });
 
     window.ships.onSettingsChanged((next) => {
       i18n.setLocale((next && next.locale) || 'zh');

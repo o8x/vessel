@@ -1885,6 +1885,31 @@ body.file-window .fm-tree-row {
 .fm-progress.hidden {
   display: none;
 }
+.fm-progress-stack {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 80px;
+  flex-direction: column;
+  gap: 3px;
+}
+.fm-progress-stack.hidden {
+  display: none;
+}
+.fm-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fm-progress-label {
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+.fm-progress-row .fm-progress {
+  flex: 1 1 auto;
+}
 
 /* 独立文件窗口：头栏与终端一致的小红绿灯 / 拖拽区，字号与高度由 file-window.js 写入
    （--file-font-size 决定 --term-header-font-size / --term-header-height）。 */

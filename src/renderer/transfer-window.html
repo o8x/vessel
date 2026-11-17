@@ -24,8 +24,19 @@
       </main>
       <footer class="fm-status">
         <span id="transfer-status-path" class="fm-status-path"></span>
-        <div id="transfer-progress" class="fm-progress hidden">
-          <div id="transfer-progress-fill" class="fm-progress-fill"></div>
+        <div id="transfer-progress" class="fm-progress-stack hidden">
+          <div class="fm-progress-row">
+            <span id="transfer-progress-download-label" class="fm-progress-label"></span>
+            <div class="fm-progress">
+              <div id="transfer-progress-download-fill" class="fm-progress-fill"></div>
+            </div>
+          </div>
+          <div class="fm-progress-row">
+            <span id="transfer-progress-upload-label" class="fm-progress-label"></span>
+            <div class="fm-progress">
+              <div id="transfer-progress-upload-fill" class="fm-progress-fill"></div>
+            </div>
+          </div>
         </div>
         <span id="transfer-status-msg" class="fm-status-msg"></span>
       </footer>
