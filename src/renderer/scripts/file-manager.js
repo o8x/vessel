@@ -599,7 +599,7 @@
       if (onOpenTransfer) {
         items.push({
           label: i18n.t('filesUi.openTransfer'),
-          icon: 'swap',
+          icon: 'transfer',
           run: () =>
             onOpenTransfer({ path, target: state.target, connection: state.connection || {} }),
         });
@@ -956,7 +956,7 @@
           if (onOpenTransfer) {
             items.push({
               label: i18n.t('filesUi.openTransfer'),
-              icon: 'swap',
+              icon: 'transfer',
               run: () =>
                 onOpenTransfer({
                   path: parentPath(path),

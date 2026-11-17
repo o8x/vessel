@@ -32,7 +32,7 @@
 
 ### 8.3 图标与资源
 
-- **SVG 图标**：所有界面图标以独立 `.svg` 文件存放于 `assets/icons/`（kebab-case 命名，如 `clock.svg`、`arrow-left.svg`、`arrow-up.svg`、`file.svg`、`doc.svg`、`image.svg`、`archive.svg`、`caret-right.svg`、`home.svg`、`temp-file.svg`、`split.svg`、`shield.svg`（2FA 工具 TAB 图标）、`gamepad.svg`（游戏 TAB / 设置图标）、`fit.svg`（游戏窗口「适配画面」）、`traffic-close.svg` / `traffic-minimize.svg` / `traffic-zoom.svg`（终端窗口自绘小红绿灯的悬浮符号）），**代码中不硬编码** SVG 标记；由 `src/preload/icons.js` 在启动时读取目录、转成 camelCase 键名并经 `contextBridge` 暴露为 `window.shipsIcons`，渲染层 `ShipsUI.Icons[name](size)` 注入尺寸后使用（会先移除图标根标签上已有的 `width` / `height` 再注入，兼容自带尺寸的品牌图标）。新增 / 修改图标只需增删 / 编辑文件；系统品牌图标（`ubuntu.svg` / `fedora.svg` / `arch.svg` / `centos.svg` / `debian.svg` / `linux.svg` / `mint.svg` / `opensuse.svg` / `RHEL.svg` / `rocky.svg` / `windows.svg` 等）同样放在此处，用于 SSH 探测结果展示。
+- **SVG 图标**：所有界面图标以独立 `.svg` 文件存放于 `assets/icons/`（kebab-case 命名，如 `clock.svg`、`arrow-left.svg`、`arrow-up.svg`、`file.svg`、`doc.svg`、`image.svg`、`archive.svg`、`caret-right.svg`、`home.svg`、`temp-file.svg`、`transfer.svg`（**文件传输专用图标**：文件夹 + 向右箭头，主界面底部栏 / 文件管理器右键「文件传输」/ 传输窗口菜单使用）、`split.svg`、`shield.svg`（2FA 工具 TAB 图标）、`gamepad.svg`（游戏 TAB / 设置图标）、`fit.svg`（游戏窗口「适配画面」）、`traffic-close.svg` / `traffic-minimize.svg` / `traffic-zoom.svg`（终端窗口自绘小红绿灯的悬浮符号）），**代码中不硬编码** SVG 标记；由 `src/preload/icons.js` 在启动时读取目录、转成 camelCase 键名并经 `contextBridge` 暴露为 `window.shipsIcons`，渲染层 `ShipsUI.Icons[name](size)` 注入尺寸后使用（会先移除图标根标签上已有的 `width` / `height` 再注入，兼容自带尺寸的品牌图标）。新增 / 修改图标只需增删 / 编辑文件；系统品牌图标（`ubuntu.svg` / `fedora.svg` / `arch.svg` / `centos.svg` / `debian.svg` / `linux.svg` / `mint.svg` / `opensuse.svg` / `RHEL.svg` / `rocky.svg` / `windows.svg` 等）同样放在此处，用于 SSH 探测结果展示。
 - **文件类型图标（文件管理）**：按 `src/renderer/scripts/constants.js` 的 `FILE_TYPE_ICONS`（扩展名 → 图标名，92 项）与 `FILE_NAME_ICONS`（无扩展名的文件名，如 `Makefile` / `Dockerfile` / `LICENSE` / `README`）映射到 `code` / `braces` / `terminal` / `doc` / `image` / `play` / `archive`，未命中用 `DEFAULT_FILE_ICON = file`；目录固定 `folder`（左侧目录树与右侧文件列表中的目录行都用它）。未引入第三方图标库：远端文件只有文件名，没有类型探测，系统图标类库（读取本地文件图标）在此用不上。
 - 位图资源（应用图标 / 托盘 / 打包）统一放在 `assets/imgs/`；`assets/icons/` 只保留 SVG 图标。
 - **国旗图标**：`assets/flags/<CC>.svg`（长方形）与 `assets/flags/<CC>_1x1.svg`（方形）；由 `src/preload/flags.js` 按需读取并缓存，暴露为 `window.shipsFlags.get(code, shape)`（code 为两位国家码，shape 为 `rect`/`1x1`）。
@@ -92,9 +92,9 @@
 - 独立标准窗口 `transfer-window.html`：**系统原生标题栏 / 红绿灯**（`titleBarStyle: 'default'`），跟随全局主题（跟随系统 / 浅色 / 深色），背景取 `--file-window-bg`（与独立文件窗口同一套深浅底色）。
 - **默认 / 最小尺寸 1100 × 700 / 880 × 560**（`package.json` 的 `vessel.transferWindow` → `constants.js` 的 `TRANSFER_WINDOW`）；屏幕 / 位置 / 尺寸记入 `transfer-window.json`。
 - 结构：主体 `main` 为 `左栏（#transfer-pane-left） + 中间控制列（#transfer-mid，宽 84px） + 右栏（#transfer-pane-right）`，底部为 `.fm-status` 状态栏（路径 + 进度条 + 状态信息，复用文件管理器样式）。
-- 每栏：`.transfer-pane-head`（SSH 主机下拉，占满栏宽）→ `.fm-path-row`（家目录 / 刷新 / 路径输入框）→ `.fm-list-head` + `.fm-list`（表头与行复用 `.fm-*` 网格 `1.9em | 160px | 70px | 90px | 120px`：图标 / 文件名 / 体积 / 权限 / 时间；目录在前、文件在后）。
-- 中间控制列：`.transfer-sync`（「同步」开关，激活时强调色描边 + 浅色底）、`.transfer-move`（`→` / `←` 穿梭按钮，禁用态 40% 透明）。
-- 列表行右键菜单复用 `.fm-menu`（传输到对侧 / 复制路径 / 复制引用），左右两栏一致。
+- 每栏：`.transfer-pane-head`（SSH 主机下拉，占满栏宽）→ `.fm-path-row`（家目录 / 刷新 / 路径输入框，显示当前目录）→ **`.fm-tree` 目录树**（复用文件管理器的目录树样式：行高 `1.85em`、缩进 14px/级、`caret-right` 展开旋转 90°、`folder` 图标、目录行可展开、文件为叶子；**只有一列**（图标 + 名称），**不显示体积 / 权限 / 时间列**；读取子项时行内显示 10px 旋转 loading `.fm-tree-spinner`；**当前目录行** `.fm-tree-row.current` 加粗 + 强调色；选中行 `.fm-tree-row.selected` 强调色底 + 左侧色条）。
+- 中间控制列（宽 118px，`--color-surface` 底 + 左右细边）：`.transfer-sync`（「同步」胶囊按钮，`refresh` 图标 + 文字，激活时强调色描边 + 浅色底）+ `.transfer-move-group`（`.transfer-move` 圆角 36×36 按钮 + `.transfer-move-label` 文字说明，悬停上浮 1px、禁用态 35% 透明）。
+- 目录 / 文件节点右键菜单复用 `.fm-menu`（传输到对侧 / 编辑文件 / 从 Finder 打开 / 从 VS Code 打开 / 从 Wireshark 打开 / 下载到本地 / 复制路径 / 复制引用），左右两栏一致。
 
 ### 8.8 游戏窗口（EmulatorJS）
 

@@ -14,7 +14,9 @@ function isFileManagerSender(event) {
   const fileWin = wm.getFileWindow();
   const id = event.sender.id;
   return Boolean(
-    wm.isTerminalWebContents(id) || (fileWin && !fileWin.isDestroyed() && fileWin.webContents.id === id)
+    wm.isTerminalWebContents(id) ||
+      wm.isTransferWebContents(id) ||
+      (fileWin && !fileWin.isDestroyed() && fileWin.webContents.id === id)
   );
 }
 

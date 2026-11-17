@@ -71,7 +71,7 @@
         item.type === 'terminal'
           ? 'terminal'
           : item.type === 'transfer'
-            ? 'swap'
+            ? 'transfer'
             : item.type === 'file'
               ? 'folder'
               : item.type === 'editor'

@@ -243,7 +243,7 @@
     dom.terminal.setAttribute('data-tip', i18n.t('terminal'));
     dom.files.innerHTML = Icons.folder(15);
     dom.files.setAttribute('data-tip', i18n.t('fileManager'));
-    dom.transfer.innerHTML = Icons.swap(15);
+    dom.transfer.innerHTML = Icons.transfer(15);
     dom.transfer.setAttribute('data-tip', i18n.t('transfer'));
     renderThemeButton();
   }

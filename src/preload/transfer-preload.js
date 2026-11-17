@@ -26,8 +26,15 @@ const api = {
     connect: (connection) => ipcRenderer.invoke(IPC.SFTP_CONNECT, connection),
     list: (id, path) => ipcRenderer.invoke(IPC.SFTP_LIST, { id, path }),
     close: (id) => ipcRenderer.invoke(IPC.SFTP_CLOSE, { id }),
+    download: (id, path) => ipcRenderer.invoke(IPC.SFTP_DOWNLOAD, { id, path }),
+    open: (id, path) => ipcRenderer.invoke(IPC.SFTP_OPEN, { id, path }),
+    openVSCode: (id, path) => ipcRenderer.invoke(IPC.SFTP_OPEN_VSCODE, { id, path }),
+    openWireshark: (id, path) => ipcRenderer.invoke(IPC.SFTP_OPEN_WIRESHARK, { id, path }),
     copyPath: (paths) => ipcRenderer.invoke(IPC.SFTP_COPY_PATH, { paths }),
     copyReference: (id, paths) => ipcRenderer.invoke(IPC.SFTP_COPY_REFERENCE, { id, paths }),
+  },
+  fileEditor: {
+    open: (payload) => ipcRenderer.invoke(IPC.FILE_EDITOR_OPEN, payload),
   },
   transfer: {
     run: (payload) => ipcRenderer.invoke(IPC.TRANSFER_RUN, payload),
