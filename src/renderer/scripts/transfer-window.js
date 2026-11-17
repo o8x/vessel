@@ -179,7 +179,7 @@
   const dom = {
     left: document.getElementById('transfer-pane-left'),
     right: document.getElementById('transfer-pane-right'),
-    mid: document.getElementById('transfer-mid'),
+    divider: document.getElementById('transfer-divider'),
     statusPath: document.getElementById('transfer-status-path'),
     statusMsg: document.getElementById('transfer-status-msg'),
     progress: document.getElementById('transfer-progress'),
@@ -284,7 +284,8 @@
   );
 
   /* -------------------------------- 一栏 --------------------------------- */
-  function createPane(side, root) {
+  function createPane(side, root, options) {
+    const paneOpts = options || {};
     const pane = {
       side,
       target: '',
@@ -352,8 +353,13 @@
         if (isDir) toggleExpand(path);
       });
       row.addEventListener('dblclick', () => {
-        if (isDir) enter(path);
-        else openEntry(pane, { path, name: entry.name, type: entry.type, size: entry.size });
+        if (isDir) {
+          // 子项还在加载时**不响应双击**（避免重复进入 / 进入未加载完的目录）。
+          if (pane.loading.has(path)) return;
+          enter(path);
+          return;
+        }
+        openEntry(pane, { path, name: entry.name, type: entry.type, size: entry.size });
       });
       row.addEventListener('contextmenu', (event) => {
         event.preventDefault();
@@ -378,13 +384,25 @@
       render({ name: '/', type: 'dir' }, '/', 0);
     }
 
+    /* 把当前目录行滚动到可见位置（同步 / 进入目录后调用）。 */
+    function scrollCurrentIntoView() {
+      const node = treeEl.querySelector('.fm-tree-row.current');
+      if (!node) return;
+      const treeRect = treeEl.getBoundingClientRect();
+      const nodeRect = node.getBoundingClientRect();
+      if (nodeRect.top < treeRect.top) {
+        treeEl.scrollTop -= treeRect.top - nodeRect.top + 8;
+      } else if (nodeRect.bottom > treeRect.bottom) {
+        treeEl.scrollTop += nodeRect.bottom - treeRect.bottom + 8;
+      }
+    }
+
     function selectEntry(item) {
       pane.selected = item;
       for (const node of treeEl.querySelectorAll('.fm-tree-row[data-path]')) {
         node.classList.toggle('selected', node.dataset.path === item.path);
       }
-      updateButtons();
-    }
+      }
 
     function beginLoading(path) {
       if (!path) return;
@@ -456,6 +474,8 @@
       }
       pane.expanded.add('/');
       renderTree();
+      // 当前目录滚动到可见位置。
+      scrollCurrentIntoView();
       if (state.sync) syncTo(side, target);
       return true;
     }
@@ -492,8 +512,7 @@
       pane.expanded.add('/');
       await ensureChildren('/');
       await enter(pane.home);
-      updateButtons();
-      return true;
+        return true;
     }
 
     function select(target) {
@@ -534,6 +553,23 @@
     });
     pickerHost.appendChild(pane.picker.el);
     head.appendChild(pickerHost);
+    // 「同步」开关放在**左侧栏**的 SSH 下拉右侧（中间不再有按钮区）。
+    if (paneOpts.withSync) {
+      const syncBtn = el('button', { class: 'transfer-sync', type: 'button' });
+      const syncIcon = el('span', { class: 'transfer-sync-icon' });
+      syncIcon.innerHTML = Icons.refresh(13);
+      const syncLabel = el('span', { class: 'transfer-sync-label' }, i18n.t('transferWin.sync'));
+      syncBtn.append(syncIcon, syncLabel);
+      syncBtn.setAttribute('data-tip', i18n.t('transferWin.syncTip'));
+      syncBtn.addEventListener('click', async () => {
+        state.sync = !state.sync;
+        syncBtn.classList.toggle('on', state.sync);
+        // 勾选后立即把两边定位到同一目录。
+        if (state.sync) await syncNow();
+      });
+      pane.syncBtn = syncBtn;
+      head.appendChild(syncBtn);
+    }
 
     pane.renderTree = renderTree;
     pane.enter = enter;
@@ -694,7 +730,6 @@
     }
     const item = source.selected;
     state.transferring = true;
-    updateButtons();
     setProgress({ transferred: 0, total: 0 });
     setStatus(i18n.t('transferWin.transferStart', { target: targetLabel(source), name: item.name }), false);
     const result = await window.ships.transfer.run({
@@ -728,44 +763,32 @@
         true
       );
     }
-    updateButtons();
   }
 
-  /* ------------------------------ 中间控制区 ----------------------------- */
-  const syncBtn = el('button', { class: 'transfer-sync', type: 'button' });
-  const syncIcon = el('span', { class: 'transfer-sync-icon' });
-  syncIcon.innerHTML = Icons.refresh(13);
-  const syncLabel = el('span', { class: 'transfer-sync-label' }, i18n.t('transferWin.sync'));
-  syncBtn.append(syncIcon, syncLabel);
-  syncBtn.setAttribute('data-tip', i18n.t('transferWin.syncTip'));
-
-  const toRightBtn = el('button', { class: 'transfer-move', type: 'button', 'data-tip': i18n.t('transferWin.toRight') });
-  toRightBtn.innerHTML = Icons.arrowRight(18);
-  const toRightLabel = el('span', { class: 'transfer-move-label' }, i18n.t('transferWin.toRight'));
-  const toLeftBtn = el('button', { class: 'transfer-move', type: 'button', 'data-tip': i18n.t('transferWin.toLeft') });
-  toLeftBtn.innerHTML = Icons.arrowLeft(18);
-  const toLeftLabel = el('span', { class: 'transfer-move-label' }, i18n.t('transferWin.toLeft'));
-
-  syncBtn.addEventListener('click', async () => {
-    state.sync = !state.sync;
-    syncBtn.classList.toggle('on', state.sync);
-    // 勾选后立即把两边定位到同一目录。
-    if (state.sync) await syncNow();
-  });
-  toRightBtn.addEventListener('click', () => transferSelection(state.panes.left, state.panes.right));
-  toLeftBtn.addEventListener('click', () => transferSelection(state.panes.right, state.panes.left));
-
-  const moveGroup = el('div', { class: 'transfer-move-group' });
-  moveGroup.append(toRightBtn, toRightLabel, toLeftBtn, toLeftLabel);
-  dom.mid.append(syncBtn, moveGroup);
-
-  function updateButtons() {
-    const left = state.panes.left;
-    const right = state.panes.right;
-    const canRight = Boolean(!state.transferring && left && left.selected && right && right.connected);
-    const canLeft = Boolean(!state.transferring && right && right.selected && left && left.connected);
-    toRightBtn.disabled = !canRight;
-    toLeftBtn.disabled = !canLeft;
+  /* ------------------------------ 分隔线（可拖动） -------------------------- */
+  /* 中间不再有按钮区，只留一条可拖动的竖线：拖动即改变左右两栏的宽度。 */
+  function setupDivider(divider) {
+    const left = dom.left;
+    const right = dom.right;
+    const MIN_PANE = 200;
+    divider.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      divider.classList.add('dragging');
+      const total = left.getBoundingClientRect().width + right.getBoundingClientRect().width;
+      const onMove = (moveEvent) => {
+        const offset = moveEvent.clientX - left.getBoundingClientRect().left;
+        const width = Math.max(MIN_PANE, Math.min(total - MIN_PANE, offset));
+        left.style.flex = `0 0 ${width}px`;
+        right.style.flex = '1 1 auto';
+      };
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        divider.classList.remove('dragging');
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
   }
 
   /* ------------------------------- SSH 列表 ------------------------------ */
@@ -824,9 +847,9 @@
     i18n.setLocale((settings && settings.locale) || 'zh');
     window.ShipsTheme.set(settings || {});
 
-    state.panes.left = createPane('left', dom.left);
+    state.panes.left = createPane('left', dom.left, { withSync: true });
     state.panes.right = createPane('right', dom.right);
-    updateButtons();
+    if (dom.divider) setupDivider(dom.divider);
 
     await refreshPickers();
 
@@ -839,15 +862,13 @@
       await state.panes.left.select(initialTarget);
       if (initialPath) await state.panes.left.enter(initialPath);
     }
-    updateButtons();
 
     window.ships.transferWindow.onLocate(async (payload) => {
       const target = (payload && payload.target) || '';
       const path = (payload && payload.path) || '';
       if (target) await state.panes.left.select(target);
       if (path) await state.panes.left.enter(path);
-      updateButtons();
-    });
+      });
 
     window.ships.onSettingsChanged((next) => {
       i18n.setLocale((next && next.locale) || 'zh');

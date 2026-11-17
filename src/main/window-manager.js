@@ -1610,9 +1610,11 @@ function openFileWindow(target, pathArg) {
    独立标准窗口（可缩放），几何记忆在 transfer-window.json。 */
 
 function transferWindowSize() {
+  const maxWidth = clampNumber(TRANSFER_WINDOW.maxWidth, TRANSFER_WINDOW.minWidth, 10000, 1024);
+  const maxHeight = clampNumber(TRANSFER_WINDOW.maxHeight, TRANSFER_WINDOW.minHeight, 10000, 768);
   return {
-    width: clampNumber(TRANSFER_WINDOW.width, TRANSFER_WINDOW.minWidth, 10000, 1100),
-    height: clampNumber(TRANSFER_WINDOW.height, TRANSFER_WINDOW.minHeight, 10000, 700),
+    width: clampNumber(TRANSFER_WINDOW.width, TRANSFER_WINDOW.minWidth, maxWidth, 640),
+    height: clampNumber(TRANSFER_WINDOW.height, TRANSFER_WINDOW.minHeight, maxHeight, 480),
   };
 }
 
@@ -1621,8 +1623,18 @@ function transferWindowBoundsForOpen() {
   const saved = transferWindowState && transferWindowState.bounds ? transferWindowState : null;
   const min = { width: TRANSFER_WINDOW.minWidth, height: TRANSFER_WINDOW.minHeight };
   const matched = saved ? displayBySignature(screen.getAllDisplays(), saved.display) : null;
-  if (matched) return clampBounds(saved.bounds, matched, size, min);
-  return clampBounds(null, anchorDisplay(), size, min);
+  const bounds = matched
+    ? clampBounds(saved.bounds, matched, size, min)
+    : clampBounds(null, anchorDisplay(), size, min);
+  // 记住的尺寸可能来自旧版本（更大）：夹到当前上限。
+  const maxWidth = clampNumber(TRANSFER_WINDOW.maxWidth, TRANSFER_WINDOW.minWidth, 10000, 1024);
+  const maxHeight = clampNumber(TRANSFER_WINDOW.maxHeight, TRANSFER_WINDOW.minHeight, 10000, 768);
+  return {
+    x: bounds.x,
+    y: bounds.y,
+    width: Math.min(bounds.width, maxWidth),
+    height: Math.min(bounds.height, maxHeight),
+  };
 }
 
 function saveTransferWindowGeometry() {
@@ -1696,6 +1708,8 @@ function openTransferWindow(target, pathArg) {
     height: bounds.height,
     minWidth: TRANSFER_WINDOW.minWidth,
     minHeight: TRANSFER_WINDOW.minHeight,
+    maxWidth: TRANSFER_WINDOW.maxWidth,
+    maxHeight: TRANSFER_WINDOW.maxHeight,
     title: 'Vessel Transfer',
     titleBarStyle: 'default',
     backgroundColor: themeBackgroundColor(),

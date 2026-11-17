@@ -890,6 +890,9 @@
         row.addEventListener('dblclick', () => {
           clearCellCopyTimer();
           if (isDir) {
+            // 目录还在加载（子项未就绪 / 列表正在刷新）时**不响应双击**，
+            // 避免连点导致重复导航 / 跳到未加载完的目录。
+            if (state.loading.has(path) || state.busy) return;
             navigate(path);
             return;
           }

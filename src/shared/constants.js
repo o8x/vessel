@@ -257,10 +257,12 @@ const TERMINAL_WINDOW = Object.assign(
 // 文件传输窗口（穿梭框）：左右两栏各一个 SSH 连接，独立窗口。
 const TRANSFER_WINDOW = Object.assign(
   {
-    width: 1100,
-    height: 700,
-    minWidth: 880,
-    minHeight: 560,
+    width: 640,
+    height: 480,
+    minWidth: 640,
+    minHeight: 480,
+    maxWidth: 1024,
+    maxHeight: 768,
   },
   appConfig.transferWindow || {}
 );

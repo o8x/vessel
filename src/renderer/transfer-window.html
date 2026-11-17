@@ -12,10 +12,10 @@
   </head>
   <body class="term-window file-window bg-transparent">
     <div class="flex h-full w-full flex-col overflow-hidden" style="background: var(--file-window-bg)">
-      <!-- 穿梭框：左 / 右两栏各一个 SSH 连接，中间是同步开关与穿梭按钮 -->
+      <!-- 穿梭框：左 / 右两栏各一个 SSH 连接，中间是可拖动的竖直分隔线 -->
       <main class="flex min-h-0 flex-1">
         <section id="transfer-pane-left" class="transfer-pane-host"></section>
-        <div id="transfer-mid" class="transfer-mid"></div>
+        <div id="transfer-divider" class="transfer-divider-v"></div>
         <section id="transfer-pane-right" class="transfer-pane-host"></section>
       </main>
       <footer class="fm-status">

@@ -2081,19 +2081,60 @@
      两块之间是可见、可拖动的分隔条：水平分割上下排列（拖动改高度），垂直分割左右排列（拖动改宽度）。 */
   function setupSplitDivider(divider) {
     let raf = 0;
-    const onMove = (event) => {
-      const rect = panesWrap.getBoundingClientRect();
-      const ratio =
-        splitOrientation === 'vertical'
-          ? (event.clientX - rect.left) / rect.width
-          : (event.clientY - rect.top) / rect.height;
-      const clamped = Math.max(0.15, Math.min(0.85, ratio));
+    // 待请求的窗口高度（上下分割拖动时按行高倍数计算）。
+    let pendingSnapHeight = 0;
+    /* 上下分割（水平分隔线）拖动时：把上下两块都取整到「终端行高」的倍数，
+       并同步把**窗口高度**调整到 (上块行数 + 下块行数) × 行高 + 窗口边框，
+       使两块终端都保持整数行（不会拖出半行）。 */
+    function dragHorizontal(event) {
       const primary = paneRecords[0];
-      if (primary && primary.host) primary.host.style.flex = `0 0 ${clamped * 100}%`;
+      const secondary = paneRecords[1];
+      if (!primary || !secondary || !primary.host || !secondary.host) return false;
+      const cell = readCellSize(primary.term, primary.host);
+      const rowHeight = cell.height;
+      if (!rowHeight) return false;
+      const rect = panesWrap.getBoundingClientRect();
+      const dividerHeight = divider.getBoundingClientRect().height || 6;
+      const wanted = event.clientY - rect.top;
+      const topRows = Math.max(1, Math.round(wanted / rowHeight));
+      const topHeight = Math.round(topRows * rowHeight);
+      const bottomRoom = rect.height - topHeight - dividerHeight;
+      const bottomRows = Math.max(1, Math.round(bottomRoom / rowHeight));
+      primary.host.style.flex = `0 0 ${topHeight}px`;
+      secondary.host.style.flex = '1 1 auto';
+      // 目标窗口高度 = 窗口边框 + 两块终端的整数行高之和（每帧最多请求一次）。
+      const chromeHeight = window.innerHeight - panesWrap.getBoundingClientRect().height;
+      pendingSnapHeight = Math.round(chromeHeight + topHeight + bottomRows * rowHeight + dividerHeight);
+      return true;
+    }
+    const onMove = (event) => {
+      const primary = paneRecords[0];
+      if (splitOrientation === 'horizontal') {
+        // 上下分割：按行高取整并同步窗口高度（失败时退回比例模式）。
+        if (!dragHorizontal(event)) {
+          const rect = panesWrap.getBoundingClientRect();
+          const ratio = Math.max(0.15, Math.min(0.85, (event.clientY - rect.top) / rect.height));
+          if (primary && primary.host) primary.host.style.flex = `0 0 ${ratio * 100}%`;
+        }
+      } else {
+        const rect = panesWrap.getBoundingClientRect();
+        const ratio = Math.max(0.15, Math.min(0.85, (event.clientX - rect.left) / rect.width));
+        if (primary && primary.host) primary.host.style.flex = `0 0 ${ratio * 100}%`;
+      }
       if (!raf) {
         raf = requestAnimationFrame(() => {
           raf = 0;
           fitIfNeeded(true);
+          // 窗口高度按行高倍数调整（每帧最多一次）。
+          if (pendingSnapHeight) {
+            const height = pendingSnapHeight;
+            pendingSnapHeight = 0;
+            const current = window.innerHeight;
+            if (Math.abs(height - current) >= 2) {
+              const snap = window.ships && window.ships.terminal && window.ships.terminal.snapSize;
+              if (typeof snap === 'function') snap({ height });
+            }
+          }
         });
       }
     };
@@ -2102,6 +2143,16 @@
       divider.classList.remove('dragging');
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
+      // 抬手时做最后一次高度对齐。
+      if (pendingSnapHeight) {
+        const height = pendingSnapHeight;
+        pendingSnapHeight = 0;
+        const current = window.innerHeight;
+        if (Math.abs(height - current) >= 2) {
+          const snap = window.ships && window.ships.terminal && window.ships.terminal.snapSize;
+          if (typeof snap === 'function') snap({ height });
+        }
+      }
       fitIfNeeded(true);
     };
     divider.addEventListener('mousedown', (event) => {
