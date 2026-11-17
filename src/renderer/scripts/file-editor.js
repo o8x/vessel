@@ -42,6 +42,18 @@
         syntax: '语法',
         eol: '换行',
         size: '大小',
+        findLabel: '查找内容',
+        replaceLabel: '替换为',
+        findPrev: '上一个',
+        findNext: '下一个',
+        findClose: '关闭',
+        caseSensitive: '区分大小写',
+        regex: '正则表达式',
+        replaceOne: '替换',
+        replaceAll: '全部替换',
+        regexInvalid: '正则无效',
+        findNone: '无结果',
+        replacedAll: '已替换 {count} 处',
       },
     },
     en: {
@@ -77,6 +89,18 @@
         syntax: 'Syntax',
         eol: 'EOL',
         size: 'Size',
+        findLabel: 'Find what',
+        replaceLabel: 'Replace with',
+        findPrev: 'Previous',
+        findNext: 'Next',
+        findClose: 'Close',
+        caseSensitive: 'Match case',
+        regex: 'Regular expression',
+        replaceOne: 'Replace',
+        replaceAll: 'Replace all',
+        regexInvalid: 'Invalid regex',
+        findNone: 'No results',
+        replacedAll: 'Replaced {count} occurrence(s)',
       },
     },
   });
@@ -177,6 +201,19 @@
     modalInput: document.getElementById('ed-modal-input'),
     modalCancel: document.getElementById('ed-modal-cancel'),
     modalConfirm: document.getElementById('ed-modal-confirm'),
+    find: document.getElementById('editor-find'),
+    findLabel: document.getElementById('ed-find-label'),
+    findInput: document.getElementById('ed-find-input'),
+    findCount: document.getElementById('ed-find-count'),
+    findPrev: document.getElementById('ed-find-prev'),
+    findNext: document.getElementById('ed-find-next'),
+    findCase: document.getElementById('ed-find-case'),
+    findRegex: document.getElementById('ed-find-regex'),
+    findClose: document.getElementById('ed-find-close'),
+    replaceLabel: document.getElementById('ed-replace-label'),
+    replaceInput: document.getElementById('ed-replace-input'),
+    replaceOne: document.getElementById('ed-replace-one'),
+    replaceAll: document.getElementById('ed-replace-all'),
   };
 
   const state = {
@@ -199,6 +236,21 @@
     cm: null,
     sizeBytes: 0,
     sizeTimer: null,
+    // 查找 / 替换（Command + F）
+    find: {
+      visible: false,
+      query: '',
+      replace: '',
+      caseSensitive: false,
+      regex: false,
+      pattern: '',
+      invalid: false,
+      matches: [],
+      index: -1,
+      markers: [],
+      activeMarker: null,
+      timer: null,
+    },
   };
 
   const loadedScripts = new Set();
@@ -334,16 +386,224 @@
         'Ctrl-Shift-S': saveAs,
       },
     });
-    state.cm.on('change', syncDirty);
+    state.cm.on('change', () => {
+      syncDirty();
+      scheduleFindRefresh();
+    });
     state.cm.on('cursorActivity', renderStatus);
     renderStatus();
+  }
+
+  /* ------------------------------ 查找 / 替换 ------------------------------
+     Command + F 打开：停靠在工具栏下方的两行面板（查找内容 / 替换为），
+     全部命中弱高亮、当前命中强高亮；匹配位置按文档全文计算（支持区分大小写与正则）。 */
+  function clearFindMarkers() {
+    const f = state.find;
+    for (const marker of f.markers) marker.clear();
+    f.markers = [];
+    if (f.activeMarker) {
+      f.activeMarker.clear();
+      f.activeMarker = null;
+    }
+  }
+
+  function updateFindCount() {
+    const f = state.find;
+    if (!dom.findCount) return;
+    dom.findCount.classList.toggle('is-error', Boolean(f.invalid));
+    if (f.invalid) {
+      dom.findCount.textContent = i18n.t('editor.regexInvalid');
+      return;
+    }
+    if (!f.query) {
+      dom.findCount.textContent = '';
+      return;
+    }
+    if (!f.matches.length) {
+      dom.findCount.textContent = i18n.t('editor.findNone');
+      return;
+    }
+    dom.findCount.textContent = `${f.index >= 0 ? f.index + 1 : 0} / ${f.matches.length}`;
+  }
+
+  function activateFindMatch(scroll) {
+    const f = state.find;
+    if (f.activeMarker) {
+      f.activeMarker.clear();
+      f.activeMarker = null;
+    }
+    const item = f.matches[f.index];
+    if (!item || !state.cm) {
+      updateFindCount();
+      return;
+    }
+    f.activeMarker = state.cm.markText(item.from, item.to, { className: 'cm-find-active' });
+    if (scroll) {
+      state.cm.setSelection(item.from, item.to);
+      state.cm.scrollIntoView({ from: item.from, to: item.to }, 60);
+    }
+    updateFindCount();
+  }
+
+  /* 重新计算全部命中并刷新高亮 / 计数（默认把视图带到光标之后的第一处命中）。 */
+  function refreshFind() {
+    const f = state.find;
+    f.matches = [];
+    f.index = -1;
+    f.invalid = false;
+    clearFindMarkers();
+    const cm = state.cm;
+    const query = String(f.query || '');
+    if (!cm || !query) {
+      updateFindCount();
+      return;
+    }
+    const source = f.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try {
+      // 先验证正则合法性（非法时只提示，不阻塞输入）。
+      new RegExp(source, f.caseSensitive ? 'g' : 'gi');
+    } catch (err) {
+      f.invalid = true;
+      updateFindCount();
+      return;
+    }
+    f.pattern = source;
+    const re = new RegExp(source, f.caseSensitive ? 'g' : 'gi');
+    const text = cm.getValue('\n');
+    const cmp = (window.CodeMirror && window.CodeMirror.cmpPos) || null;
+    const cursor = cm.getCursor();
+    let match = re.exec(text);
+    while (match !== null) {
+      if (!match[0].length) {
+        re.lastIndex += 1;
+      } else {
+        const from = cm.posFromIndex(match.index);
+        const to = cm.posFromIndex(match.index + match[0].length);
+        f.matches.push({ from, to, text: match[0] });
+        if (f.index < 0 && (!cmp || cmp(from, cursor) >= 0)) f.index = f.matches.length - 1;
+        if (f.matches.length >= 20000) break;
+      }
+      match = re.exec(text);
+    }
+    if (f.matches.length && f.index < 0) f.index = 0;
+    f.markers = f.matches.map((item) => cm.markText(item.from, item.to, { className: 'cm-find-match' }));
+    if (f.index >= 0) activateFindMatch(true);
+    else updateFindCount();
+  }
+
+  function scheduleFindRefresh() {
+    const f = state.find;
+    if (!f.visible) return;
+    if (f.timer) clearTimeout(f.timer);
+    f.timer = setTimeout(() => {
+      f.timer = null;
+      refreshFind();
+    }, 180);
+  }
+
+  function findStep(direction) {
+    const f = state.find;
+    if (!f.visible) {
+      openFind(false);
+      return;
+    }
+    if (!f.matches.length && !f.invalid) refreshFind();
+    if (!f.matches.length) return;
+    if (f.index < 0) f.index = direction > 0 ? 0 : f.matches.length - 1;
+    else f.index = (f.index + direction + f.matches.length) % f.matches.length;
+    activateFindMatch(true);
+  }
+
+  function replacementForMatch(item) {
+    const f = state.find;
+    if (!f.regex) return f.replace;
+    try {
+      const single = new RegExp(f.pattern, f.caseSensitive ? '' : 'i');
+      return item.text.replace(single, f.replace);
+    } catch (err) {
+      return f.replace;
+    }
+  }
+
+  function replaceOne() {
+    const f = state.find;
+    if (!state.cm) return;
+    if (state.readOnly) {
+      setStatus(i18n.t('editor.binaryReadOnly'));
+      return;
+    }
+    if (!f.matches.length && !f.invalid) refreshFind();
+    if (!f.matches.length) return;
+    if (f.index < 0) f.index = 0;
+    const item = f.matches[f.index];
+    const next = replacementForMatch(item);
+    state.cm.replaceRange(next, item.from, item.to);
+    refreshFind();
+  }
+
+  function replaceAll() {
+    const f = state.find;
+    if (!state.cm) return;
+    if (state.readOnly) {
+      setStatus(i18n.t('editor.binaryReadOnly'));
+      return;
+    }
+    if (!f.matches.length && !f.invalid) refreshFind();
+    const items = f.matches.slice();
+    if (!items.length) return;
+    const replacements = items.map((item) => replacementForMatch(item));
+    // 从后往前替换，避免前面的改动影响后面命中的位置。
+    state.cm.operation(() => {
+      for (let i = items.length - 1; i >= 0; i -= 1) {
+        state.cm.replaceRange(replacements[i], items[i].from, items[i].to);
+      }
+    });
+    syncDirty();
+    refreshFind();
+    setStatus(i18n.t('editor.replacedAll', { count: items.length }), 'is-success');
+  }
+
+  function openFind(focusReplace) {
+    if (!state.cm) return;
+    const f = state.find;
+    f.visible = true;
+    dom.find.hidden = false;
+    // 有单行选区时用它作为初始关键词（Word 的习惯）。
+    const selection = state.cm.getSelection();
+    if (selection && !selection.includes('\n')) {
+      f.query = selection;
+      dom.findInput.value = selection;
+    }
+    refreshFind();
+    const target = focusReplace ? dom.replaceInput : dom.findInput;
+    target.focus();
+    target.select();
+    // 面板显隐改变了编辑器可用高度：下一帧让 CodeMirror 重新测量。
+    requestAnimationFrame(() => {
+      if (state.cm) state.cm.refresh();
+    });
+  }
+
+  function closeFind() {
+    const f = state.find;
+    f.visible = false;
+    if (f.timer) {
+      clearTimeout(f.timer);
+      f.timer = null;
+    }
+    clearFindMarkers();
+    if (dom.find) dom.find.hidden = true;
+    if (state.cm) state.cm.focus();
+    requestAnimationFrame(() => {
+      if (state.cm) state.cm.refresh();
+    });
   }
 
   /* 二进制文件按只读方式呈现：禁用保存 / 另存为 / 从 VS Code 打开 / 下载，
      避免把有损解码后的文本写回或导出。 */
   function applyReadOnlyState() {
     if (state.cm) state.cm.setOption('readOnly', state.readOnly);
-    for (const button of [dom.save, dom.saveAs, dom.openVSCode, dom.download]) {
+    for (const button of [dom.save, dom.saveAs, dom.openVSCode, dom.download, dom.replaceOne, dom.replaceAll]) {
       if (button) button.disabled = state.readOnly;
     }
   }
@@ -551,8 +811,23 @@
     setIconButton(dom.undo, Icons.undo, 'editor.undo');
     setIconButton(dom.redo, Icons.redo, 'editor.redo');
     setIconButton(dom.wrap, Icons.wrap, state.wrap ? 'editor.wrapOff' : 'editor.wrapOn');
+    if (dom.findLabel) dom.findLabel.textContent = i18n.t('editor.findLabel');
+    if (dom.findInput) dom.findInput.placeholder = i18n.t('editor.findLabel');
+    if (dom.replaceLabel) dom.replaceLabel.textContent = i18n.t('editor.replaceLabel');
+    if (dom.replaceInput) dom.replaceInput.placeholder = i18n.t('editor.replaceLabel');
+    setIconButton(dom.findPrev, Icons.chevronUp, 'editor.findPrev');
+    setIconButton(dom.findNext, Icons.chevronDown, 'editor.findNext');
+    setIconButton(dom.findClose, Icons.x, 'editor.findClose');
+    setIconButton(dom.findCase, Icons.caseSensitive, 'editor.caseSensitive');
+    if (dom.findRegex) {
+      dom.findRegex.setAttribute('data-tip', i18n.t('editor.regex'));
+      dom.findRegex.setAttribute('aria-label', i18n.t('editor.regex'));
+    }
+    if (dom.replaceOne) dom.replaceOne.textContent = i18n.t('editor.replaceOne');
+    if (dom.replaceAll) dom.replaceAll.textContent = i18n.t('editor.replaceAll');
     state.modeLabel = labelForMode(state.mode, state.name);
     renderStatus();
+    updateFindCount();
   }
 
   dom.save.addEventListener('click', () => save());
@@ -569,6 +844,56 @@
     dom.wrap.setAttribute('data-tip', i18n.t(tipKey));
     dom.wrap.setAttribute('aria-label', i18n.t(tipKey));
   });
+
+  /* 查找 / 替换面板交互 */
+  if (dom.findInput) {
+    dom.findInput.addEventListener('input', () => {
+      state.find.query = dom.findInput.value;
+      refreshFind();
+    });
+    dom.findInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        findStep(event.shiftKey ? -1 : 1);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeFind();
+      }
+    });
+  }
+  if (dom.replaceInput) {
+    dom.replaceInput.addEventListener('input', () => {
+      state.find.replace = dom.replaceInput.value;
+    });
+    dom.replaceInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        replaceOne();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeFind();
+      }
+    });
+  }
+  if (dom.findPrev) dom.findPrev.addEventListener('click', () => findStep(-1));
+  if (dom.findNext) dom.findNext.addEventListener('click', () => findStep(1));
+  if (dom.findClose) dom.findClose.addEventListener('click', closeFind);
+  if (dom.findCase) {
+    dom.findCase.addEventListener('click', () => {
+      state.find.caseSensitive = !state.find.caseSensitive;
+      dom.findCase.setAttribute('aria-pressed', String(state.find.caseSensitive));
+      refreshFind();
+    });
+  }
+  if (dom.findRegex) {
+    dom.findRegex.addEventListener('click', () => {
+      state.find.regex = !state.find.regex;
+      dom.findRegex.setAttribute('aria-pressed', String(state.find.regex));
+      refreshFind();
+    });
+  }
+  if (dom.replaceOne) dom.replaceOne.addEventListener('click', replaceOne);
+  if (dom.replaceAll) dom.replaceAll.addEventListener('click', replaceAll);
 
   dom.modalCancel.addEventListener('click', closeModal);
   dom.modalConfirm.addEventListener('click', () => {
@@ -591,8 +916,24 @@
 
   window.addEventListener('keydown', (event) => {
     const mod = event.metaKey || event.ctrlKey;
-    if (!mod) return;
     const key = String(event.key || '').toLowerCase();
+    // Command + F：打开查找（已打开时聚焦并全选关键词）；Command + G / Shift + G：下一个 / 上一个。
+    if (mod && key === 'f') {
+      event.preventDefault();
+      openFind(false);
+      return;
+    }
+    if (mod && key === 'g') {
+      event.preventDefault();
+      findStep(event.shiftKey ? -1 : 1);
+      return;
+    }
+    if (event.key === 'Escape' && state.find.visible && dom.modal.hidden) {
+      event.preventDefault();
+      closeFind();
+      return;
+    }
+    if (!mod) return;
     if (key === 's') {
       event.preventDefault();
       if (event.shiftKey) saveAs();

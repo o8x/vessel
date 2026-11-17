@@ -1645,6 +1645,9 @@
       applyLocale,
       destroy,
       isConnected: () => state.connected,
+      // 当前远端目录 / 当前连接目标（供「文件传输」右键菜单定位）。
+      getCwd: () => state.cwd,
+      getTarget: () => state.target,
     };
   }
 

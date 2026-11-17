@@ -119,10 +119,12 @@ function openTool(id) {
 function buildMenuTemplate() {
   const wm = require('./window-manager');
   const template = [
-    { label: label('启动终端', 'Open Terminal'), click: () => wm.openTerminalWindow() },
+    { label: label('主界面', 'Main Window'), click: () => wm.showMainWindow() },
+    { label: label('打开终端', 'Open Terminal'), click: () => wm.openTerminalWindow() },
+    { type: 'separator' },
+    { label: label('连接到', 'Connect to Server'), submenu: buildSshSubmenu() },
     { label: label('文件管理', 'File Manager'), click: () => wm.openFileWindow() },
     { label: label('文件传输', 'File Transfer'), click: () => wm.openTransferWindow() },
-    { label: label('连接到服务器', 'Connect to Server'), submenu: buildSshSubmenu() },
   ];
   if (toolItems.length) {
     template.push({ type: 'separator' });
@@ -131,9 +133,8 @@ function buildMenuTemplate() {
     }
   }
   template.push({ type: 'separator' });
-  template.push({ label: label('显示主界面', 'Show Main Window'), click: () => wm.showMainWindow() });
-  template.push({ label: label(`重启 ${APP_NAME}`, `Restart ${APP_NAME}`), click: () => restartApp() });
-  template.push({ label: label(`退出 ${APP_NAME}`, `Quit ${APP_NAME}`), click: () => app.quit() });
+  template.push({ label: label(`重新启动`, `Restart`), click: () => restartApp() });
+  template.push({ label: label(`退出`, `Quit`), click: () => app.quit() });
   return template;
 }
 

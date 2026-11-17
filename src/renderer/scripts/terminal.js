@@ -50,6 +50,7 @@
         menuConnect: '连接到服务器',
         menuNoHosts: '无可用主机',
         menuFiles: '切换文件管理器',
+        menuTransfer: '文件传输',
         menuUpload: '上传文件到此处',
         quickUser: '用户名',
         quickAddress: '地址',
@@ -104,6 +105,7 @@
         menuConnect: 'Connect to server',
         menuNoHosts: 'No hosts available',
         menuFiles: 'Toggle file manager',
+        menuTransfer: 'File transfer',
         menuUpload: 'Upload files here',
         quickUser: 'Username',
         quickAddress: 'Address',
@@ -2340,6 +2342,17 @@
         disabled: !sshReady || !filesApi,
         run: () => {
           if (filesApi) filesApi.toggle();
+        },
+      },
+      {
+        label: i18n.t('terminalWin.menuTransfer'),
+        icon: 'transfer',
+        disabled: !sshReady || !filesApi,
+        run: () => {
+          const dir = filesApi && typeof filesApi.getCwd === 'function' ? filesApi.getCwd() : '';
+          if (window.ships.transferWindow) {
+            window.ships.transferWindow.open({ target: String(sshTarget || ''), path: dir || '' });
+          }
         },
       },
       {

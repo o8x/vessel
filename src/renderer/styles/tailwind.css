@@ -3043,6 +3043,78 @@ body.editor-window {
 .editor-toolbar-spacer {
   flex: 1 1 auto;
 }
+/* 查找 / 替换面板：停靠在工具栏下方，两行（查找 / 替换），布局接近 Word 的查找替换。 */
+.editor-find {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+.editor-find[hidden] {
+  display: none;
+}
+.editor-find-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.editor-find-label {
+  flex: 0 0 52px;
+  font-size: 12px;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+.editor-find-input {
+  flex: 1 1 160px;
+  min-width: 120px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-control-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-control);
+  color: var(--color-fg);
+  font-size: 12px;
+}
+.editor-find-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring);
+}
+.editor-find-count {
+  flex: 0 0 auto;
+  min-width: 56px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--color-fg-muted);
+}
+.editor-find-count.is-error {
+  color: var(--color-danger);
+}
+.editor-find-btn {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+.editor-find-toggle[aria-pressed='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.editor-find-row .editor-btn {
+  height: 26px;
+}
+/* 查找命中高亮：全部命中弱底色，当前命中强底色。 */
+.cm-find-match {
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+.cm-find-active {
+  background: color-mix(in srgb, var(--color-accent) 46%, transparent);
+}
 .editor-host {
   flex: 1 1 auto;
   min-height: 0;

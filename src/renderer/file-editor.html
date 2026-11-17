@@ -28,6 +28,25 @@
         <button id="ed-wrap" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-reload" class="icon-btn editor-toolbar-btn" type="button"></button>
       </header>
+      <!-- 查找 / 替换（Command + F）：停靠在工具栏下方，两行布局（查找 / 替换），风格接近 Word -->
+      <div id="editor-find" class="editor-find" hidden>
+        <div class="editor-find-row">
+          <label class="editor-find-label" for="ed-find-input" id="ed-find-label"></label>
+          <input id="ed-find-input" class="editor-find-input" type="text" spellcheck="false" autocomplete="off" />
+          <span id="ed-find-count" class="editor-find-count"></span>
+          <button id="ed-find-prev" class="icon-btn editor-find-btn" type="button"></button>
+          <button id="ed-find-next" class="icon-btn editor-find-btn" type="button"></button>
+          <button id="ed-find-case" class="icon-btn editor-find-btn editor-find-toggle" type="button" aria-pressed="false"></button>
+          <button id="ed-find-regex" class="icon-btn editor-find-btn editor-find-toggle" type="button" aria-pressed="false">.*</button>
+          <button id="ed-find-close" class="icon-btn editor-find-btn" type="button"></button>
+        </div>
+        <div class="editor-find-row">
+          <label class="editor-find-label" for="ed-replace-input" id="ed-replace-label"></label>
+          <input id="ed-replace-input" class="editor-find-input" type="text" spellcheck="false" autocomplete="off" />
+          <button id="ed-replace-one" class="editor-btn" type="button"></button>
+          <button id="ed-replace-all" class="editor-btn" type="button"></button>
+        </div>
+      </div>
       <div id="editor-host" class="editor-host"></div>
       <footer class="editor-status">
         <span id="ed-ref" class="editor-status-ref"></span>

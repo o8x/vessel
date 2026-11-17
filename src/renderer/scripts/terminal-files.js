@@ -190,6 +190,8 @@
       followCd,
       closeConnection,
       isOpen: () => open,
+      // 当前远端目录（未连接 / 面板未创建时为空）。
+      getCwd: () => (manager && typeof manager.getCwd === 'function' ? manager.getCwd() : ''),
     };
   }
 
