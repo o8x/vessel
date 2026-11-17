@@ -2,6 +2,30 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.10.0 - 2026-11-17
+
+### 新增
+
+- Terminal file transfer menu item and editor find/replace
+- Give file, transfer and editor windows a dedicated modal title bar
+- Use modal hidden-inset title bars for file, transfer and editor windows
+- Refine tray menu, ssh dropdown sizes and file tree double-click handling
+- Polish transfer window layout, ssh dropdown sizing and split snapping
+- Rework transfer window with folder tree, sync toggle and dedicated icon
+- Pin terminal windows by default so they do not shrink into a ball
+- Dual-pane file transfer window with sync and shuttle transfer
+- Rebuild tray menu with terminal, ssh hosts and tool shortcuts
+- Release download button to update window and tighten padding
+
+### 修复
+
+- Set modal title bar left padding to 85px
+- Increase modal title bar left padding to clear traffic lights
+- Unify row and control heights in file windows
+- Match ssh dropdown trigger height with connection inputs
+- Match ssh dropdown row height with path row in file windows
+- Use 32px ssh dropdown trigger and 25px items in file windows
+
 ## v6.9.0 - 2026-11-12
 
 ### 新增
