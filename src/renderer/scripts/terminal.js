@@ -1423,8 +1423,23 @@
     return { grouped, ungrouped, showHeaders: sections > 1 };
   }
 
+  /* 主机显示名（归一化）：`用户名@地址` —— 别名里内嵌的 user@ 会被拆出来，
+     `User` / `HostName` 字段优先，两者都没有时用别名本身。与托盘菜单一致。 */
   function sshHostLabel(host) {
-    return host.user ? `${host.user}@${host.hostName}` : String(host.hostName || host.alias || '');
+    const alias = String((host && host.alias) || '');
+    const fields = (host && host.fields) || {};
+    let user = String(fields.user || host.user || '').trim();
+    let address = String(fields.hostname || host.hostName || '').trim();
+    if (!address) address = alias;
+    if (address.includes('@')) {
+      const at = address.lastIndexOf('@');
+      if (!user) user = address.slice(0, at);
+      address = address.slice(at + 1);
+    } else if (!user && alias.includes('@')) {
+      user = alias.slice(0, alias.lastIndexOf('@'));
+    }
+    if (!address) address = alias;
+    return user ? `${user}@${address}` : address;
   }
 
   /* 当前 SSH 连接的展示文本：优先用 ~/.ssh/config 里的 `用户名@主机地址`，

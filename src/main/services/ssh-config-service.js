@@ -108,6 +108,26 @@ function hostFromEntry(entry) {
   };
 }
 
+/* 主机的归一化显示名：`用户名@地址`。
+   别名里内嵌的 `user@` 会被拆出来，`User` / `HostName` 字段优先；两者都没有时用别名本身。 */
+function hostLabel(host) {
+  if (!host) return '';
+  const alias = String(host.alias || '');
+  const fields = host.fields || {};
+  let user = String(fields.user || host.user || '').trim();
+  let address = String(fields.hostname || host.hostName || '').trim();
+  if (!address) address = alias;
+  if (address.includes('@')) {
+    const at = address.lastIndexOf('@');
+    if (!user) user = address.slice(0, at);
+    address = address.slice(at + 1);
+  } else if (!user && alias.includes('@')) {
+    user = alias.slice(0, alias.lastIndexOf('@'));
+  }
+  if (!address) address = alias;
+  return user ? `${user}@${address}` : address;
+}
+
 function readContent() {
   try {
     return fs.readFileSync(SSH_CONFIG_FILE, 'utf8');
@@ -333,6 +353,7 @@ function remove(alias) {
 module.exports = {
   list,
   listGroups,
+  hostLabel,
   upsert,
   upsertQuickConnect,
   remove,

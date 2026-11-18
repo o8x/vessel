@@ -1,12 +1,17 @@
 'use strict';
 
 const path = require('path');
-const { Tray, Menu, nativeImage, app } = require('electron');
+const { Tray, Menu, nativeImage, app, clipboard } = require('electron');
 const { APP_NAME, TRAY_CLICK_ACTIONS, TRAY_HIDDEN_TOOL_IDS } = require('../shared/constants');
 const settings = require('./services/settings-service');
 const logger = require('./utils/logger');
 
 const TRAY_ICON = path.join(__dirname, '..', '..', 'assets', 'imgs', 'trayTemplate.png');
+
+// 2FA 工具 id（托盘里用它做「复制验证码」而非打开主界面）。
+const TOTP_TOOL_ID = 'twofa';
+// SSH 工具 id（托盘里用它承载「连接到服务器」，不再显示「SSH 管理」）。
+const SSH_TOOL_ID = 'ssh';
 
 /* 右键菜单里的工具清单由渲染层上报（主进程不硬编码工具列表）：
    渲染层知道自己的工具注册顺序与当前语言下的名称，上报后托盘菜单据此生成条目。 */
@@ -73,21 +78,54 @@ function buildSshSubmenu() {
     items.push({
       label: group,
       submenu: list.map((host) => ({
-        label: host.alias,
+        label: configService.hostLabel(host),
         click: () => connectHost(host),
       })),
     });
   }
-  if (ungrouped.length) {
+  // 未分组主机直接平铺在二级菜单里（不再单独放进「未分组」分组）。
+  for (const host of ungrouped) {
     items.push({
-      label: label('未分组', 'Ungrouped'),
-      submenu: ungrouped.map((host) => ({
-        label: host.alias,
-        click: () => connectHost(host),
-      })),
+      label: configService.hostLabel(host),
+      click: () => connectHost(host),
     });
   }
   return items;
+}
+
+/* 2FA 验证码：直接复制到剪贴板，不打开主界面。
+   沿用工具清单里的「2FA 验证码」菜单项：账号多于 1 个时展开二级菜单列出名称，
+   点击对应名称即复制该账号的验证码；只有 1 个账号时点击菜单项即复制。 */
+function buildTotpToolItem(item) {
+  const totpService = require('./services/totp-service');
+  const accounts = totpService.list();
+  // 没有账号：保持原样（打开主界面并加载 2FA 工具，便于添加账号）。
+  if (!accounts.length) return { label: item.label, click: () => openTool(item.id) };
+  const copyCode = (account) => {
+    const codes = totpService.codes();
+    const code = codes[account.id];
+    if (!code) return;
+    clipboard.writeText(String(code));
+    logger.file(`[tray] 2FA code copied (id=${account.id})`);
+  };
+  if (accounts.length === 1) {
+    return { label: item.label, click: () => copyCode(accounts[0]) };
+  }
+  return {
+    label: item.label,
+    submenu: accounts.map((account) => ({
+      label: totpAccountLabel(account),
+      click: () => copyCode(account),
+    })),
+  };
+}
+
+/* 账号显示名：优先标题，其次副标题（都没有则「未命名」）。 */
+function totpAccountLabel(account) {
+  const title = String((account && account.title) || '').trim();
+  const subtitle = String((account && account.subtitle) || '').trim();
+  if (title && subtitle) return `${title} (${subtitle})`;
+  return title || subtitle || label('未命名', 'Unnamed');
 }
 
 /* 连接主机：新开一扇内置终端并执行 ssh；已存密码时自动注入。 */
@@ -116,21 +154,38 @@ function openTool(id) {
   wm.showMainWindowWithTool(id);
 }
 
+/* 「连接到服务器」条目：列出 ~/.ssh/config 里的主机（未分组的主机平铺）。 */
+function connectMenuItem() {
+  return { label: label('连接到服务器', 'Connect to Server'), submenu: buildSshSubmenu() };
+}
+
 function buildMenuTemplate() {
   const wm = require('./window-manager');
   const template = [
     { label: label('主界面', 'Main Window'), click: () => wm.showMainWindow() },
     { label: label('打开终端', 'Open Terminal'), click: () => wm.openTerminalWindow() },
-    { type: 'separator' },
-    { label: label('连接到', 'Connect to Server'), submenu: buildSshSubmenu() },
-    { label: label('文件管理', 'File Manager'), click: () => wm.openFileWindow() },
-    { label: label('文件传输', 'File Transfer'), click: () => wm.openTransferWindow() },
+    { label: label('打开文件管理', 'Open File Manager'), click: () => wm.openFileWindow() },
+    { label: label('打开文件传输', 'Open File Transfer'), click: () => wm.openTransferWindow() },
   ];
   if (toolItems.length) {
     template.push({ type: 'separator' });
     for (const tool of toolItems) {
+      // SSH 工具项 → 「连接到服务器」：直接列主机，不再打开主界面的「SSH 管理」。
+      if (tool.id === SSH_TOOL_ID) {
+        template.push(connectMenuItem());
+        continue;
+      }
+      // 2FA 工具项：直接复制验证码，不打开主界面。
+      if (tool.id === TOTP_TOOL_ID) {
+        template.push(buildTotpToolItem(tool));
+        continue;
+      }
       template.push({ label: tool.label, click: () => openTool(tool.id) });
     }
+  } else {
+    // 工具清单还没上报时，保留「连接到服务器」入口。
+    template.push({ type: 'separator' });
+    template.push(connectMenuItem());
   }
   template.push({ type: 'separator' });
   template.push({ label: label(`重新启动`, `Restart`), click: () => restartApp() });
