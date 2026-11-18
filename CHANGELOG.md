@@ -2,6 +2,15 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.12.0 - 2026-11-18
+
+### 新增
+
+- Embedded file transfer panel to terminal
+- Dedupe quick connect, refine tray menu and normalize ssh labels
+- Refine inline command usage and save local files via the built-in editor
+- Show ssh connection in centered terminal title and add inline \v commands
+
 ## v6.11.0 - 2026-11-17
 
 ### 新增
