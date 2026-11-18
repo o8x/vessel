@@ -98,11 +98,11 @@
 | `file-window:set-top` | `{ value: boolean }` | `{ ok, alwaysOnTop }` | 独立文件窗口的置顶开关：写 `settings.fileWindowAlwaysOnTop`；**默认关**（普通窗口），持久 |
 | `file-window:snap-size` | `{ height }` | `{ ok, height? }` | 保留兼容：独立文件窗口已**不再自动对齐整行高度**，渲染层不再调用；通道仍按工作区 / 最小高度夹取后设置内容高度；只接受来自该窗口的请求 |
 | `file-editor:open` | `{ sessionId, path, name? }` | `{ ok, error? }` | 从文件管理器打开一扇内置编辑器窗口（每文件一扇、可多开）；`sessionId` 必须是**发起窗口自己**的 SFTP 会话；只接受终端窗口 / 独立文件窗口的请求 |
-| `file-editor:new-local` | — | `{ ok, path?, error? }` | 新建**本地**临时文件（系统临时目录下的 `scratch-<时间戳>.txt`）并用内置编辑器打开；不依赖 SSH / SFTP；只接受终端窗口 / 独立文件窗口的请求 |
+| `file-editor:new-local` | — | `{ ok, path?, error? }` | 新建**本地**文件（落在设置里配置的「文件下载目录」，文件名 `scratch-<时间戳>.txt`，重名自动加序号）并用内置编辑器打开；不依赖 SSH / SFTP；只接受终端窗口 / 独立文件窗口的请求 |
 | `file-editor:info` | — | `{ ok, path, name, reference, local? }` | 编辑器启动后读取当前文件信息与引用（`用户名@地址:路径`）；本地临时文件时 `reference` 为本地路径、`local: true`；只接受来自编辑器窗口的请求 |
 | `file-editor:read` | — | `{ ok, content, size, mtime, binary, error?, code? }` | 读取当前文件文本（远端 ≤ 8MB、拒绝目录；本地临时文件直接读 fs）；含 NUL 的二进制内容不报错，按有损 UTF-8 解码返回并置 `binary: true`，渲染层据此只读；只接受来自编辑器窗口的请求 |
 | `file-editor:save` | `{ content }` | `{ ok, path?, bytes?, error? }` | 覆盖写回当前文件（远端走 SFTP，本地临时文件走 fs）；编辑器状态栏显示保存中 / 已保存；只接受来自编辑器窗口的请求 |
-| `file-editor:save-as` | `{ path, content }` | `{ ok, path?, bytes?, error? }` | 另存为：`path` 必须为 `/` 开头的绝对路径，写入成功后该编辑器切换到新文件；只接受来自编辑器窗口的请求 |
+| `file-editor:save-as` | `{ path, content }` | `{ ok, path?, bytes?, error?, canceled? }` | 另存为：远端文件要求 `path` 为 `/` 开头的绝对路径；**本地文件忽略 `path` 并拉起系统保存面板（Finder 样式）选择位置**，写入成功后该编辑器切换到新文件；只接受来自编辑器窗口的请求 |
 | `file-editor:open-vscode` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「从 VS Code 打开」：远端文件把当前内容写成本地文件（下载目录，重名自动加 ` (n)`）后用 VS Code 打开；本地临时文件先落盘当前内容再直接打开该文件；不修改远端文件；只接受来自编辑器窗口的请求 |
 | `file-editor:download` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「下载到本地」：把编辑器当前内容写成本地文件到设置的下载目录（同名自动加 ` (n)`）；只接受来自编辑器窗口的请求 |
 | `file-editor:close-all` | — | `{ ok, closed }` | 关闭发起窗口打开的所有编辑器窗口（文件管理器销毁 / 断开 / 切换目标时调用）；只接受终端窗口 / 独立文件窗口的请求 |
@@ -123,6 +123,7 @@
 | `files-layout:get` | — | `{ treeWidth, name, size, time, panelHeight }` | 读取文件管理布局（`file-layout.json`） |
 | `files-layout:set` | `{ ...patch }` | 合并后的布局 | 合并写入文件管理布局（拖动分隔线 / 列宽时调用） |
 | `terminal:export` | `{ text, name? }` | `{ ok, path?, canceled?, error? }` | 保存对话框 + 把终端文本写入本地文件 |
+| `terminal:save-buffer` | `{ text }` | `{ ok, path?, error? }` | 把终端缓冲区文本写入**应用数据目录**下的 `terminal-<时间戳>.txt`，并用内置编辑器打开该文件（本地文件模式） |
 | `terminal:open-iterm` | — | `{ ok, command?, error? }` | 在 iTerm 中重放最后注入的命令并关闭终端窗口 |
 | `terminal:set-top` | `{ value: boolean }` | `{ ok, alwaysOnTop: false }` | **已弃用（兼容保留）**：终端窗口不再置顶（图钉按钮只控制失焦缩成悬浮球），本通道恒返回 `alwaysOnTop: false`、**不写设置** |
 | `shortcut:set` | `{ target: 'terminal', hotkey: string }` | `{ ok, hotkey, error? }` | 设置 → 快捷键 改绑**终端**全局快捷键：先试注册（空串 = 注销），**成功才写 `settings.terminalHotkey`**；失败返回 `{ ok: false, error }`（`unavailable` = 已被占用，`invalid-target` = target 非法 / `main` 已不再支持）并保持原值 |

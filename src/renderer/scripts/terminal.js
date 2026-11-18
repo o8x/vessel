@@ -578,15 +578,25 @@
   const META_TRIGGER_PREFIXES = new Set(['v', 've', 'ves', 'vess', 'vesse', 'vessel']);
   const META_SHORT = {
     '-t': 'trans',
+    "--trans": "trans",
     '-s': 'sftp',
+    "--sftp": "sftp",
     '-u': 'upload',
+    "--upload": "upload",
     '-i': 'iterm',
+    "--iterm": "iterm",
     '-p': 'split',
+    "--split": "split",
     '-o': 'open',
+    "--open": "open",
     '-w': 'save',
+    "--save": "save",
     '-x': 'exit',
+    "--exit": "exit",
     '-c': 'ssh',
+    "--ssh": "ssh",
     '-e': 'edit',
+    "--edit": "edit",
   };
 
   function metaNewState() {
@@ -615,9 +625,11 @@
     else startSessionFor(rec);
   }
 
+  /* 输出正文：行首换行（接在刚输入的命令行之后），**结尾不留空行** ——
+     末尾的换行由随后发给 shell 的空回车补上，提示符正好落在最后一行下面。 */
   function metaPrint(rec, text) {
     const body = Array.isArray(text) ? text.join('\r\n') : String(text || '');
-    write(`\r\n${body}\r\n`, rec);
+    write(`\r\n${body}`, rec)
   }
 
   /* 内联命令结束后让 shell 重新打印提示符（发送空回车，不产生 ^C）。 */
@@ -625,36 +637,37 @@
     if (rec && rec.sessionId) window.ships.terminal.input(rec.sessionId, '\r');
   }
 
+  /* usage 排版参照 curl --help：Usage 行 + 子命令列表（命令名 + 短选项对齐）+ 示例 + 结尾提示。 */
   function metaUsage() {
-    const rows = [
-      ['Usage', ''],
-      ['\\v <command>', 'Run a command (alias: \\vessel)'],
-      ['\\v -<flag>', 'Short form, e.g. \\v -t'],
-      ['', ''],
-      ['Commands', ''],
-      ['trans, -t', 'Open File Transfer; connect and start in the current directory'],
-      ['sftp, -s', 'Open the embedded file manager in the current directory'],
-      ['upload, -u', 'Upload files to the current directory'],
-      ['iterm, -i', 'Open the current SSH session in iTerm and close this terminal'],
-      ['split, -p [h]', 'Split vertically; add "h" to split horizontally'],
-      ['open, -o', 'Open a new terminal window'],
-      ['save, -w', 'Save the full terminal buffer to a local file'],
-      ['exit, -x', 'Destroy this terminal'],
-      ['edit, -e', 'Create a local temporary file and open it in the built-in editor'],
-      ['ssh, -c <user@host> [password]', 'Quick-connect in a new terminal (password optional)'],
-      ['', ''],
-      ['Examples', ''],
-      ['\\v trans', ''],
-      ['\\v split h', ''],
-      ['\\v ssh root@10.0.0.5 "secret"', ''],
+    const commands = [
+      ["-t, trans", "Open File Transfer; connect and start in the current directory"],
+      ["-s, sftp", "Open the embedded file manager in the current directory"],
+      ["-u, upload", "Upload files to the current directory"],
+      ["-i, iterm", "Open the current SSH session in iTerm and close this terminal"],
+      ["-p, split", "Split vertically; add \"h\" to split horizontally"],
+      ["-o, open", "Open a new terminal window"],
+      ["-w, save", "Save the terminal buffer to the data folder and open it"],
+      ["-x, exit", "Destroy this terminal"],
+      ["-e, edit", "Create a new local file in the download folder and open it"],
+      ["-c, ssh", "Quick-connect in a new terminal; <user@host> [password]"],
     ];
-    const width = Math.max(...rows.filter((row) => row[1]).map((row) => row[0].length));
-    const lines = ['Vessel terminal commands', ''];
-    for (const [cmd, desc] of rows) {
-      if (!cmd) lines.push('');
-      else if (!desc) lines.push(`  ${cmd}`);
-      else lines.push(`  ${cmd.padEnd(width)}  ${desc}`);
+    const width = Math.max(...commands.map((row) => row[0].length))
+    const lines = [
+      "Usage: \\v <command> [args] or \\v -<flag> [args]",
+      "",
+      "Commands:",
+    ]
+    for (const [name, desc] of commands) {
+      lines.push(` ${name.padEnd(width)}  ${desc}`)
     }
+    lines.push("")
+    lines.push("Examples:")
+    lines.push(" \\v trans")
+    lines.push(" \\v split h")
+    lines.push(" \\v ssh root@10.0.0.5 \"secret\"")
+    lines.push("")
+    lines.push("Each command has a short flag, e.g. \\v trans is \\v -t.")
+    lines.push("Use \"\\v <command>\" to run a command.")
     return lines;
   }
 
@@ -812,9 +825,8 @@
 
     if (command === 'save') {
       const text = metaFullBufferText(rec.term);
-      const result = await window.ships.terminal.export({ text });
-      if (result && result.canceled) metaPrint(rec, 'Save canceled.');
-      else if (result && result.ok) metaPrint(rec, `Saved to ${result.path}`);
+      const result = await window.ships.terminal.saveBuffer(text)
+      if (result && result.ok) metaPrint(rec, `Saved to ${result.path}`)
       else metaPrint(rec, `Save failed: ${(result && result.error) || 'error'}`);
       metaReprintPrompt(rec);
       return;
@@ -832,7 +844,7 @@
         return;
       }
       const result = await window.ships.fileEditor.newLocal();
-      if (result && result.ok) metaPrint(rec, `Opened a new temporary file: ${result.path}`);
+      if (result && result.ok) metaPrint(rec, `Opened a new file: ${result.path}`)
       else metaPrint(rec, `Cannot create file: ${(result && result.error) || 'error'}`);
       metaReprintPrompt(rec);
       return;

@@ -5,8 +5,8 @@
 // that opened it (no extra credentials needed) and is closed with that window.
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
+const { BrowserWindow, dialog } = require('electron');
 const { IPC } = require('../../shared/constants');
 const wm = require('../window-manager');
 const sftp = require('../services/sftp-service');
@@ -74,16 +74,17 @@ function registerFileEditorIpc(ipcMain) {
   });
 
   // 新建本地临时文件并在内置编辑器中打开（终端内联命令 `\v edit`）。
+  // 本地文件默认落在设置里配置的「文件下载目录」，方便用户直接找到。
   ipcMain.handle(IPC.FILE_EDITOR_NEW_LOCAL, (event) => {
     if (!isFileManagerSender(event)) return { ok: false, error: 'forbidden' };
     let filePath = '';
     try {
       const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vessel-edit-'));
-      filePath = path.join(dir, `scratch-${stamp}.txt`);
+      const dir = sftp.downloadDir();
+      filePath = sftp.uniqueLocalPath(dir, `scratch-${stamp}.txt`);
       fs.writeFileSync(filePath, '', 'utf8');
     } catch (err) {
-      logger.error(`[file-editor] cannot create local temp file: ${err.message}`);
+      logger.error(`[file-editor] cannot create local file: ${err.message}`);
       return { ok: false, error: err.message };
     }
     const win = wm.openFileEditorWindow(event.sender, {
@@ -93,7 +94,7 @@ function registerFileEditorIpc(ipcMain) {
       target: '',
     });
     if (!win) return { ok: false, error: 'open-failed' };
-    logger.file(`[file-editor] local temp file created: ${filePath}`);
+    logger.file(`[file-editor] local file created: ${filePath}`);
     return { ok: true, path: filePath };
   });
 
@@ -128,18 +129,29 @@ function registerFileEditorIpc(ipcMain) {
     return sftp.writeText(info.sessionId, info.path, content);
   });
 
-  ipcMain.handle(IPC.FILE_EDITOR_SAVE_AS, (event, payload) => {
+  ipcMain.handle(IPC.FILE_EDITOR_SAVE_AS, async (event, payload) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
     const nextPath = String((payload && payload.path) || '').trim();
     const content = payload && payload.content;
-    if (!nextPath.startsWith('/')) return { ok: false, error: 'bad-path' };
     if (typeof content !== 'string') return { ok: false, error: 'bad-content' };
+    // 本地文件：拉起系统保存面板（Finder 样式）选择保存位置。
     if (info.local) {
-      const result = writeLocalText(nextPath, content);
-      if (result && result.ok) wm.updateFileEditorPath(event.sender.id, nextPath);
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const options = {
+        title: 'Save As',
+        defaultPath: path.join(sftp.downloadDir(), info.name || 'untitled.txt'),
+        filters: [{ name: 'Text', extensions: ['txt', 'log', 'md'] }],
+      };
+      const picked = win
+        ? await dialog.showSaveDialog(win, options)
+        : await dialog.showSaveDialog(options);
+      if (picked.canceled || !picked.filePath) return { ok: false, canceled: true };
+      const result = writeLocalText(picked.filePath, content);
+      if (result && result.ok) wm.updateFileEditorPath(event.sender.id, picked.filePath);
       return result;
     }
+    if (!nextPath.startsWith('/')) return { ok: false, error: 'bad-path' };
     return sftp.writeText(info.sessionId, nextPath, content).then((result) => {
       if (result && result.ok) wm.updateFileEditorPath(event.sender.id, nextPath);
       return result;

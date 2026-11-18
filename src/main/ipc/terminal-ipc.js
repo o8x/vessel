@@ -10,6 +10,7 @@ const settings = require('../services/settings-service');
 const iterm = require('../services/iterm-service');
 const wm = require('../window-manager');
 const logger = require('../utils/logger');
+const { DATA_DIR } = require('../utils/paths');
 
 // 设置 → 终端 里「重置」要恢复的设置项（都来自 package.json 的 vessel 配置）。
 const TERMINAL_SETTING_KEYS = [
@@ -255,6 +256,27 @@ function registerTerminalIpc(ipcMain) {
       logger.error(`[terminal] export failed: ${err.message}`);
       return { ok: false, error: err.message };
     }
+  });
+
+  /* 终端内联命令 `\v save`：把当前缓冲区文本写入应用数据目录，并用内置编辑器打开该文件。 */
+  ipcMain.handle(IPC.TERMINAL_SAVE_BUFFER, (event, payload) => {
+    const text = String((payload && payload.text) || '');
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    const filePath = path.join(DATA_DIR, `terminal-${stamp}.txt`);
+    try {
+      fs.writeFileSync(filePath, text, 'utf8');
+    } catch (err) {
+      logger.error(`[terminal] save buffer failed (${filePath}): ${err.message}`);
+      return { ok: false, error: err.message };
+    }
+    logger.file(`[terminal] buffer saved: ${filePath} (${Buffer.byteLength(text, 'utf8')} bytes)`);
+    const win = wm.openFileEditorWindow(event.sender, {
+      local: true,
+      path: filePath,
+      name: path.basename(filePath),
+      target: '',
+    });
+    return win ? { ok: true, path: filePath } : { ok: false, path: filePath, error: 'open-failed' };
   });
 
   /* Hand the session over to iTerm (same command when known) and close the window. */

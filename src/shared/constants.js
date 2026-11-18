@@ -90,6 +90,7 @@ const IPC = {
   TERMINAL_INTERRUPT: 'terminal:interrupt',
   TERMINAL_KILL: 'terminal:kill',
   TERMINAL_EXPORT: 'terminal:export',
+  TERMINAL_SAVE_BUFFER: 'terminal:save-buffer',
   TERMINAL_OPEN_ITERM: 'terminal:open-iterm',
   TERMINAL_SET_TOP: 'terminal:set-top',
   SHORTCUT_SET: 'shortcut:set',

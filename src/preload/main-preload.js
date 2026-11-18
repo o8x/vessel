@@ -73,6 +73,7 @@ const api = {
     kill: (id) => ipcRenderer.invoke(IPC.TERMINAL_KILL, { id }),
     destroy: () => ipcRenderer.invoke(IPC.TERMINAL_DESTROY),
     export: (payload) => ipcRenderer.invoke(IPC.TERMINAL_EXPORT, payload),
+    saveBuffer: (text) => ipcRenderer.invoke(IPC.TERMINAL_SAVE_BUFFER, { text }),
     copyText: (text) => ipcRenderer.invoke(IPC.TERMINAL_COPY_TEXT, { text }),
     pasteText: () => ipcRenderer.invoke(IPC.TERMINAL_PASTE_TEXT),
     openIterm: () => ipcRenderer.invoke(IPC.TERMINAL_OPEN_ITERM),

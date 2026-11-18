@@ -230,6 +230,8 @@
     downloading: false,
     readOnly: false,
     binary: false,
+    // 本地文件（终端内联命令 \v edit 创建）：读写走本地 fs，另存为拉起系统保存面板。
+    local: false,
     wrap: false,
     statusText: '',
     statusKind: '',
@@ -618,6 +620,7 @@
     state.path = info.path || '';
     state.name = info.name || state.path.split('/').pop() || 'Untitled';
     state.reference = info.reference || state.path;
+    state.local = Boolean(info.local);
     const read = await window.ships.fileEditor.read();
     if (!read || !read.ok) {
       setStatus(i18n.t('editor.loadFailed', { error: (read && read.error) || 'read' }), 'is-error');
@@ -682,6 +685,11 @@
       setStatus(i18n.t('editor.binaryReadOnly'));
       return;
     }
+    // 本地文件：拉起系统保存面板（Finder 样式）选位置，不弹路径输入框。
+    if (state.local) {
+      void saveAsTo('');
+      return;
+    }
     dom.modalTitle.textContent = i18n.t('editor.saveAsTitle');
     dom.modalInput.placeholder = i18n.t('editor.saveAsPlaceholder');
     dom.modalInput.value = state.path;
@@ -698,8 +706,8 @@
       setStatus(i18n.t('editor.binaryReadOnly'));
       return;
     }
-    const value = String(nextPath || '').trim();
-    if (!value.startsWith('/')) {
+    const value = state.local ? '' : String(nextPath || '').trim();
+    if (!state.local && !value.startsWith('/')) {
       setStatus(i18n.t('editor.badPath'), 'is-error');
       return;
     }
@@ -712,9 +720,15 @@
       result = { ok: false, error: err.message };
     }
     state.saving = false;
+    if (result && result.canceled) {
+      setStatus('');
+      renderStatus();
+      return;
+    }
     if (result && result.ok) {
-      state.path = value;
-      state.name = value.split('/').pop() || value;
+      const nextPath2 = state.local ? String(result.path || '') : value;
+      state.path = nextPath2;
+      state.name = nextPath2.split('/').pop() || nextPath2;
       state.mode = modeForName(state.name);
       state.modeLabel = labelForMode(state.mode, state.name);
       try {
