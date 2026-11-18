@@ -1805,10 +1805,14 @@ function fileEditorTitle(info) {
 
 function openFileEditorWindow(ownerSender, payload) {
   if (!ownerSender || ownerSender.isDestroyed()) return null;
-  const sessionId = String((payload && payload.sessionId) || '');
+  // local = 本地临时文件（无 SFTP 会话），其余走远端文件。
+  const isLocal = Boolean(payload && payload.local);
+  const sessionId = isLocal ? '' : String((payload && payload.sessionId) || '');
   const filePath = String((payload && payload.path) || '');
-  if (!sessionId || !filePath) return null;
-  const name = String((payload && payload.name) || path.posix.basename(filePath));
+  if (!filePath || (!isLocal && !sessionId)) return null;
+  const name = String(
+    (payload && payload.name) || (isLocal ? path.basename(filePath) : path.posix.basename(filePath))
+  );
   const win = new BrowserWindow({
     width: FILE_EDITOR_WINDOW.width,
     height: FILE_EDITOR_WINDOW.height,
@@ -1838,6 +1842,7 @@ function openFileEditorWindow(ownerSender, payload) {
     sessionId,
     path: filePath,
     name,
+    local: isLocal,
     target: String((payload && payload.target) || ''),
   };
   const windowId = win.id;
@@ -1890,7 +1895,7 @@ function updateFileEditorPath(id, nextPath) {
   const info = getFileEditorInfoForWebContents(id);
   if (!info) return null;
   info.path = String(nextPath || '');
-  info.name = path.posix.basename(info.path);
+  info.name = info.local ? path.basename(info.path) : path.posix.basename(info.path);
   for (const win of fileEditorWindows) {
     if (!win.isDestroyed() && win.webContents.id === id) win.setTitle(fileEditorTitle(info));
   }

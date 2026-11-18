@@ -150,6 +150,7 @@
   const lightMinimize = document.getElementById('light-minimize');
   const lightZoom = document.getElementById('light-zoom');
   const sizeEl = document.getElementById('term-size');
+  const titleEl = document.getElementById('term-title');
   const shellEl = document.getElementById('term-shell');
   const ballEl = document.getElementById('term-ball');
   const ballIconEl = document.getElementById('term-ball-icon');
@@ -213,6 +214,8 @@
       typedLine: '',
       cursorEl: null,
       search: null,
+      // 内联命令（\v / \vessel）的输入状态：idle / slash / word / capture。
+      meta: metaNewState(),
     };
   }
 
@@ -242,6 +245,7 @@
     lastHostKey = rec.lastHostKey;
     typedLine = rec.typedLine;
     if (filesApi) filesApi.setSshTarget(sshTarget);
+    renderHeaderTitle();
   }
 
   function splitActive() {
@@ -567,6 +571,435 @@
     }
   }
 
+  /* --------------------- 内联命令（\v / \vessel） ---------------------
+     行首输入 `\` 时先暂存不发：紧跟 `v` / `vessel` 则进入内联命令模式，由客户端
+     本地回显并执行，全程不经过 pty-bridge；否则把暂存字符原样转发给 shell。
+     仅在普通缓冲区（非 vim / less 等全屏程序）且提示符后为空时触发。 */
+  const META_TRIGGER_PREFIXES = new Set(['v', 've', 'ves', 'vess', 'vesse', 'vessel']);
+  const META_SHORT = {
+    '-t': 'trans',
+    '-s': 'sftp',
+    '-u': 'upload',
+    '-i': 'iterm',
+    '-p': 'split',
+    '-o': 'open',
+    '-w': 'save',
+    '-x': 'exit',
+    '-c': 'ssh',
+    '-e': 'edit',
+  };
+
+  function metaNewState() {
+    return { mode: 'idle', word: '', buffer: '', echo: 0 };
+  }
+
+  /* 擦除本地回显（不发 PTY）：退格 + 空格 + 退格，光标回到原位置。 */
+  function metaEraseEcho(rec) {
+    const count = rec && rec.meta ? rec.meta.echo : 0;
+    if (!count) return;
+    write('\b \b'.repeat(count), rec);
+    rec.meta.echo = 0;
+  }
+
+  function metaCanStart(rec) {
+    if (!rec || !rec.term || !rec.sessionId || ballMode) return false;
+    const buffer = rec.term.buffer && rec.term.buffer.active;
+    if (buffer && buffer.type !== 'normal') return false; // 全屏程序中不拦截
+    return commandFromRendered(currentLineText(rec.term)) === '';
+  }
+
+  function forwardInput(data, rec) {
+    if (!data) return;
+    trackLine(data, rec);
+    if (rec.sessionId) window.ships.terminal.input(rec.sessionId, data);
+    else startSessionFor(rec);
+  }
+
+  function metaPrint(rec, text) {
+    const body = Array.isArray(text) ? text.join('\r\n') : String(text || '');
+    write(`\r\n${body}\r\n`, rec);
+  }
+
+  /* 内联命令结束后让 shell 重新打印提示符（发送空回车，不产生 ^C）。 */
+  function metaReprintPrompt(rec) {
+    if (rec && rec.sessionId) window.ships.terminal.input(rec.sessionId, '\r');
+  }
+
+  function metaUsage() {
+    const rows = [
+      ['Usage', ''],
+      ['\\v <command>', 'Run a command (alias: \\vessel)'],
+      ['\\v -<flag>', 'Short form, e.g. \\v -t'],
+      ['', ''],
+      ['Commands', ''],
+      ['trans, -t', 'Open File Transfer; connect and start in the current directory'],
+      ['sftp, -s', 'Open the embedded file manager in the current directory'],
+      ['upload, -u', 'Upload files to the current directory'],
+      ['iterm, -i', 'Open the current SSH session in iTerm and close this terminal'],
+      ['split, -p [h]', 'Split vertically; add "h" to split horizontally'],
+      ['open, -o', 'Open a new terminal window'],
+      ['save, -w', 'Save the full terminal buffer to a local file'],
+      ['exit, -x', 'Destroy this terminal'],
+      ['edit, -e', 'Create a local temporary file and open it in the built-in editor'],
+      ['ssh, -c <user@host> [password]', 'Quick-connect in a new terminal (password optional)'],
+      ['', ''],
+      ['Examples', ''],
+      ['\\v trans', ''],
+      ['\\v split h', ''],
+      ['\\v ssh root@10.0.0.5 "secret"', ''],
+    ];
+    const width = Math.max(...rows.filter((row) => row[1]).map((row) => row[0].length));
+    const lines = ['Vessel terminal commands', ''];
+    for (const [cmd, desc] of rows) {
+      if (!cmd) lines.push('');
+      else if (!desc) lines.push(`  ${cmd}`);
+      else lines.push(`  ${cmd.padEnd(width)}  ${desc}`);
+    }
+    return lines;
+  }
+
+  function metaTokenize(text) {
+    const tokens = [];
+    let current = '';
+    let quote = '';
+    let started = false;
+    for (const ch of String(text || '')) {
+      if (quote) {
+        if (ch === quote) quote = '';
+        else current += ch;
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        started = true;
+      } else if (ch === ' ' || ch === '\t') {
+        if (started || current) {
+          tokens.push(current);
+          current = '';
+          started = false;
+        }
+      } else {
+        current += ch;
+        started = true;
+      }
+    }
+    if (started || current) tokens.push(current);
+    return tokens;
+  }
+
+  function metaCommandName(token) {
+    const value = String(token || '');
+    return META_SHORT[value] || value.toLowerCase();
+  }
+
+  function metaFullBufferText(target) {
+    const t = target || term;
+    if (!t) return '';
+    const buffer = t.buffer.active;
+    const lines = [];
+    for (let i = 0; i < buffer.length; i += 1) {
+      const line = buffer.getLine(i);
+      lines.push(line ? line.translateToString(true) : '');
+    }
+    while (lines.length && !lines[lines.length - 1]) lines.pop();
+    return lines.join('\n');
+  }
+
+  function metaSshParts(value) {
+    let user = '';
+    let rest = String(value || '');
+    const at = rest.lastIndexOf('@');
+    if (at >= 0) {
+      user = rest.slice(0, at);
+      rest = rest.slice(at + 1);
+    }
+    let host = rest;
+    let port = 22;
+    const bracketed = /^\[(.+)\](?::(\d+))?$/.exec(rest);
+    if (bracketed) {
+      host = bracketed[1];
+      port = Number(bracketed[2]) || 22;
+    } else if (rest.indexOf(':') === rest.lastIndexOf(':') && rest.includes(':')) {
+      const index = rest.lastIndexOf(':');
+      const tail = rest.slice(index + 1);
+      if (/^\d+$/.test(tail)) {
+        host = rest.slice(0, index);
+        port = Number(tail) || 22;
+      }
+    }
+    return { user, host, port };
+  }
+
+  function metaNeedSsh(rec) {
+    metaPrint(rec, 'No SSH connection is active.');
+    metaReprintPrompt(rec);
+  }
+
+  async function runMetaCommand(rec, line) {
+    const tokens = metaTokenize(line);
+    if (!tokens.length) {
+      metaPrint(rec, metaUsage());
+      metaReprintPrompt(rec);
+      return;
+    }
+    const command = metaCommandName(tokens[0]);
+    const arg = tokens[1] || '';
+
+    if (command === 'trans') {
+      if (!sshTarget) return metaNeedSsh(rec);
+      const dir = filesApi && filesApi.getCwd ? filesApi.getCwd() : '';
+      if (window.ships.transferWindow) {
+        await window.ships.transferWindow.open({ target: String(sshTarget || ''), path: dir || '' });
+      }
+      metaPrint(rec, 'File Transfer opened.');
+      metaReprintPrompt(rec);
+      return;
+    }
+
+    if (command === 'sftp') {
+      if (!sshTarget) return metaNeedSsh(rec);
+      if (filesApi && !(typeof filesApi.isOpen === 'function' && filesApi.isOpen())) filesApi.toggle();
+      metaPrint(rec, 'File manager opened.');
+      metaReprintPrompt(rec);
+      return;
+    }
+
+    if (command === 'upload') {
+      if (!sshTarget) return metaNeedSsh(rec);
+      if (filesApi && typeof filesApi.uploadHere === 'function') filesApi.uploadHere();
+      metaPrint(rec, 'Select files to upload.');
+      metaReprintPrompt(rec);
+      return;
+    }
+
+    if (command === 'iterm') {
+      if (!sshTarget || !window.ships.ssh || typeof window.ships.ssh.openIterm !== 'function') {
+        const result = await window.ships.terminal.openIterm();
+        if (result && result.ok === false) {
+          metaPrint(rec, `iTerm handoff failed: ${result.error || 'error'}`);
+          metaReprintPrompt(rec);
+        }
+        return;
+      }
+      const dir = filesApi && filesApi.getCwd ? filesApi.getCwd() : '';
+      const result = await window.ships.ssh.openIterm({ alias: sshTarget, path: dir || '' });
+      if (result && result.ok === false) {
+        metaPrint(rec, `iTerm handoff failed: ${result.error || 'error'}`);
+        metaReprintPrompt(rec);
+      }
+      return;
+    }
+
+    if (command === 'split') {
+      if (splitActive()) {
+        metaPrint(rec, 'The terminal is already split.');
+        metaReprintPrompt(rec);
+        return;
+      }
+      const horizontal = arg === 'h' || arg === 'horizontal';
+      metaPrint(rec, horizontal ? 'Horizontal split.' : 'Vertical split.');
+      metaReprintPrompt(rec);
+      splitTerminal(horizontal ? 'horizontal' : 'vertical');
+      return;
+    }
+
+    if (command === 'open') {
+      openTerminalWithNewBall();
+      metaPrint(rec, 'New terminal window opened.');
+      metaReprintPrompt(rec);
+      return;
+    }
+
+    if (command === 'save') {
+      const text = metaFullBufferText(rec.term);
+      const result = await window.ships.terminal.export({ text });
+      if (result && result.canceled) metaPrint(rec, 'Save canceled.');
+      else if (result && result.ok) metaPrint(rec, `Saved to ${result.path}`);
+      else metaPrint(rec, `Save failed: ${(result && result.error) || 'error'}`);
+      metaReprintPrompt(rec);
+      return;
+    }
+
+    if (command === 'exit') {
+      window.ships.terminal.destroy();
+      return;
+    }
+
+    if (command === 'edit') {
+      if (!window.ships.fileEditor || typeof window.ships.fileEditor.newLocal !== 'function') {
+        metaPrint(rec, 'Editor is unavailable.');
+        metaReprintPrompt(rec);
+        return;
+      }
+      const result = await window.ships.fileEditor.newLocal();
+      if (result && result.ok) metaPrint(rec, `Opened a new temporary file: ${result.path}`);
+      else metaPrint(rec, `Cannot create file: ${(result && result.error) || 'error'}`);
+      metaReprintPrompt(rec);
+      return;
+    }
+
+    if (command === 'ssh') {
+      if (!arg) {
+        metaPrint(rec, ['Usage: \\v ssh <user@host> [password]']);
+        metaReprintPrompt(rec);
+        return;
+      }
+      const parts = metaSshParts(arg);
+      if (!parts.host) {
+        metaPrint(rec, ['Usage: \\v ssh <user@host> [password]']);
+        metaReprintPrompt(rec);
+        return;
+      }
+      const result = await window.ships.ssh.quickConnect({
+        user: parts.user,
+        hostName: parts.host,
+        port: parts.port,
+        password: tokens[2] || '',
+        inCurrentTerminal: false,
+      });
+      if (result && result.ok) metaPrint(rec, `Connecting to ${result.alias} in a new terminal…`);
+      else metaPrint(rec, `Quick connect failed: ${(result && result.error) || 'error'}`);
+      metaReprintPrompt(rec);
+      return;
+    }
+
+    metaPrint(rec, [`Unknown command: ${tokens[0]}`, '', ...metaUsage()]);
+    metaReprintPrompt(rec);
+  }
+
+  /* 返回 true 表示输入已被内联命令接管（不再发给 PTY）。 */
+  function handleMetaInput(data, rec) {
+    if (!data || !rec || !rec.meta) return false;
+    const state = rec.meta;
+
+    if (state.mode === 'idle') {
+      if (data === '\\' && metaCanStart(rec)) {
+        state.mode = 'slash';
+        return true;
+      }
+      return false;
+    }
+
+    if (state.mode === 'slash') {
+      const first = data[0];
+      if (first === 'v') {
+        state.mode = 'word';
+        state.word = 'v';
+        state.echo = 2;
+        write('\\v', rec);
+        if (data.length > 1) handleMetaInput(data.slice(1), rec);
+        return true;
+      }
+      if (first === '\u007f' || first === '\b') {
+        metaEraseEcho(rec);
+        state.mode = 'idle';
+        return true;
+      }
+      state.mode = 'idle';
+      forwardInput(`\\${data}`, rec);
+      return true;
+    }
+
+    if (state.mode === 'word') {
+      for (let i = 0; i < data.length; i += 1) {
+        const ch = data[i];
+        if (ch === ' ' || ch === '\t') {
+          if (state.word === 'v' || state.word === 'vessel') {
+            state.mode = 'capture';
+            state.buffer = '';
+            write(' ', rec);
+            state.echo += 1;
+            if (data.length > i + 1) handleMetaInput(data.slice(i + 1), rec);
+            return true;
+          }
+          const held = `\\${state.word}`;
+          metaEraseEcho(rec);
+          state.mode = 'idle';
+          forwardInput(held + data.slice(i), rec);
+          return true;
+        }
+        if (ch === '\r' || ch === '\n') {
+          if (state.word === 'v' || state.word === 'vessel') {
+            state.mode = 'idle';
+            state.echo = 0;
+            metaPrint(rec, metaUsage());
+            metaReprintPrompt(rec);
+            return true;
+          }
+          metaEraseEcho(rec);
+          state.mode = 'idle';
+          forwardInput(`\\${state.word}${data.slice(i)}`, rec);
+          return true;
+        }
+        if (ch === '\u007f' || ch === '\b') {
+          state.word = state.word.slice(0, -1);
+          if (state.echo > 0) {
+            write('\b \b', rec);
+            state.echo -= 1;
+          }
+          if (!state.word) state.mode = 'slash';
+          continue;
+        }
+        if (ch === '\u001b') {
+          metaEraseEcho(rec);
+          state.mode = 'idle';
+          return true;
+        }
+        state.word += ch;
+        if (!META_TRIGGER_PREFIXES.has(state.word)) {
+          metaEraseEcho(rec);
+          state.mode = 'idle';
+          forwardInput(`\\${state.word}${data.slice(i + 1)}`, rec);
+          return true;
+        }
+        write(ch, rec);
+        state.echo += 1;
+      }
+      return true;
+    }
+
+    if (state.mode === 'capture') {
+      for (let i = 0; i < data.length; i += 1) {
+        const ch = data[i];
+        if (ch === '\r' || ch === '\n') {
+          const line = state.buffer;
+          state.mode = 'idle';
+          state.buffer = '';
+          state.echo = 0;
+          void runMetaCommand(rec, line);
+          return true;
+        }
+        if (ch === '\u007f' || ch === '\b') {
+          if (state.buffer) {
+            state.buffer = state.buffer.slice(0, -1);
+            write('\b \b', rec);
+            state.echo = Math.max(0, state.echo - 1);
+          }
+          continue;
+        }
+        if (ch === '\u001b') {
+          metaEraseEcho(rec);
+          state.mode = 'idle';
+          return true;
+        }
+        if (ch === '\u0003') {
+          metaEraseEcho(rec);
+          state.mode = 'idle';
+          forwardInput('\u0003', rec);
+          return true;
+        }
+        if (ch >= ' ') {
+          state.buffer += ch;
+          write(ch, rec);
+          state.echo += 1;
+        }
+      }
+      return true;
+    }
+
+    return false;
+  }
+
   /* Only tell the PTY about a real size change: a redundant resize makes the shell
      redraw and looks like the view jumping while scrolling. */
   function syncPtySizeFor(rec) {
@@ -825,6 +1258,7 @@
       lastRows = rec.lastRows;
       sshTarget = '';
       if (filesApi) filesApi.setSshTarget('');
+      renderHeaderTitle();
       window.ships.terminal.setActiveSession(rec.sessionId);
     }
     ballElapsedAccum = 0;
@@ -847,6 +1281,7 @@
     sessionId = '';
     sshTarget = '';
     if (filesApi) filesApi.setSshTarget('');
+    renderHeaderTitle();
     if (oldId) {
       try {
         await window.ships.terminal.kill(oldId);
@@ -980,6 +1415,23 @@
     return host.user ? `${host.user}@${host.hostName}` : String(host.hostName || host.alias || '');
   }
 
+  /* 当前 SSH 连接的展示文本：优先用 ~/.ssh/config 里的 `用户名@主机地址`，
+     未命中（如快速连接的 `user@host:port`）时原样显示目标；空串 = 未连接。 */
+  function currentSshLabel() {
+    const target = String(sshTarget || '').trim();
+    if (!target) return '';
+    const host = sshHosts.find((item) => item.alias === target);
+    return host ? sshHostLabel(host) : target;
+  }
+
+  /* 头栏居中标题：只在有 SSH 目标时显示（CSS 对空文本隐藏）。 */
+  function renderHeaderTitle() {
+    if (!titleEl) return;
+    const label = currentSshLabel();
+    titleEl.textContent = label;
+    titleEl.title = label;
+  }
+
   async function refreshSshPicker() {
     if (!sshPicker) return;
     if (typeof sshPicker.setPlaceholder === 'function') {
@@ -1012,6 +1464,8 @@
     if (!hosts.some((host) => host.alias === sshPicker.getValue())) sshPicker.setValue('');
     sshPicker.el.disabled = hosts.length === 0;
     sshPicker.el.style.opacity = hosts.length === 0 ? '0.5' : '';
+    // 主机列表就绪后，标题才能把别名映射成 `用户名@主机地址`。
+    renderHeaderTitle();
   }
 
   function initTerminal(options, targetRec) {
@@ -1076,9 +1530,8 @@
       observer.observe(hostBox || rec.host);
     }
     t.onData((data) => {
-      trackLine(data, rec);
-      if (rec.sessionId) window.ships.terminal.input(rec.sessionId, data);
-      else startSessionFor(rec);
+      if (handleMetaInput(data, rec)) return;
+      forwardInput(data, rec);
     });
     if (typeof t.onFocus === 'function') t.onFocus(() => setActiveRecord(rec));
     rec.host.addEventListener('mousedown', () => setActiveRecord(rec), true);
@@ -1115,6 +1568,7 @@
       if (rec === activeRecord) {
         sshTarget = '';
         if (filesApi) filesApi.setSshTarget('');
+        renderHeaderTitle();
       }
     }
     if (!data) return;
@@ -1129,6 +1583,7 @@
     if (rec === activeRecord) {
       sshTarget = rec.sshTarget;
       if (filesApi) filesApi.setSshTarget(sshTarget);
+      renderHeaderTitle();
     }
   });
   const offExit = window.ships.terminal.onExit((message) => {
@@ -1144,6 +1599,7 @@
       sessionId = '';
       sshTarget = '';
       if (filesApi) filesApi.setSshTarget('');
+      renderHeaderTitle();
     }
     if (message.type === 'error') {
       // 启动失败：留在窗口里显示原因（否则用户看不到是为什么）。

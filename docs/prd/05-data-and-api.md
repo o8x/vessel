@@ -65,6 +65,7 @@
 | `ssh:connect` | `{ alias, inTerminal? }` | `{ ok, command?, error? }` | 按 alias 查表并拼 `ssh …`：`inTerminal: true`（终端内发起，如右键「连接到服务器」；头部下拉已隐藏但仍兼容）**强制注入当前悬浮终端窗口**、不受 `sshBuiltinTerminal` 影响；省略时按 `settings.sshBuiltinTerminal` 决定走悬浮终端或 iTerm |
 | `ssh:quick-connect` | `{ hostName, user?, port?, password?, inCurrentTerminal? }` | `{ ok, command?, alias?, hosts?, error? }` | SSH 管理 / 终端右键「快速连接」：`hostName` **必填**（缺省返回 `{ ok:false, error:'hostName required' }`），`port` 默认 `22`。有 `password` 则加密保存，否则清除该别名旧密码并使用 `~/.ssh/id_ed25519`。**无论连接成败**都写入 `~/.ssh/config` 的「快速连接」分组并置于最前，随后广播 `ssh-config:changed` 并触发探测。连接目标：省略 / `inCurrentTerminal: false` → **始终新开一扇终端**再注入（`runInNewTerminal`）；`inCurrentTerminal: true`（终端右键菜单）→ 在**发起请求的那个终端窗口**注入（`runInTerminal` 指定窗口，不新开）。成功返回 `command` / `alias` |
 | `ssh:open-in-terminal` | `{ path, alias?, target?, host?, username?, port?, identityFile?, password? }` | `{ ok, command?, error? }` | 独立文件窗口目录右键「在终端打开」：按 `alias` 命中 `~/.ssh/config`（否则用手动字段构造主机），**新开一扇终端**执行 `ssh -t 'cd <path> && exec $SHELL -l'`，让远端 shell 直接进入该目录；有显式密码 / 该别名已保存密码时交给终端在密码提示处自动输入（同 §3.4-4），否则用密钥 |
+| `ssh:open-iterm` | `{ alias, path? }` | `{ ok, command?, error? }` | 终端内联命令 `\v iterm`：按 `alias` 查表拼 `ssh …`（带 `path` 时追加 `-t 'cd <path> && exec $SHELL -l'`），在 iTerm 中打开并**销毁发起请求的终端窗口**；成功后返回实际执行的 `command` |
 | `ssh:detect` | `{ alias }` | `{ queued }` | 异步，结果经 `ssh:detected` 回传（兼容保留） |
 | `ssh:detect-host` | `{ alias?, hostName, user?, port?, identityFile?, proxyJump?, password?, useStoredPassword? }` | `{ ok, alias, info }` | 对任意主机（可尚未保存）同步探测，结果写入缓存并广播。**支持密码认证**：用 `password`（表单填的明文密码）优先，为空且 `useStoredPassword !== false` 时回退到该别名已保存的加密密码（主进程解密后用于这次探测，不外传） |
 | `ssh:get-detected` | — | `{ [alias]: { os, family, label, at } }` | 读取探测缓存 |
@@ -97,11 +98,12 @@
 | `file-window:set-top` | `{ value: boolean }` | `{ ok, alwaysOnTop }` | 独立文件窗口的置顶开关：写 `settings.fileWindowAlwaysOnTop`；**默认关**（普通窗口），持久 |
 | `file-window:snap-size` | `{ height }` | `{ ok, height? }` | 保留兼容：独立文件窗口已**不再自动对齐整行高度**，渲染层不再调用；通道仍按工作区 / 最小高度夹取后设置内容高度；只接受来自该窗口的请求 |
 | `file-editor:open` | `{ sessionId, path, name? }` | `{ ok, error? }` | 从文件管理器打开一扇内置编辑器窗口（每文件一扇、可多开）；`sessionId` 必须是**发起窗口自己**的 SFTP 会话；只接受终端窗口 / 独立文件窗口的请求 |
-| `file-editor:info` | — | `{ ok, path, name, reference }` | 编辑器启动后读取当前文件信息与引用（`用户名@地址:路径`）；只接受来自编辑器窗口的请求 |
-| `file-editor:read` | — | `{ ok, content, size, mtime, binary, error?, code? }` | 读取当前远端文件文本（≤ 8MB，拒绝目录）；含 NUL 的二进制内容不报错，按有损 UTF-8 解码返回并置 `binary: true`，渲染层据此只读；只接受来自编辑器窗口的请求 |
-| `file-editor:save` | `{ content }` | `{ ok, path?, bytes?, error? }` | 覆盖写回当前远端文件（编辑器状态栏显示保存中 / 已保存）；只接受来自编辑器窗口的请求 |
-| `file-editor:save-as` | `{ path, content }` | `{ ok, path?, bytes?, error? }` | 另存为：`path` 必须为 `/` 开头的远端绝对路径，写入成功后该编辑器切换到新文件；只接受来自编辑器窗口的请求 |
-| `file-editor:open-vscode` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「从 VS Code 打开」：把编辑器当前内容写成本地文件（下载目录，重名自动加 ` (n)`）后用 VS Code 打开；不修改远端文件；只接受来自编辑器窗口的请求 |
+| `file-editor:new-local` | — | `{ ok, path?, error? }` | 新建**本地**临时文件（系统临时目录下的 `scratch-<时间戳>.txt`）并用内置编辑器打开；不依赖 SSH / SFTP；只接受终端窗口 / 独立文件窗口的请求 |
+| `file-editor:info` | — | `{ ok, path, name, reference, local? }` | 编辑器启动后读取当前文件信息与引用（`用户名@地址:路径`）；本地临时文件时 `reference` 为本地路径、`local: true`；只接受来自编辑器窗口的请求 |
+| `file-editor:read` | — | `{ ok, content, size, mtime, binary, error?, code? }` | 读取当前文件文本（远端 ≤ 8MB、拒绝目录；本地临时文件直接读 fs）；含 NUL 的二进制内容不报错，按有损 UTF-8 解码返回并置 `binary: true`，渲染层据此只读；只接受来自编辑器窗口的请求 |
+| `file-editor:save` | `{ content }` | `{ ok, path?, bytes?, error? }` | 覆盖写回当前文件（远端走 SFTP，本地临时文件走 fs）；编辑器状态栏显示保存中 / 已保存；只接受来自编辑器窗口的请求 |
+| `file-editor:save-as` | `{ path, content }` | `{ ok, path?, bytes?, error? }` | 另存为：`path` 必须为 `/` 开头的绝对路径，写入成功后该编辑器切换到新文件；只接受来自编辑器窗口的请求 |
+| `file-editor:open-vscode` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「从 VS Code 打开」：远端文件把当前内容写成本地文件（下载目录，重名自动加 ` (n)`）后用 VS Code 打开；本地临时文件先落盘当前内容再直接打开该文件；不修改远端文件；只接受来自编辑器窗口的请求 |
 | `file-editor:download` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「下载到本地」：把编辑器当前内容写成本地文件到设置的下载目录（同名自动加 ` (n)`）；只接受来自编辑器窗口的请求 |
 | `file-editor:close-all` | — | `{ ok, closed }` | 关闭发起窗口打开的所有编辑器窗口（文件管理器销毁 / 断开 / 切换目标时调用）；只接受终端窗口 / 独立文件窗口的请求 |
 | `games:scan` | — | `{ ok, workDir, resolvedWorkDir, isDefault, engines }` | 扫描游戏工作目录；`engines[].games[]` 含 `{ id, name, engine, label, core, romRelativePath, size, mtime, played, coverUrl, romUrl }`（`played` 表示该游戏是否启动过）；支持 `roms/<engine>/<文件夹>/xxx.rom`（单 ROM 子目录以文件夹名为游戏名；多 ROM 子目录生成 `<引擎> - <文件夹>` 独立分类），扩展名匹配不区分大小写；已启动过的游戏会以 `id: recent` 的「最近启动」分类置顶（按 `lastPlayedAt` 倒序最多 8 个）；只接受主窗口 / 设置窗口请求 |

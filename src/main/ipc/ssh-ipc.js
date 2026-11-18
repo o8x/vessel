@@ -6,10 +6,12 @@ const { Notification, dialog, BrowserWindow } = require('electron');
 const configService = require('../services/ssh-config-service');
 const sshService = require('../services/ssh-service');
 const credentials = require('../services/ssh-credentials-service');
+const wm = require('../window-manager');
 const { broadcast, getMainWindow } = require('../window-manager');
 const { runInTerminal, runInNewTerminal } = require('./terminal-ipc');
 const { requestLocalNetworkAccess } = require('../services/local-network-service');
 const proxyService = require('../services/proxy-service');
+const itermService = require('../services/iterm-service');
 const logger = require('../utils/logger');
 
 function findHost(alias) {
@@ -141,6 +143,33 @@ function registerSshIpc(ipcMain) {
       : runInNewTerminal(command, password, alias);
     if (!started) return { ok: false, error: 'terminal unavailable', command, alias, hosts };
     return { ok: true, command, alias, hosts };
+  });
+
+  // 终端内联命令 `\v iterm`：在 iTerm 里重放当前主机的连接，并进入文件面板的当前目录，
+  // 成功后销毁发起请求的终端窗口（与会话交接一致）。
+  ipcMain.handle(IPC.SSH_OPEN_ITERM, async (event, payload) => {
+    requestLocalNetworkAccess();
+    const alias = String((payload && payload.alias) || '').trim();
+    const dir = String((payload && payload.path) || '').trim();
+    const host = findHost(alias);
+    if (!host) return { ok: false, error: 'host not found' };
+    const socksProxy = await proxyService.resolveSocks(host.hostName, Number(host.port) || 22);
+    const remote = dir ? `cd ${sshService.shellQuote(dir)} && exec $SHELL -l` : '';
+    const command = sshService.buildCommand(host, {
+      socksProxy,
+      forceTty: Boolean(remote),
+      command: remote ? sshService.shellQuote(remote) : '',
+    });
+    const result = await itermService.openCommand(command, 'terminal:handoff');
+    if (!result || !result.ok) {
+      return { ok: false, error: (result && result.error) || 'error', command };
+    }
+    const win = wm.getTerminalWindowForWebContents(event.sender.id);
+    if (win && !win.isDestroyed()) {
+      win.__suppressBall = true;
+      wm.destroyTerminalWindow(win);
+    }
+    return { ok: true, command };
   });
 
   ipcMain.handle(IPC.SSH_DETECT, (_event, payload) => {

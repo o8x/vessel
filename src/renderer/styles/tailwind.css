@@ -945,6 +945,28 @@ input[type='color'].swatch::-webkit-color-swatch {
   /* 左留白交给红绿灯组（10px 左边距 = 第一个红绿灯到窗口左边缘的距离），右侧 10px */
   padding: 0 10px 0 0;
 }
+/* 头栏居中标题：显示当前 SSH 连接（`用户名@主机地址`，未命中配置时原样显示目标别名）。
+   绝对定位到整条头栏的中点，左右两侧的红绿灯 / 图标不参与宽度计算，因此文字始终
+   位于窗口视觉中央；过长时省略号截断，空字符串（未连接 SSH）时隐藏。 */
+#term-title {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-mono);
+  font-size: var(--term-header-font-size);
+  line-height: 1;
+  color: var(--color-fg-muted);
+}
+#term-title:empty {
+  display: none;
+}
 /* 终端内容：上下留白 var(--term-padding-y)、左侧留 2px（右侧铺满）；
    xterm 仍挂在里面那层无内边距的 #term-fit 上，FitAddon 量的是 #term-fit 的真实可用区。 */
 #term-host {

@@ -127,6 +127,7 @@ const api = {
   games: gamesApi,
   fileEditor: {
     open: (payload) => ipcRenderer.invoke(IPC.FILE_EDITOR_OPEN, payload),
+    newLocal: () => ipcRenderer.invoke(IPC.FILE_EDITOR_NEW_LOCAL),
     info: () => ipcRenderer.invoke(IPC.FILE_EDITOR_INFO),
     read: () => ipcRenderer.invoke(IPC.FILE_EDITOR_READ),
     save: (content) => ipcRenderer.invoke(IPC.FILE_EDITOR_SAVE, { content }),
@@ -152,6 +153,7 @@ const api = {
     edit: (alias) => ipcRenderer.invoke(IPC.SSH_EDIT, { alias }),
     connect: (payload) => ipcRenderer.invoke(IPC.SSH_CONNECT, payload),
     openInTerminal: (payload) => ipcRenderer.invoke(IPC.SSH_OPEN_IN_TERMINAL, payload),
+    openIterm: (payload) => ipcRenderer.invoke(IPC.SSH_OPEN_ITERM, payload),
     quickConnect: (payload) => ipcRenderer.invoke(IPC.SSH_QUICK_CONNECT, payload),
     detect: (payload) => ipcRenderer.invoke(IPC.SSH_DETECT, payload),
     onDetected: (cb) => on(IPC.SSH_DETECTED, cb),

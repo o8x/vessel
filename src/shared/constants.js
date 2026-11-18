@@ -147,6 +147,7 @@ const IPC = {
 
   // 内置文本编辑器窗口（由文件管理器打开，可多开，随文件管理器销毁而关闭）。
   FILE_EDITOR_OPEN: 'file-editor:open',
+  FILE_EDITOR_NEW_LOCAL: 'file-editor:new-local',
   FILE_EDITOR_INFO: 'file-editor:info',
   FILE_EDITOR_READ: 'file-editor:read',
   FILE_EDITOR_SAVE: 'file-editor:save',
@@ -197,6 +198,7 @@ const IPC = {
   SSH_CONNECT: 'ssh:connect',
   SSH_QUICK_CONNECT: 'ssh:quick-connect',
   SSH_OPEN_IN_TERMINAL: 'ssh:open-in-terminal',
+  SSH_OPEN_ITERM: 'ssh:open-iterm',
   SSH_DETECT: 'ssh:detect',
   SSH_DETECT_HOST: 'ssh:detect-host',
   SSH_GET_DETECTED: 'ssh:get-detected',

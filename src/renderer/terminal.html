@@ -20,6 +20,8 @@
         class="flex shrink-0 items-center justify-between gap-2 px-3"
         style="border-bottom: 1px solid var(--color-border); -webkit-app-region: no-drag"
       >
+        <!-- 头栏居中标题：显示当前 SSH 连接（绝对居中于整条头栏，左右图标不参与宽度计算） -->
+        <div id="term-title"></div>
         <!-- 自绘小红绿灯（系统红绿灯由主进程隐藏）+「固定」按钮（开启后本窗口不缩成悬浮球） -->
         <div class="flex shrink-0 items-center gap-1.5">
           <div id="term-lights" class="flex shrink-0 items-center" style="-webkit-app-region: no-drag">

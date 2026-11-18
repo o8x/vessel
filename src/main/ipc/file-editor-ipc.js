@@ -4,10 +4,14 @@
 // editors can be open at once; each reuses the SFTP session of the file-manager window
 // that opened it (no extra credentials needed) and is closed with that window.
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { IPC } = require('../../shared/constants');
 const wm = require('../window-manager');
 const sftp = require('../services/sftp-service');
 const vscode = require('../services/vscode-service');
+const logger = require('../utils/logger');
 
 /* 只有终端窗口的内嵌面板 / 独立文件窗口可以打开编辑器。 */
 function isFileManagerSender(event) {
@@ -20,26 +24,85 @@ function isFileManagerSender(event) {
   );
 }
 
+/* 本地临时文件：读 / 写直接走 fs，与 SFTP 无关。 */
+function readLocalText(filePath) {
+  try {
+    const data = fs.readFileSync(filePath);
+    const binary = data.subarray(0, 8192).includes(0);
+    let mtime = 0;
+    try {
+      mtime = fs.statSync(filePath).mtimeMs;
+    } catch (err) {
+      mtime = 0;
+    }
+    return { ok: true, content: data.toString('utf8'), size: data.length, mtime, binary };
+  } catch (err) {
+    return { ok: false, error: err.message, code: 'read' };
+  }
+}
+
+function writeLocalText(filePath, content) {
+  const data = Buffer.from(String(content == null ? '' : content), 'utf8');
+  try {
+    fs.writeFileSync(filePath, data);
+    return { ok: true, path: filePath, bytes: data.length };
+  } catch (err) {
+    logger.error(`[file-editor] local write failed (${filePath}): ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+}
+
 function registerFileEditorIpc(ipcMain) {
   ipcMain.handle(IPC.FILE_EDITOR_OPEN, (event, payload) => {
     if (!isFileManagerSender(event)) return { ok: false, error: 'forbidden' };
-    const sessionId = String((payload && payload.sessionId) || '');
+    const isLocal = Boolean(payload && payload.local);
+    const sessionId = isLocal ? '' : String((payload && payload.sessionId) || '');
     const filePath = String((payload && payload.path) || '');
-    if (!sessionId || !filePath) return { ok: false, error: 'bad-request' };
+    if (!filePath || (!isLocal && !sessionId)) return { ok: false, error: 'bad-request' };
     // 会话必须属于发起窗口，避免跨窗口 / 跨连接读取。
-    if (sftp.ownerId(sessionId) !== event.sender.id) return { ok: false, error: 'forbidden' };
+    if (!isLocal && sftp.ownerId(sessionId) !== event.sender.id) {
+      return { ok: false, error: 'forbidden' };
+    }
     const win = wm.openFileEditorWindow(event.sender, {
       sessionId,
       path: filePath,
       name: payload && payload.name,
+      local: isLocal,
       target: payload && payload.target,
     });
     return win ? { ok: true } : { ok: false, error: 'open-failed' };
   });
 
+  // 新建本地临时文件并在内置编辑器中打开（终端内联命令 `\v edit`）。
+  ipcMain.handle(IPC.FILE_EDITOR_NEW_LOCAL, (event) => {
+    if (!isFileManagerSender(event)) return { ok: false, error: 'forbidden' };
+    let filePath = '';
+    try {
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vessel-edit-'));
+      filePath = path.join(dir, `scratch-${stamp}.txt`);
+      fs.writeFileSync(filePath, '', 'utf8');
+    } catch (err) {
+      logger.error(`[file-editor] cannot create local temp file: ${err.message}`);
+      return { ok: false, error: err.message };
+    }
+    const win = wm.openFileEditorWindow(event.sender, {
+      local: true,
+      path: filePath,
+      name: path.basename(filePath),
+      target: '',
+    });
+    if (!win) return { ok: false, error: 'open-failed' };
+    logger.file(`[file-editor] local temp file created: ${filePath}`);
+    return { ok: true, path: filePath };
+  });
+
   ipcMain.handle(IPC.FILE_EDITOR_INFO, (event) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false };
+    if (info.local) {
+      return { ok: true, path: info.path, name: info.name, reference: info.path, local: true };
+    }
     const ref = sftp.reference(info.sessionId, [info.path]);
     return {
       ok: true,
@@ -52,6 +115,7 @@ function registerFileEditorIpc(ipcMain) {
   ipcMain.handle(IPC.FILE_EDITOR_READ, (event) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
+    if (info.local) return readLocalText(info.path);
     return sftp.readText(info.sessionId, info.path);
   });
 
@@ -60,6 +124,7 @@ function registerFileEditorIpc(ipcMain) {
     if (!info) return { ok: false, error: 'forbidden' };
     const content = payload && payload.content;
     if (typeof content !== 'string') return { ok: false, error: 'bad-content' };
+    if (info.local) return writeLocalText(info.path, content);
     return sftp.writeText(info.sessionId, info.path, content);
   });
 
@@ -70,6 +135,11 @@ function registerFileEditorIpc(ipcMain) {
     const content = payload && payload.content;
     if (!nextPath.startsWith('/')) return { ok: false, error: 'bad-path' };
     if (typeof content !== 'string') return { ok: false, error: 'bad-content' };
+    if (info.local) {
+      const result = writeLocalText(nextPath, content);
+      if (result && result.ok) wm.updateFileEditorPath(event.sender.id, nextPath);
+      return result;
+    }
     return sftp.writeText(info.sessionId, nextPath, content).then((result) => {
       if (result && result.ok) wm.updateFileEditorPath(event.sender.id, nextPath);
       return result;
@@ -84,6 +154,16 @@ function registerFileEditorIpc(ipcMain) {
     if (!info) return { ok: false, error: 'forbidden' };
     const content = payload && payload.content;
     if (typeof content !== 'string') return { ok: false, error: 'bad-content' };
+    // 本地临时文件：先落盘当前内容，再直接用 VS Code 打开该文件。
+    if (info.local) {
+      const written = writeLocalText(info.path, content);
+      if (!written.ok) return written;
+      const opened = await vscode.openPath(info.path);
+      if (!opened || !opened.ok) {
+        return { ok: false, error: (opened && opened.error) || 'vscode-failed', path: info.path };
+      }
+      return { ok: true, path: info.path, name: info.name, bytes: written.bytes };
+    }
     const result = sftp.saveLocalText((payload && payload.name) || info.name, content);
     if (!result || !result.ok) return result;
     const opened = await vscode.openPath(result.path);
