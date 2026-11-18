@@ -1295,6 +1295,97 @@ body.file-window .select-menu .select-group-title {
   background: var(--color-bg);
   color: var(--color-fg);
 }
+/* 终端内嵌的文件传输面板（穿梭框）：与文件管理互斥，共用同一条分隔条与面板高度。
+   尺寸变量与内嵌文件管理保持一致（字号 / 行高 / 控件高），视觉与文件管理同一套。 */
+#file-panel,
+#transfer-panel {
+  --file-font-size: 12px;
+  /* 行高 / 控件高与文件管理的 .fm-path-row（1.9em）保持一致。 */
+  --fm-row-height: 1.9em;
+  --fm-control-height: 22px;
+}
+#transfer-panel:not(.hidden) {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+/* 内嵌传输面板的骨架：穿梭框主体（左右两栏 + 竖直分隔条）+ 底部状态栏。 */
+/* 根容器必须撑满面板高度，否则内层 flex 高度不受约束，目录树不会出现滚动条。 */
+#transfer-panel-root {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.transfer-embedded {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  font-size: var(--file-font-size, 12px);
+  color: var(--color-fg);
+}
+.transfer-embedded-main {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+/* 内嵌面板首行 SSH 下拉与路径输入框同高（1.7em），避免在终端窗口里套用头栏 34px 尺寸。 */
+.transfer-embedded .transfer-pane-head .select-trigger {
+  height: 1.7em;
+  font-size: 12px;
+  padding: 0 6px;
+}
+/* 内嵌面板：SSH 下拉行与路径行合并为同一行。
+   左栏 = 分离 / 主页 / 刷新图标 + 路径栏 + 同步图标按钮（不显示 SSH 下拉）；
+   右栏 = SSH 下拉 + 路径栏（各占 50%，没有图标）。 */
+.transfer-pane-head.transfer-pane-head-merged {
+  padding: 0 6px;
+  gap: 6px;
+}
+.transfer-pane-head-merged .transfer-pane-picker {
+  flex: 1 1 0;
+}
+.transfer-pane-head-merged .transfer-path-half {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border-bottom: none;
+}
+/* 同步按钮：与路径栏输入框严格等高（1.7em）的长方形图标按钮（非圆形外框）。 */
+.transfer-pane-head-merged .transfer-sync {
+  height: 1.7em;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: var(--radius-control-sm);
+}
+.transfer-pane-head-merged .transfer-sync-icon-only {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 0 7px;
+  justify-content: center;
+}
+/* 未连接时禁用的路径栏 / 同步按钮。 */
+.fm-path-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.transfer-sync:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* 内嵌面板里的穿梭框沿用独立窗口的配色（跟随主题的 --file-window-bg）。 */
+.transfer-embedded .transfer-pane {
+  background: var(--color-bg);
+}
 #term-divider:not(.hidden) {
   display: flex;
   flex: 0 0 auto;
@@ -1921,6 +2012,9 @@ body.file-window .fm-tree-row {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.fm-progress-row.hidden {
+  display: none;
 }
 .fm-progress-label {
   flex: 0 0 auto;
@@ -3268,7 +3362,7 @@ body.editor-window {
    目录树 / 状态栏复用文件管理器（.fm-*）的样式。 */
 .transfer-pane-host {
   display: flex;
-  flex: 1 1 50%;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
 }
@@ -3285,8 +3379,8 @@ body.editor-window {
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
-  /* 与第二行路径行（`.fm-path-row`，32px）同高。 */
-  height: 32px;
+  /* 与第二行路径行（`.fm-path-row`）同高：内嵌面板取 --fm-row-height（1.9em），独立窗口 32px。 */
+  height: var(--fm-row-height, 32px);
   padding: 0 8px;
   border-bottom: 1px solid var(--color-border);
 }

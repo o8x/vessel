@@ -22,8 +22,11 @@
     const opts = options || {};
     const onStateChange = typeof opts.onStateChange === 'function' ? opts.onStateChange : () => {};
     const onCd = typeof opts.onCd === 'function' ? opts.onCd : null;
+    // 面板展开时通知外部（如收起内嵌的文件传输面板）。
+    const onShow = typeof opts.onShow === 'function' ? opts.onShow : () => {};
 
     const panel = document.getElementById('file-panel');
+    const transferPanel = document.getElementById('transfer-panel');
     const divider = document.getElementById('term-divider');
     const rootEl = document.getElementById('file-panel-root');
     if (!panel || !divider || !rootEl || !window.ShipsFileManager) return null;
@@ -38,7 +41,10 @@
 
     function applyPanelHeight() {
       const value = Math.max(MIN_PANEL_HEIGHT, Number(layout.panelHeight) || DEFAULT_PANEL_HEIGHT);
-      panel.style.height = `${value}px`;
+      // 文件管理与内嵌文件传输共用同一个底部面板槽位：高度对两者同时生效。
+      for (const item of [panel, transferPanel]) {
+        if (item) item.style.height = `${value}px`;
+      }
     }
 
     /* 无本地记录时按最小布局（终端 ≥300 / 文件管理 ≥200、目录树 220 / 文件列表 ≥400）
@@ -115,12 +121,15 @@
       // 首次打开且没有本地调整记录：套用最小布局并把窗口放大到够用。
       if (hasRecord === false) applyFirstRunLayout();
       emitState();
+      onShow();
     }
 
     function hide(opts2) {
       open = false;
       panel.classList.add('hidden');
-      divider.classList.add('hidden');
+      // 内嵌文件传输正开着时，分隔条保持可见（两者共用同一个底部槽位）。
+      const transferOpen = transferPanel && !transferPanel.classList.contains('hidden');
+      if (!transferOpen) divider.classList.add('hidden');
       if (opts2 && opts2.destroy) destroyManager();
       emitState();
     }
@@ -186,6 +195,8 @@
     return {
       setSshTarget,
       toggle,
+      show,
+      hide,
       uploadHere,
       followCd,
       closeConnection,

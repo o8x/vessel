@@ -184,7 +184,7 @@
 | `theme:changed` | `{ shouldUseDarkColors }` | 系统主题变化 |
 | `tray:show-tool` | `toolId` | 托盘右键菜单点击某个工具：主进程显示主界面后通知渲染层切换到该工具（渲染层未启动完成时先暂存，boot 后应用） |
 | `transfer:progress` | `{ phase, name, path?, transferred, total, files?, localPath?, phaseAt?, error? }` | 传输任务的实时进度（`phase` ∈ `start` / `download` / `upload` / `downloaded` / `done` / `error`；`download` / `upload` 两段分别回传 `transferred/total`，`transferred` 为**当前段**已完成的字节；`downloaded` 表示下载段结束、开始上传段；`error` 时 `phaseAt` ∈ `download` / `upload` 指明失败所在段），供传输窗口状态栏的**下载 / 上传两条进度条**使用 |
-| `transfer-window:locate` | `{ target, path }` | 传输窗口已打开时，主进程通知它把**左侧栏**定位到指定 SSH 目标与目录 |
+| `transfer-window:locate` | `{ target, path, rightTarget?, rightPath? }` | 传输窗口已打开时，主进程通知它把**左侧栏**定位到指定 SSH 目标与目录；`rightTarget` / `rightPath` 存在时同时定位**右侧栏**（分离为独立窗口时带过去） |
 | `ssh:detected` | `{ alias, os, family, label, at }` | 探测完成 |
 | `clipboard:changed` | `item[]` | 剪贴板历史变化（主进程每约 1.2s 轮询系统剪贴板） |
 | `terminal:data` | `{ id, type: 'data', data }` | PTY 输出（原样文本，含 ANSI），只发给拥有该会话的窗口 |
@@ -198,10 +198,10 @@
 | `terminal:drag-active` | — | 主进程检测到终端窗口开始被拖动（`will-resize`）：渲染层据此在拖动期间不发对齐请求 |
 | `terminal:zoom` | `'in' \| 'out' \| 'reset'` | 焦点在终端窗口时 `Cmd +/-/0` 的字号缩放（见 §5.3）；独立文件窗口不支持缩放 |
 | `sftp:progress` | `{ id, direction: 'upload' \| 'download', name, transferred, total }` | SFTP 上传 / 下载进度，只发给发起该操作、拥有该会话的窗口（渲染层在状态栏显示进度条） |
-| `transfer-window:open` | `{ target?, path? }` | `{ ok }` | 打开 / 聚焦文件传输窗口（穿梭框）；`target` = **左侧栏**的 SSH 目标，`path` = 左侧栏初始目录（文件管理器右键「文件传输」时传入当前连接与目录）；窗口已打开时改为向其下发 `transfer-window:locate` 定位 |
-| `transfer-window:info` | — | `{ ok, target, path, settings }` | 传输窗口读取自身的初始连接 / 目录与当前设置（仅传输窗口可调用） |
+| `transfer-window:open` | `{ target?, path?, rightTarget?, rightPath? }` | `{ ok }` | 打开 / 聚焦文件传输窗口（穿梭框）；`target` = **左侧栏**的 SSH 目标，`path` = 左侧栏初始目录（文件管理器右键「文件传输」时传入当前连接与目录）；`rightTarget` / `rightPath` = 右侧栏的 SSH 目标与目录（内嵌面板「分离为独立窗口」时传入，窗口会自动选中右侧连接）；窗口已打开时改为向其下发 `transfer-window:locate` 定位 |
+| `transfer-window:info` | — | `{ ok, target, path, rightTarget, rightPath, settings }` | 传输窗口读取自身的初始连接 / 目录（含右侧）与当前设置（仅传输窗口可调用） |
 | `transfer-window:close` | — | `{ ok }` | 关闭传输窗口（仅传输窗口可调用） |
-| `transfer:run` | `{ fromId, toId, path, destDir, type? }` | `{ ok, transferred?, total?, files?, name?, localPath?, error? }` | 执行一次**远端 → 远端**传输（文件或目录，目录递归复制）：先把源端下载到**文件下载目录**（保留本地副本，重名加序号，`localPath` 为其路径），再从本地副本上传到目标端；源端 / 目标端为两端 SFTP 会话 id；**同一时刻只允许一个任务**，并发请求返回 `error: 'busy'`；进度经 `transfer:progress` 分「下载 / 上传」两段实时回传 |
+| `transfer:run` | `{ fromId, toId, path, destDir, type? }` | `{ ok, transferred?, total?, files?, name?, localPath?, error? }` | 执行一次**远端 → 远端**传输（文件或目录，目录递归复制）：先把源端下载到**文件下载目录**（保留本地副本，重名加序号，`localPath` 为其路径），再从本地副本上传到目标端；源端 / 目标端为两端 SFTP 会话 id；**同一时刻只允许一个任务**，并发请求返回 `error: 'busy'`；进度经 `transfer:progress` 分「下载 / 上传」两段实时回传。**请求来源**：独立文件传输窗口**或终端窗口**（内嵌文件传输面板）；渲染层经 `window.ships.transfer.run(payload)` / `window.ships.transfer.onProgress(cb)` 调用 |
 | `file-window:target` | `{ target, path }` | 独立文件窗口已打开时，`file-window:open` 带目标再次调用 → 请它切换连接并进入 `path` |
 | `games:load` | `{ game }` | 复用游戏窗口时切换游戏；渲染层先 flush 旧游戏再重新加载 |
 | `games:prepare-close` | — | 请求游戏窗口暂停、flush 电池存档后调用 `games:close-now` |

@@ -140,6 +140,11 @@ const api = {
   transferWindow: {
     open: (payload) => ipcRenderer.invoke(IPC.TRANSFER_WINDOW_OPEN, payload || {}),
   },
+  transfer: {
+    // 传输任务（穿梭框）：独立文件传输窗口与终端内嵌面板共用。
+    run: (payload) => ipcRenderer.invoke(IPC.TRANSFER_RUN, payload),
+    onProgress: (cb) => on(IPC.TRANSFER_PROGRESS, cb),
+  },
   fileWindow: {
     open: (target, path) => ipcRenderer.invoke(IPC.FILE_WINDOW_OPEN, { target, path }),
     info: () => ipcRenderer.invoke(IPC.FILE_WINDOW_INFO),

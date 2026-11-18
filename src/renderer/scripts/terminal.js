@@ -50,7 +50,7 @@
         menuConnect: '连接到服务器',
         menuNoHosts: '无可用主机',
         menuFiles: '切换文件管理器',
-        menuTransfer: '文件传输',
+        menuTransferPanel: '切换文件传输',
         menuUpload: '上传文件到此处',
         quickUser: '用户名',
         quickAddress: '地址',
@@ -105,7 +105,7 @@
         menuConnect: 'Connect to server',
         menuNoHosts: 'No hosts available',
         menuFiles: 'Toggle file manager',
-        menuTransfer: 'File transfer',
+        menuTransferPanel: 'Toggle file transfer',
         menuUpload: 'Upload files here',
         quickUser: 'Username',
         quickAddress: 'Address',
@@ -192,6 +192,14 @@
   let sshTarget = '';
   // 底部文件面板（SFTP）控制器
   let filesApi = null;
+  // 内嵌文件传输（穿梭框）面板控制器：与文件管理互斥，共用底部面板槽位。
+  let transferApi = null;
+
+  /* 当前 SSH 目标同步给两个底部面板（文件管理 / 文件传输）。 */
+  function setPanelsSshTarget(value) {
+    if (filesApi) filesApi.setSshTarget(value);
+    if (transferApi) transferApi.setSshTarget(value);
+  }
   // 悬浮球模式（失去焦点缩成圆形小窗；期间不 fit、不把尺寸同步给 PTY）
   let ballMode = false;
   // 「固定」：开启后本窗口失焦不缩成悬浮球（仅当前窗口，**默认开**，不持久）
@@ -244,7 +252,7 @@
     lastRows = rec.lastRows;
     lastHostKey = rec.lastHostKey;
     typedLine = rec.typedLine;
-    if (filesApi) filesApi.setSshTarget(sshTarget);
+    setPanelsSshTarget(sshTarget);
     renderHeaderTitle();
   }
 
@@ -546,6 +554,7 @@
     const match = /^\s*cd(?:\s+(.*))?\s*$/.exec(candidate || '');
     if (!match || !filesApi || target !== activeRecord) return;
     filesApi.followCd(match[1] == null ? '' : match[1]);
+    if (transferApi) transferApi.followCd(match[1] == null ? '' : match[1]);
   }
   function trackLine(data, rec) {
     const target = rec || activeRecord;
@@ -760,27 +769,37 @@
 
     if (command === 'trans') {
       if (!sshTarget) return metaNeedSsh(rec);
-      const dir = filesApi && filesApi.getCwd ? filesApi.getCwd() : '';
-      if (window.ships.transferWindow) {
-        await window.ships.transferWindow.open({ target: String(sshTarget || ''), path: dir || '' });
+      // 默认打开**内嵌**的文件传输面板（穿梭框）；没有内嵌面板时退回独立窗口。
+      if (transferApi) {
+        transferApi.setSshTarget(sshTarget);
+        await transferApi.show();
+        metaPrint(rec, 'File transfer panel opened.');
+      } else {
+        const dir = filesApi && filesApi.getCwd ? filesApi.getCwd() : '';
+        if (window.ships.transferWindow) {
+          await window.ships.transferWindow.open({ target: String(sshTarget || ''), path: dir || '' });
+        }
+        metaPrint(rec, 'File Transfer opened.');
       }
-      metaPrint(rec, 'File Transfer opened.');
       metaReprintPrompt(rec);
       return;
     }
 
-    if (command === 'sftp') {
-      if (!sshTarget) return metaNeedSsh(rec);
-      if (filesApi && !(typeof filesApi.isOpen === 'function' && filesApi.isOpen())) filesApi.toggle();
-      metaPrint(rec, 'File manager opened.');
-      metaReprintPrompt(rec);
-      return;
-    }
-
-    if (command === 'upload') {
-      if (!sshTarget) return metaNeedSsh(rec);
-      if (filesApi && typeof filesApi.uploadHere === 'function') filesApi.uploadHere();
-      metaPrint(rec, 'Select files to upload.');
+    if (command === 'sftp' || command === 'upload') {
+      // 未连接 SSH：直接打开**独立文件管理窗口**（窗口内可选择主机再连接）。
+      if (!sshTarget) {
+        if (window.ships.fileWindow) window.ships.fileWindow.open('', '');
+        metaPrint(rec, 'No SSH connection is active; opened the File Manager window.');
+        metaReprintPrompt(rec);
+        return;
+      }
+      if (command === 'sftp') {
+        if (filesApi && !(typeof filesApi.isOpen === 'function' && filesApi.isOpen())) filesApi.toggle();
+        metaPrint(rec, 'File manager opened.');
+      } else {
+        if (filesApi && typeof filesApi.uploadHere === 'function') filesApi.uploadHere();
+        metaPrint(rec, 'Select files to upload.');
+      }
       metaReprintPrompt(rec);
       return;
     }
@@ -1269,7 +1288,7 @@
       lastCols = rec.lastCols;
       lastRows = rec.lastRows;
       sshTarget = '';
-      if (filesApi) filesApi.setSshTarget('');
+      setPanelsSshTarget('');
       renderHeaderTitle();
       window.ships.terminal.setActiveSession(rec.sessionId);
     }
@@ -1292,7 +1311,7 @@
     rec.sshTarget = '';
     sessionId = '';
     sshTarget = '';
-    if (filesApi) filesApi.setSshTarget('');
+    setPanelsSshTarget('');
     renderHeaderTitle();
     if (oldId) {
       try {
@@ -1594,7 +1613,7 @@
       rec.sshTarget = '';
       if (rec === activeRecord) {
         sshTarget = '';
-        if (filesApi) filesApi.setSshTarget('');
+        setPanelsSshTarget('');
         renderHeaderTitle();
       }
     }
@@ -1609,7 +1628,7 @@
     rec.sshTarget = message.target || '';
     if (rec === activeRecord) {
       sshTarget = rec.sshTarget;
-      if (filesApi) filesApi.setSshTarget(sshTarget);
+      setPanelsSshTarget(sshTarget);
       renderHeaderTitle();
     }
   });
@@ -1625,7 +1644,7 @@
     if (rec === activeRecord) {
       sessionId = '';
       sshTarget = '';
-      if (filesApi) filesApi.setSshTarget('');
+      setPanelsSshTarget('');
       renderHeaderTitle();
     }
     if (message.type === 'error') {
@@ -2828,14 +2847,11 @@
         },
       },
       {
-        label: i18n.t('terminalWin.menuTransfer'),
+        label: i18n.t('terminalWin.menuTransferPanel'),
         icon: 'transfer',
-        disabled: !sshReady || !filesApi,
+        disabled: !sshReady || !transferApi,
         run: () => {
-          const dir = filesApi && typeof filesApi.getCwd === 'function' ? filesApi.getCwd() : '';
-          if (window.ships.transferWindow) {
-            window.ships.transferWindow.open({ target: String(sshTarget || ''), path: dir || '' });
-          }
+          if (transferApi) transferApi.toggle();
         },
       },
       {
@@ -2875,8 +2891,23 @@
   }
   filesApi =
     window.ShipsTerminalFiles && filesBtn
-      ? window.ShipsTerminalFiles.mount({ onStateChange: applyFilesState, onCd: cdInTerminal })
+      ? window.ShipsTerminalFiles.mount({
+          onStateChange: applyFilesState,
+          onCd: cdInTerminal,
+          // 展开文件管理时收起内嵌的文件传输（两者互斥，共用同一个底部槽位）。
+          onShow: () => {
+            if (transferApi) transferApi.hide();
+          },
+        })
       : null;
+  // 内嵌文件传输（穿梭框）：与文件管理互斥，共用底部面板与分隔条。
+  transferApi = window.ShipsTerminalTransfer
+    ? window.ShipsTerminalTransfer.mount({
+        onShow: () => {
+          if (filesApi) filesApi.hide();
+        },
+      })
+    : null;
 
   itermBtn.addEventListener('click', () => window.ships.terminal.openIterm());
   lightClose.addEventListener('click', () => window.ships.windowControl('close'));

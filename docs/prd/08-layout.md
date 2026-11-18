@@ -60,6 +60,7 @@
 - 光标行高亮（iTerm 风格）：每块终端内有一个 `.term-cursor-line` 背景层（绝对定位、位于 `.xterm` 文字下方、`pointer-events: none`），按光标所在视口行 `top = cursorY × 单元格高` 定位，铺一层淡淡底色（`--term-cursor-line`，白天 `rgba(15,18,25,0.055)` / 暗色 `rgba(255,255,255,0.07)`）；随光标移动 / 滚动更新，滚出视口时隐藏。**分屏时只画在当前激活的终端上**（切换焦点时隐藏上一块的高亮）。
 - 分屏（§3.8-13）：`#term-panes` 为 flex 容器，默认只有主终端 `#term-fit`；右键「分割窗口」后插入 `.term-split-divider`（6px 命中区 + 居中 1px 线，悬停 / 拖动变强调色）与副终端的 `.term-pane`。`split-horizontal` = 上下排列（拖动改高度）、`split-vertical` = 左右排列（拖动改宽度）；两块各占 50%，拖动时主终端按 15%–85% 比例伸缩。**最多两块**；分屏后行号栏仍显示，固定在最左侧、只给主终端（左右分割时在左、上下分割时在上）编号。行号栏宽度 `--term-gutter-width` = 终端字号 × 1.4（默认 14px → 19.6px，刚好容纳两位数字）。两块各有独立 xterm / FitAddon / PTY 会话，最外层窗口尺寸与几何记忆逻辑不变。
 - 内嵌文件面板（`#file-panel` + `#term-divider`，见 §3.8-10、§8.6）：默认隐藏，由头部文件夹按钮显隐；面板与终端间是 **6px 可拖动分隔线**（中间一条 1px 线，`:hover` 变强调色加粗；**面板自身不画上边框，所以只有这一条线**），面板高度 = `file-layout.json` 的 `panelHeight`（默认 260px、最小 120px，向上拖 = 终端变小），**字体跟随终端字号**（`--file-font-size`）。面板内容由 `scripts/file-manager.js` 构建（见 §8.6），左目录树初始宽 300px、列宽与面板高度均可拖动并持久化。
+- 内嵌文件传输面板（`#transfer-panel`，见 §3.8-15）：与内嵌文件面板**互斥**、共用同一条分隔线与同一个高度；内容为穿梭框（`.transfer-embedded`：主体 `.transfer-embedded-main` 内左右两栏 `.transfer-pane-host` + 中间 6px 竖直分隔条 + 底部 `.fm-status` 状态栏）。尺寸变量与内嵌文件管理一致（`#file-panel` / `#transfer-panel` 共用 `--file-font-size` / `--fm-row-height` / `--fm-control-height`），因此字号、行高、行内控件高度与文件管理完全相同。
 - 入口：主面板底部栏「终端」图标；SSH 连接（§3.4）也会拉起本窗口。
 
 ### 8.6 文件管理（内嵌面板 / 独立文件窗口）
@@ -94,7 +95,7 @@
 - **默认 / 最小尺寸 640 × 480**、**最大 1024 × 768**（`package.json` 的 `vessel.transferWindow` → `constants.js` 的 `TRANSFER_WINDOW`）；屏幕 / 位置 / 尺寸记入 `transfer-window.json`（旧版本记住的超大尺寸会被夹到上限）。
 - 结构：主体 `main` 为 `左栏（#transfer-pane-left） + 可拖动竖直分隔线（#transfer-divider，宽 6px，`.transfer-divider-v`，拖动改变左右两栏宽度、各不小于 200px） + 右栏（#transfer-pane-right）`，底部为 `.fm-status` 状态栏（路径 + **下载 / 上传两段进度条** + 状态信息，复用文件管理器样式：两段进度各为一行 `下载 xx%` / `上传 xx%` 的细进度条，均在 `.fm-progress-stack` 内、`.fm-progress-row` 逐行排列，标签宽度自适应、进度条占满剩余宽度）；**中间没有按钮区**。
 - 每栏：`.transfer-pane-head`（**行高 32px**，与第二行路径行 `.fm-path-row` 同高：SSH 主机下拉（**高 22px**）占满栏宽，**左栏**的下拉右侧放**「同步」开关** `.transfer-sync`）→ `.fm-path-row`（家目录 / 刷新 / 路径输入框，显示当前目录）→ **`.fm-tree` 目录树**（复用文件管理器的目录树样式：行高 `1.85em`、缩进 14px/级、`caret-right` 展开旋转 90°、`folder` 图标、目录行可展开、文件为叶子；**只有一列**（图标 + 名称），**不显示体积 / 权限 / 时间列**；读取子项时行内显示 10px 旋转 loading `.fm-tree-spinner`；**当前目录行** `.fm-tree-row.current` 加粗 + 强调色；选中行 `.fm-tree-row.selected` 强调色底 + 左侧色条）。
-- 「同步」开关 `.transfer-sync`：胶囊按钮（`refresh` 图标 + 文字），激活时强调色描边 + 浅色底；**位于左栏 SSH 下拉的右侧**。
+- 「同步」开关 `.transfer-sync`：按钮（`sync` 双向箭头图标；独立窗口带「同步」文字，内嵌面板仅图标且为长方形，不用圆形外框），激活时强调色描边 + 浅色底；**独立窗口位于左栏 SSH 下拉的右侧**，内嵌面板位于左栏行末。两侧未都连接时按钮禁用。
 - 目录 / 文件节点右键菜单复用 `.fm-menu`（传输到对侧 / 编辑文件 / 从 Finder 打开 / 从 VS Code 打开 / 从 Wireshark 打开 / 下载到本地 / 复制路径 / 复制引用），左右两栏一致。
 
 ### 8.8 游戏窗口（EmulatorJS）

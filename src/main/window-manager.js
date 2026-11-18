@@ -82,6 +82,8 @@ let transferWindow = null;
 let transferWindowOwnerId = null;
 let transferWindowTarget = '';
 let transferWindowPath = '';
+let transferWindowRightTarget = '';
+let transferWindowRightPath = '';
 let transferWindowState = readJson(TRANSFER_WINDOW_FILE, null);
 let transferWindowGeometryTimer = null;
 // 内置编辑器窗口：可多开，记录归属的文件管理器窗口与服务端文件，随文件管理器销毁而关闭。
@@ -1684,11 +1686,22 @@ function getTransferWindowPath() {
   return transferWindowPath;
 }
 
-/* 打开（或聚焦）文件传输窗口；target / path 用于定位左侧连接与目录。 */
-function openTransferWindow(target, pathArg) {
+function getTransferWindowRightTarget() {
+  return transferWindowRightTarget;
+}
+
+function getTransferWindowRightPath() {
+  return transferWindowRightPath;
+}
+
+/* 打开（或聚焦）文件传输窗口；target / path 用于定位左侧连接与目录，
+   rightTarget / rightPath 用于把右侧连接与目录一并带过来（分离为独立窗口时用）。 */
+function openTransferWindow(target, pathArg, rightTarget, rightPath) {
   if (target != null) {
     transferWindowTarget = String(target || '');
     transferWindowPath = pathArg != null ? String(pathArg || '') : '';
+    transferWindowRightTarget = rightTarget != null ? String(rightTarget || '') : '';
+    transferWindowRightPath = rightPath != null ? String(rightPath || '') : '';
   }
   if (transferWindow && !transferWindow.isDestroyed()) {
     transferWindow.show();
@@ -1697,6 +1710,8 @@ function openTransferWindow(target, pathArg) {
       transferWindow.webContents.send(IPC.TRANSFER_WINDOW_LOCATE, {
         target: transferWindowTarget,
         path: transferWindowPath,
+        rightTarget: transferWindowRightTarget,
+        rightPath: transferWindowRightPath,
       });
     }
     return transferWindow;
