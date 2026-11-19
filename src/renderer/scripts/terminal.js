@@ -51,6 +51,8 @@
         menuNoHosts: '无可用主机',
         menuFiles: '切换文件管理器',
         menuTransferPanel: '切换文件传输',
+        menuOpenFiles: '打开文件管理器',
+        menuOpenTransfer: '打开文件传输',
         menuUpload: '上传文件到此处',
         quickUser: '用户名',
         quickAddress: '地址',
@@ -106,6 +108,8 @@
         menuNoHosts: 'No hosts available',
         menuFiles: 'Toggle file manager',
         menuTransferPanel: 'Toggle file transfer',
+        menuOpenFiles: 'Open file manager',
+        menuOpenTransfer: 'Open file transfer',
         menuUpload: 'Upload files here',
         quickUser: 'Username',
         quickAddress: 'Address',
@@ -127,10 +131,9 @@
   const FONT_DEFAULT = C.TERMINAL_FONT_DEFAULT || 14;
   const FONT_MIN = C.TERMINAL_FONT_MIN || 8;
   const FONT_MAX = C.TERMINAL_FONT_MAX || 64;
-  const HEADER_FONT_MIN = C.TERMINAL_HEADER_FONT_MIN || 10;
-  const HEADER_FONT_MAX = C.TERMINAL_HEADER_FONT_MAX || 20;
+  const HEADER_HEIGHT_RATIO = C.TERMINAL_HEADER_HEIGHT_RATIO || 1.6;
   const HEADER_HEIGHT_MIN = C.TERMINAL_HEADER_HEIGHT_MIN || 16;
-  const HEADER_HEIGHT_MAX = C.TERMINAL_HEADER_HEIGHT_MAX || 32;
+  const FONT_SIZE_EVENT = C.FONT_SIZE_EVENT || 'vessel:font-size';
 
   /* xterm 挂在 #term-fit（无内边距）里，留白由外层 #term-host（上下 5px、左右 0）提供：FitAddon 用
      「父元素的 border box 高度」算行数，父元素带内边距会把可用高度多算一份内边距，
@@ -1173,15 +1176,25 @@
     syncPtySize();
   }
 
-  /* 头栏字号跟随终端字号，但夹在 10–20px；高度按字号线性映射并夹在 20–32px
-     （10px 字号 → 20px，20px 字号 → 32px）。文件面板文字 = 终端字号。 */
+  /* 头栏字号 = 终端字号（完全一致，不再夹取 10–20px）；高度按字号线性映射（×1.6），
+     仅保留下限。内嵌文件管理 / 文件传输面板共用同一个 --file-font-size（= 终端字号），
+     因此面板文字始终与终端同号；面板内所有固定 px 尺寸按 --fm-unit 等比换算
+     （见 styles/constants.css 的 --fm-unit），放大字号时整体等比放大、比例不变。
+     --fm-scale 是纯数字的缩放系数（终端字号 ÷ 基准字号），供「用户可拖动的 px 布局值」
+     （目录树宽 / 各列列宽 / 目录树缩进）换算。 */
   function applyHeaderFontSize(value) {
-    const headerFont = Math.max(HEADER_FONT_MIN, Math.min(HEADER_FONT_MAX, value));
-    const headerHeight = Math.max(HEADER_HEIGHT_MIN, Math.min(HEADER_HEIGHT_MAX, Math.round(headerFont * 1.6)));
-    document.documentElement.style.setProperty('--term-header-font-size', `${headerFont}px`);
+    const size = Math.max(FONT_MIN, Math.min(FONT_MAX, Number(value) || FONT_DEFAULT));
+    const headerHeight = Math.max(HEADER_HEIGHT_MIN, Math.round(size * HEADER_HEIGHT_RATIO));
+    const base = C.FILE_PANEL_BASE_FONT_SIZE || 12;
+    document.documentElement.style.setProperty('--term-header-font-size', `${size}px`);
     document.documentElement.style.setProperty('--term-header-height', `${headerHeight}px`);
-    document.documentElement.style.setProperty('--file-font-size', `${value}px`);
+    document.documentElement.style.setProperty('--file-font-size', `${size}px`);
+    document.documentElement.style.setProperty('--fm-scale', (size / base).toFixed(4));
     positionSearchPanel();
+    // 通知内嵌面板：字号变了，面板最小高度要跟着重算（见 scripts/terminal-files.js）。
+    document.documentElement.dispatchEvent(
+      new CustomEvent(FONT_SIZE_EVENT, { detail: { fontSize: size } })
+    );
   }
 
   function fontFamilyValue(family) {
@@ -2839,19 +2852,31 @@
         run: openQuickConnect,
       },
       {
-        label: i18n.t('terminalWin.menuFiles'),
+        label: sshReady ? i18n.t('terminalWin.menuFiles') : i18n.t('terminalWin.menuOpenFiles'),
         icon: 'folder',
-        disabled: !sshReady || !filesApi,
+        // 已连接 SSH：展开 / 收起内嵌文件管理面板；未连接：打开独立的文件管理窗口。
+        disabled: sshReady ? !filesApi : !window.ships.fileWindow,
         run: () => {
-          if (filesApi) filesApi.toggle();
+          if (sshReady) {
+            if (filesApi) filesApi.toggle();
+            return;
+          }
+          if (window.ships.fileWindow) window.ships.fileWindow.open('', '');
         },
       },
       {
-        label: i18n.t('terminalWin.menuTransferPanel'),
+        label: sshReady
+          ? i18n.t('terminalWin.menuTransferPanel')
+          : i18n.t('terminalWin.menuOpenTransfer'),
         icon: 'transfer',
-        disabled: !sshReady || !transferApi,
+        // 已连接 SSH：展开 / 收起内嵌文件传输面板；未连接：打开独立的文件传输窗口。
+        disabled: sshReady ? !transferApi : !window.ships.transferWindow,
         run: () => {
-          if (transferApi) transferApi.toggle();
+          if (sshReady) {
+            if (transferApi) transferApi.toggle();
+            return;
+          }
+          if (window.ships.transferWindow) window.ships.transferWindow.open({});
         },
       },
       {
@@ -2906,6 +2931,8 @@
         onShow: () => {
           if (filesApi) filesApi.hide();
         },
+        // 内嵌传输面板左栏右键「进入该目录」→ 在当前 shell 里 cd 过去（与文件管理器一致）。
+        onCd: cdInTerminal,
       })
     : null;
 

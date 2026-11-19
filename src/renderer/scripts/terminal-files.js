@@ -10,6 +10,12 @@
   const DEFAULT_PANEL_HEIGHT = 260;
   const MIN_PANEL_HEIGHT = 120;
   const MIN_TERM_HEIGHT = 80;
+  // 面板最小高度随终端字号自适应：字号越大行越高（行高 = 字号 × 1.9），
+  // 面板至少要放得下 MIN_PANEL_ROWS 行，避免大字号下被挤成一条缝。
+  const MIN_PANEL_ROWS = 3;
+  const ROW_HEIGHT_RATIO = 1.9;
+  // 终端字号变化事件（terminal.js 的 applyHeaderFontSize 派发）：字号变了要重算面板高度。
+  const FONT_SIZE_EVENT = (window.ShipsConstants && window.ShipsConstants.FONT_SIZE_EVENT) || 'vessel:font-size';
   // 首次打开（无本地布局记录）时的最小布局：终端 ≥300、文件管理 ≥200；目录树 220、文件列表 ≥400。
   const FIRST_TERM_HEIGHT = 300;
   const FIRST_PANEL_HEIGHT = 200;
@@ -39,8 +45,28 @@
     // null = 未知（布局还没读回来）；true/false = 本地是否已有调整记录。
     let hasRecord = null;
 
+    /* 当前终端字号：--file-font-size 由 terminal.js 写成终端字号（内嵌面板与终端同号）。 */
+    function currentFontSize() {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue('--file-font-size');
+      const size = parseFloat(raw);
+      return Number.isFinite(size) && size > 0 ? size : 12;
+    }
+
+    /* 当前缩放系数（终端字号 ÷ 基准字号 12）：目录树宽 / 各列列宽都按它等比放大，
+       因此首次布局时窗口要的宽度也要跟着放大，否则大字号下列宽会被挤掉。 */
+    function currentScale() {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue('--fm-scale');
+      const value = parseFloat(raw);
+      return Number.isFinite(value) && value > 0 ? value : 1;
+    }
+
+    /* 面板最小高度：固定下限 120px，且至少放得下 MIN_PANEL_ROWS 行（随字号自适应）。 */
+    function minPanelHeight() {
+      return Math.max(MIN_PANEL_HEIGHT, Math.round(MIN_PANEL_ROWS * ROW_HEIGHT_RATIO * currentFontSize()));
+    }
+
     function applyPanelHeight() {
-      const value = Math.max(MIN_PANEL_HEIGHT, Number(layout.panelHeight) || DEFAULT_PANEL_HEIGHT);
+      const value = Math.max(minPanelHeight(), Number(layout.panelHeight) || DEFAULT_PANEL_HEIGHT);
       // 文件管理与内嵌文件传输共用同一个底部面板槽位：高度对两者同时生效。
       for (const item of [panel, transferPanel]) {
         if (item) item.style.height = `${value}px`;
@@ -48,7 +74,8 @@
     }
 
     /* 无本地记录时按最小布局（终端 ≥300 / 文件管理 ≥200、目录树 220 / 文件列表 ≥400）
-       把本窗口「只放大不缩小」到够用：树宽 220 + 列表 400 + 分隔线 ≈ 626 宽，
+       把本窗口「只放大不缩小」到够用：树宽 220 + 列表 400 + 分隔线 ≈ 626 宽（按当前
+       缩放系数放大：大字号下列宽 / 树宽都会等比变大，窗口要跟着变宽才放得下），
        头栏 + 300 + 分隔线 + 200 + 状态栏 ≈ 550 高。 */
     function applyFirstRunLayout() {
       layout.treeWidth = FIRST_TREE_WIDTH;
@@ -57,8 +84,9 @@
       if (manager) manager.setLayout({ treeWidth: FIRST_TREE_WIDTH, panelHeight: FIRST_PANEL_HEIGHT });
       const ensure = window.ships.terminal && window.ships.terminal.ensureSize;
       if (typeof ensure === 'function') {
+        const scale = currentScale();
         ensure({
-          width: FIRST_TREE_WIDTH + FIRST_LIST_WIDTH + DIVIDER_WIDTH,
+          width: Math.round((FIRST_TREE_WIDTH + FIRST_LIST_WIDTH + DIVIDER_WIDTH) * scale),
           height: CHROME_HEIGHT + FIRST_TERM_HEIGHT + FIRST_PANEL_HEIGHT,
         });
       }
@@ -176,8 +204,9 @@
       const startY = event.clientY;
       const startHeight = Number(layout.panelHeight) || DEFAULT_PANEL_HEIGHT;
       const onMove = (moveEvent) => {
-        const maxHeight = Math.max(MIN_PANEL_HEIGHT, window.innerHeight - MIN_TERM_HEIGHT);
-        const next = Math.max(MIN_PANEL_HEIGHT, Math.min(maxHeight, startHeight - (moveEvent.clientY - startY)));
+        const floor = minPanelHeight();
+        const maxHeight = Math.max(floor, window.innerHeight - MIN_TERM_HEIGHT);
+        const next = Math.max(floor, Math.min(maxHeight, startHeight - (moveEvent.clientY - startY)));
         layout.panelHeight = next;
         applyPanelHeight();
       };
@@ -188,6 +217,11 @@
       };
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
+    });
+
+    /* 终端字号变化：行高随之变化，面板最小高度要重算（已展开的面板同步长高）。 */
+    document.documentElement.addEventListener(FONT_SIZE_EVENT, () => {
+      applyPanelHeight();
     });
 
     applyPanelHeight();

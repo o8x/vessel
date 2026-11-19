@@ -35,14 +35,28 @@
   --footer-height: 34px;
   --tabbar-height: 46px;
 
-  /* 终端窗口头栏：字号 = 终端字号夹在 10–20px，高度 = 该字号线性映射并夹在 16–32px
-     —— terminal.js 的 applyHeaderFontSize() 会改写这两个变量（默认终端 14 → 头栏 14px / 22px）。 */
+  /* 终端窗口头栏：字号 = 终端字号（完全一致，不再夹取），高度 = 字号 × 1.6（仅保留下限 16px）
+     —— terminal.js 的 applyHeaderFontSize() 会改写这两个变量（默认终端 14 → 头栏 14px / 22px）。
+     头栏内所有尺寸（图标 / 红绿灯 / 间距 / 控件高）都按 --term-header-font-size 线性换算，
+     放大字号时整条头栏等比放大，比例不变（见 styles/tailwind.css 的 #term-header 规则）。 */
   --term-header-height: 22px;
-  --term-header-font-size: 13px;
+  --term-header-font-size: 14px;
   /* 终端内容与窗口四边的留白：0 = 终端铺满窗口（vim 等全屏程序四周不留白） */
   --term-padding-y: 0px;
-  /* 文件管理（内嵌面板 / 独立窗口）基础字号；终端窗口里由 terminal.js 跟随终端字号改写 */
+  /* 文件管理（内嵌面板 / 独立窗口）基础字号；终端窗口里由 terminal.js 写成终端字号
+     （内嵌文件管理 / 文件传输与终端标题栏始终同号）。 */
   --file-font-size: 12px;
+  /* 内嵌面板的等比缩放单位：「基准像素」（面板基准字号 12px 时的 1px）在当前字号下的长度。
+     面板内所有固定 px 尺寸都按它换算（calc(N * var(--fm-unit))）→ 放大字号时整体等比放大，
+     不会只放大文字而留白 / 图标不动。独立文件 / 传输窗口把它固定为 1px（body.file-window），
+     尺寸与放大前完全一致。 */
+  --fm-unit: calc(var(--file-font-size, 12px) / 12);
+  /* 右键菜单（.fm-menu：终端 / 文件管理 / 文件传输共用）固定规格：
+     字号固定 13px，不随终端字号 / 面板字号（--file-font-size）变化；
+     --menu-unit 恒为 1px —— 菜单内所有固定 px 尺寸（宽度 / 行高 / 图标）按它换算，
+     即恒为固定值（tailwind.css 的 .fm-menu 把 --fm-unit 覆盖为该值）。 */
+  --menu-font-size: 13px;
+  --menu-unit: 1px;
   /* 终端左侧行号栏宽度：两位数字（01–99）+ 少量间隙；随终端字号缩放。 */
   --term-gutter-width: calc(var(--file-font-size, 12px) * 1.4);
   /* Hash 工具：字符串 / 文件两种输入模式共用同一高度，切换时下方结果不跳动。 */

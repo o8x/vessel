@@ -45,6 +45,8 @@
         loadFailed: '{target} 无法读取目录：{error}',
         copyPath: '复制路径',
         copyReference: '复制引用',
+        enterDir: '进入该目录',
+        openInTerminal: '在终端打开',
         copiedPath: '已复制路径：{path}',
         copiedReference: '已复制引用：{reference}',
         copyFailed: '复制失败',
@@ -99,6 +101,8 @@
         loadFailed: '{target} cannot read the folder: {error}',
         copyPath: 'Copy path',
         copyReference: 'Copy reference',
+        enterDir: 'Enter this directory',
+        openInTerminal: 'Open in terminal',
         copiedPath: 'Copied path: {path}',
         copiedReference: 'Copied reference: {reference}',
         copyFailed: 'Copy failed',
@@ -195,6 +199,10 @@
   function createTransferUI(refs, options) {
     const opts = options || {};
     const dom = Object.assign({ title: null }, refs || {});
+    // 「进入该目录」回调（内嵌面板用）：在**当前终端的 shell** 里 cd 到该目录。
+    const onEnterDir = typeof opts.onEnterDir === 'function' ? opts.onEnterDir : null;
+    // 是否内嵌在终端窗口里（compact）：决定「进入该目录」的行为与文案。
+    const compact = !opts.standalone;
 
     const state = {
       hosts: [],
@@ -379,10 +387,6 @@
       const wrap = el('div', { class: 'transfer-pane' });
       if (compact) {
         head.classList.add(side === 'left' ? 'transfer-head-left' : 'transfer-head-right');
-        if (side === 'right') {
-          pathRow.classList.add('transfer-path-half');
-          head.append(pathRow);
-        }
         wrap.append(head, treeEl);
       } else {
         wrap.append(head, pathRow, treeEl);
@@ -408,10 +412,9 @@
         refreshBtn.disabled = disabled;
       }
       if (compact) {
-        // 右栏只有「SSH 下拉 + 路径栏」；路径栏里不放图标。
-        if (side === 'right') pathRow.append(pathInput);
-        // 左栏顺序：分离图标 / 主页 / 刷新 / 路径栏 /（同步图标稍后追加）。
-        if (side === 'left') head.append(homeBtn, refreshBtn, pathInput);
+        // 左右两栏一致：家目录 / 刷新图标在最左，路径栏占满剩余宽度；
+        // 右栏的 SSH 下拉稍后插到「图标」与「路径栏」之间。
+        head.append(homeBtn, refreshBtn, pathInput);
       } else {
         pathRow.append(homeBtn, refreshBtn, pathInput);
       }
@@ -433,7 +436,11 @@
       function makeRow(entry, path, depth) {
         const isDir = entry.type === 'dir';
         const expanded = isDir && pane.expanded.has(path);
-        const row = el('div', { class: 'fm-tree-row', style: `padding-left:${6 + depth * 14}px` });
+        // 缩进：基准 6px + 每层 14px，按缩放系数换算（内嵌面板放大后缩进同步放大）。
+        const row = el('div', {
+          class: 'fm-tree-row',
+          style: `padding-left:calc(${6 + depth * 14}px * var(--fm-scale, 1))`,
+        });
         row.dataset.path = path;
         const caret = el('span', { class: `fm-tree-caret${expanded ? ' open' : ''}` });
         if (isDir) {
@@ -676,7 +683,8 @@
       if (compact && side === 'left') {
         // 不挂载 pickerHost，仅保留 picker 供内部同步使用。
       } else if (compact) {
-        head.insertBefore(pickerHost, pathRow);
+        // 右栏顺序：主页 / 刷新 / SSH 下拉 / 路径栏。
+        head.insertBefore(pickerHost, pathInput);
       } else {
         head.appendChild(pickerHost);
       }
@@ -717,7 +725,7 @@
     }
 
     /* 右键菜单：传输到对侧 + 与文件管理器一致的文件操作（编辑 / Finder / VS Code /
-       Wireshark / 下载 / 复制路径 / 复制引用）。 */
+       Wireshark / 下载 / 复制路径 / 复制引用）；目录另有「进入该目录」。 */
     function contextItems(pane, item) {
       const other = state.panes[pane.side === 'left' ? 'right' : 'left'];
       const toOther = pane.side === 'left' ? i18n.t('transferWin.toRight') : i18n.t('transferWin.toLeft');
@@ -730,6 +738,18 @@
           run: () => transferSelection(pane, other),
         },
       ];
+      if (!isFile) {
+        // 目录：进入该目录（与文件管理器一致）。
+        //   · 内嵌面板左栏（= 终端当前连接）→ 在当前 shell 里 cd 过去；
+        //   · 其它情况（独立窗口 / 内嵌面板右栏的另一台主机）→ 新开终端、SSH 连接该主机并进入该目录。
+        const inCurrentShell = compact && pane.side === 'left';
+        items.push({
+          label: inCurrentShell ? i18n.t('transferWin.enterDir') : i18n.t('transferWin.openInTerminal'),
+          icon: inCurrentShell ? 'arrowRight' : 'terminal',
+          disabled: !pane.connected,
+          run: () => enterDirectory(pane, item),
+        });
+      }
       if (isFile) {
         items.push({
           label: i18n.t('transferWin.editFile'),
@@ -759,6 +779,29 @@
         { label: i18n.t('transferWin.copyReference'), icon: 'copy', run: () => copyReference(pane, [item.path]) }
       );
       return items;
+    }
+
+    /* 「进入该目录」：
+       · 内嵌面板左栏（= 终端当前连接）→ 在当前 shell 里 cd 过去（与文件管理器一致），
+         同时把左栏定位到该目录；
+       · 其它情况 → 新开一扇终端，SSH 连接该主机并直接进入该目录（同「在终端打开」）。 */
+    async function enterDirectory(pane, item) {
+      const dir = String((item && item.path) || '');
+      if (!dir || !pane) return;
+      if (compact && pane.side === 'left' && onEnterDir) {
+        await onEnterDir({ path: dir, target: pane.target });
+        await pane.enter(dir);
+        return;
+      }
+      openInTerminal(pane, dir);
+    }
+
+    /* 新开一扇终端，SSH 连接该栏的主机并进入该目录。 */
+    function openInTerminal(pane, dir) {
+      if (!window.ships.ssh || typeof window.ships.ssh.openInTerminal !== 'function') return;
+      const target = String((pane && pane.target) || '');
+      if (!target) return;
+      window.ships.ssh.openInTerminal({ alias: target, target, path: dir }).catch(() => {});
     }
 
     async function copyPath(pane, paths) {
@@ -990,7 +1033,6 @@
         window.ShipsTheme.set(settings || {});
       }
 
-      const compact = !opts.standalone;
       state.panes.left = createPane('left', dom.left, {
         withSync: true,
         compact,

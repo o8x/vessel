@@ -26,16 +26,35 @@
 
   const DEFAULT_LAYOUT = {
     treeWidth: 300,
-    name: 160,
-    size: 60,
-    perm: 90,
-    time: 130,
+    // 文件列表四个数据列的宽度：**占比**（%，四列合计恒为 100）。
+    // 列表宽度按占比分配，窗口 / 面板怎么缩放都不会留空或溢出。
+    name: 36.4,
+    size: 13.6,
+    perm: 20.5,
+    time: 29.5,
     // 列排序：sortKey 为空 = 不排序（服务端返回顺序）；sortDir 仅在有 sortKey 时有效。
     sortKey: '',
     sortDir: 'asc',
   };
   const MIN_TREE = 140;
-  const MIN_COL = 60;
+  // 各列最小占比（%）：拖动时列不会被压到看不见。
+  const MIN_COL_PCT = 10;
+  // 数据列顺序（拖动把手作用在相邻两列的分界线上：文件名|体积、体积|权限、权限|时间）。
+  const COL_KEYS = ['name', 'size', 'perm', 'time'];
+
+  /* 列宽单位迁移：旧版按 px 记录（160 / 60 / 90 / 130 等），新版按占比（%，合计 100）。
+     旧值之和 ≠ 100 时按占比归一化（保留各列相对比例）；已是占比则原样保留（幂等）。 */
+  function normalizeColRatios(layout) {
+    const values = COL_KEYS.map((key) => {
+      const value = Number(layout[key]);
+      return Number.isFinite(value) && value > 0 ? value : DEFAULT_LAYOUT[key];
+    });
+    const sum = values.reduce((acc, value) => acc + value, 0);
+    const legacy = Math.abs(sum - 100) > 0.5;
+    COL_KEYS.forEach((key, index) => {
+      layout[key] = legacy ? (values[index] / sum) * 100 : values[index];
+    });
+  }
 
   i18n.extend({
     zh: {
@@ -328,6 +347,8 @@
     const onConnectionState =
       typeof opts.onConnectionState === 'function' ? opts.onConnectionState : () => {};
     const layoutData = Object.assign({}, DEFAULT_LAYOUT, opts.layout || {});
+    // 列宽统一成占比（旧版 px 记录在此归一化）。
+    normalizeColRatios(layoutData);
 
     const state = {
       id: '',
@@ -436,13 +457,11 @@
       });
     }
 
-    // 时间列表头 = 「时间」标签（可排序）+ 拖动把手（上传 / 分离按钮已分别移到目录树右键菜单 / 路径行）。
+    // 时间列表头 = 「时间」标签（可排序）。没有拖动把手：时间列是最后一列，
+    // 它的宽度由「权限|时间」分界线上的把手调整（见 startColResize）。
     const timeCell = el('div', { class: 'fm-head-cell fm-head-time' });
     timeCell.append(el('span', { class: 'fm-head-time-label' }, i18n.t('filesUi.time')));
     attachSort(timeCell, 'time');
-    const timeResize = el('div', { class: 'fm-col-resize' });
-    timeResize.addEventListener('mousedown', (event) => startColResize(event, 'time'));
-    timeCell.appendChild(timeResize);
 
     listHead.append(
       el('div', { class: 'fm-head-cell fm-head-icon' }, ''),
@@ -479,14 +498,26 @@
     }
     updateSortIndicators();
 
+    /* 目录树宽 / 各列列宽：写进 CSS 变量，由样式直接使用。
+       四个数据列用 **fr 占比**（合计恒为 100%）分配列表剩余宽度 —— 窗口 / 面板怎么缩放，
+       列表都被完整占满，不会留空也不会溢出；内嵌面板与独立窗口一视同仁（不再按字号放大列宽）。
+       目录树宽仍是 px（按 --fm-scale 缩放，用户可拖动）。 */
     function applyLayout() {
-      treePane.style.width = `${layoutData.treeWidth}px`;
-      listPane.style.setProperty('--fm-name', `${layoutData.name}px`);
-      listPane.style.setProperty('--fm-size', `${layoutData.size}px`);
-      listPane.style.setProperty('--fm-time', `${layoutData.time}px`);
-      listPane.style.setProperty('--fm-perm', `${layoutData.perm}px`);
+      treePane.style.setProperty('--fm-tree-width', `${layoutData.treeWidth}px`);
+      listPane.style.setProperty('--fm-name', `${layoutData.name}fr`);
+      listPane.style.setProperty('--fm-size', `${layoutData.size}fr`);
+      listPane.style.setProperty('--fm-perm', `${layoutData.perm}fr`);
+      listPane.style.setProperty('--fm-time', `${layoutData.time}fr`);
     }
     applyLayout();
+
+    /* 当前缩放系数（内嵌面板 = 终端字号 ÷ 基准字号；独立文件窗口 = 1）：
+       拖动列宽 / 分隔线时按它换算鼠标位移，保证「鼠标走多少像素、宽度就变多少像素」。 */
+    function currentScale() {
+      const raw = getComputedStyle(root).getPropertyValue('--fm-scale');
+      const value = parseFloat(raw);
+      return Number.isFinite(value) && value > 0 ? value : 1;
+    }
 
     /* ---------------------------- status helpers -------------------------- */
     let statusTimer = null;
@@ -616,7 +647,11 @@
 
     function makeTreeRow(name, path, depth) {
       const expanded = state.expanded.has(path);
-      const row = el('div', { class: 'fm-tree-row', style: `padding-left:${6 + depth * 14}px` });
+      // 缩进：基准 6px + 每层 14px，按缩放系数换算（内嵌面板放大后缩进同步放大）。
+      const row = el('div', {
+        class: 'fm-tree-row',
+        style: `padding-left:calc(${6 + depth * 14}px * var(--fm-scale, 1))`,
+      });
       const caret = el('span', { class: `fm-tree-caret${expanded ? ' open' : ''}` });
       caret.innerHTML = Icons.caretRight(11);
       caret.addEventListener('click', (event) => {
@@ -1350,18 +1385,45 @@
     }
 
     /* ---------------------------- resizing -------------------------------- */
+    /* 四个数据列当前的实际总宽（px）：把鼠标位移换算成占比变化。 */
+    function columnsWidth() {
+      let total = 0;
+      for (const key of COL_KEYS) {
+        const cell = listHead.querySelector(`.fm-head-${key}`);
+        if (cell) total += cell.getBoundingClientRect().width;
+      }
+      return total;
+    }
+
+    /* 列宽拖动：把手位于相邻两列的分界线上（文件名|体积、体积|权限、权限|时间），
+       拖动即调整这两列的**占比**（合计恒为 100%，列表宽度始终被占满）。 */
     function startColResize(event, key) {
       event.preventDefault();
+      const index = COL_KEYS.indexOf(key);
+      const nextKey = index >= 0 && index < COL_KEYS.length - 1 ? COL_KEYS[index + 1] : '';
+      if (!nextKey) return;
       const startX = event.clientX;
-      const startWidth = layoutData[key];
+      const startRatio = layoutData[key];
+      const startNext = layoutData[nextKey];
+      const total = columnsWidth();
       const onMove = (moveEvent) => {
-        layoutData[key] = clamp(startWidth + (moveEvent.clientX - startX), MIN_COL, 900);
+        // 列宽是占比（不随字号缩放），鼠标位移按「四列当前总宽」直接折算成占比变化，
+        // 边界始终跟着鼠标走。
+        const delta = moveEvent.clientX - startX;
+        const max = startRatio + startNext - MIN_COL_PCT;
+        const ratio = clamp(
+          startRatio + (total > 0 ? (delta / total) * 100 : 0),
+          MIN_COL_PCT,
+          Math.max(MIN_COL_PCT, max)
+        );
+        layoutData[key] = ratio;
+        layoutData[nextKey] = startRatio + startNext - ratio;
         applyLayout();
       };
       const onUp = () => {
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
-        onLayout({ [key]: layoutData[key] });
+        onLayout({ [key]: layoutData[key], [nextKey]: layoutData[nextKey] });
       };
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
@@ -1372,7 +1434,8 @@
       const startX = event.clientX;
       const startWidth = layoutData.treeWidth;
       const onMove = (moveEvent) => {
-        layoutData.treeWidth = clamp(startWidth + (moveEvent.clientX - startX), MIN_TREE, 1200);
+        const scale = currentScale();
+        layoutData.treeWidth = clamp(startWidth + (moveEvent.clientX - startX) / scale, MIN_TREE, 1200);
         applyLayout();
       };
       const onUp = () => {
@@ -1593,6 +1656,8 @@
 
     function setLayout(patch) {
       Object.assign(layoutData, patch || {});
+      // 列宽统一成占比（布局文件里可能是旧版 px 记录）。
+      normalizeColRatios(layoutData);
       if (
         patch &&
         (Object.prototype.hasOwnProperty.call(patch, 'sortKey') ||

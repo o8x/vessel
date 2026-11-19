@@ -938,12 +938,18 @@ input[type='color'].swatch::-webkit-color-swatch {
     opacity: 1;
   }
 }
+/* 终端窗口头栏：高度 / 字号由 styles/constants.css 的 --term-header-height /
+   --term-header-font-size 决定（terminal.js 写成终端字号）。
+   头栏内所有尺寸（间距、控件高、图标、红绿灯）都按 --term-header-font-size 线性换算，
+   放大终端字号时整条头栏等比放大 —— 比例不变，不会出现「字变大、留白不动」的走样。 */
 #term-header {
   position: relative;
-  height: max(var(--term-header-height), calc(var(--term-header-font-size) + 6px));
-  gap: 6px;
-  /* 左留白交给红绿灯组（10px 左边距 = 第一个红绿灯到窗口左边缘的距离），右侧 10px */
-  padding: 0 10px 0 0;
+  height: var(--term-header-height);
+  font-size: var(--term-header-font-size);
+  /* 间距：6px（基准字号 14px）→ 0.43em */
+  gap: calc(var(--term-header-font-size) * 0.43);
+  /* 左留白交给红绿灯组（右边距 10px = 基准字号 14px → 0.71em），右侧 10px */
+  padding: 0 calc(var(--term-header-font-size) * 0.71) 0 0;
 }
 /* 头栏居中标题：显示当前 SSH 连接（`用户名@主机地址`，未命中配置时原样显示目标别名）。
    绝对定位到整条头栏的中点，左右两侧的红绿灯 / 图标不参与宽度计算，因此文字始终
@@ -1085,9 +1091,9 @@ body.show-lines #term-host {
   color: var(--color-fg-muted);
   white-space: nowrap;
 }
-/* 图标按钮与 SSH 下拉都随头栏字号一起缩放。 */
+/* 图标按钮与 SSH 下拉都随头栏字号一起等比缩放（间距 / 控件尺寸 / 图标均按字号换算）。 */
 #term-actions {
-  gap: calc(var(--term-header-font-size) * 0.6);
+  gap: calc(var(--term-header-font-size) * 0.43);
 }
 /* 头栏不再显示 SSH 下拉 / 文件 / iTerm 图标（功能保留在终端右键菜单）。 */
 #term-actions .term-ssh-picker,
@@ -1096,19 +1102,20 @@ body.show-lines #term-host {
   display: none !important;
 }
 #term-actions .icon-btn {
-  width: calc(var(--term-header-font-size) + 6px);
-  height: calc(var(--term-header-font-size) + 6px);
+  /* 控件高度随字号自适应（基准：字号 + 6px → 1.43em，保证点击区足够大）。 */
+  width: calc(var(--term-header-font-size) * 1.43);
+  height: calc(var(--term-header-font-size) * 1.43);
 }
 #term-actions .icon-btn svg {
+  /* 图标与字号同号（等比放大，不设上限）。 */
   width: var(--term-header-font-size);
   height: var(--term-header-font-size);
 }
-/* SSH 下拉：字号随头栏缩放；高度给上限，避免在大字号下占满整条头栏；
-   宽度按字号放大并保持最小可读宽度（10px 头栏字号 → 150px，20px → 180px）。 */
+/* SSH 下拉：字号随头栏缩放；高度 / 宽度都按字号等比放大（不再取上限，避免大字号下压扁）。 */
 #term-actions .select-trigger {
   font-size: var(--term-dropdown-font-size);
-  height: clamp(14px, calc(var(--term-header-font-size) + 3px), 22px);
-  width: clamp(170px, calc(var(--term-header-font-size) * 10), 260px);
+  height: calc(var(--term-header-font-size) + 3px);
+  width: calc(var(--term-header-font-size) * 10);
 }
 /* 下拉框的箭头与字号一致 */
 #term-actions .select-trigger .select-chevron svg {
@@ -1121,11 +1128,12 @@ body.show-lines #term-host {
 }
 
 /* 自绘小红绿灯（系统红绿灯已由主进程隐藏，见 window-manager）。
-   尺寸跟随头栏字号（--term-header-font-size）一起缩放：12px 字号 = 9px 圆点 / 6px 符号。 */
+   尺寸跟随头栏字号（--term-header-font-size）一起等比缩放：12px 字号 = 9px 圆点 / 6px 符号，
+   更大的字号按同一比例继续放大（不设上限，避免比例走样）。 */
 #term-lights,
 #file-lights {
-  gap: 5px;
-  padding-left: 10px;
+  gap: calc(var(--term-header-font-size) * 0.36);
+  padding-left: calc(var(--term-header-font-size) * 0.71);
   --traffic-size: calc(var(--term-header-font-size) * 0.75);
   --traffic-glyph-size: calc(var(--term-header-font-size) * 0.5);
 }
@@ -1185,54 +1193,50 @@ body.show-lines #term-host {
   opacity: 0;
 }
 
-/* 终端窗口头栏下拉的菜单（菜单挂在 body 上，用 body.term-window 限定范围）：
-   固定 135px 宽（与下拉同宽、左右对齐），条目高 20px、四周留 3px（菜单 padding + 条目间距），无分隔线。 */
+/* 终端窗口下拉的菜单（菜单挂在 body 上，用 body.term-window 限定范围）：
+   宽度由 JS 按触发器实测宽度写入；条目高度 / 字号 / 间距按终端字号等比缩放。
+   终端窗口里唯一可见的下拉是内嵌文件传输面板的 SSH 下拉（头栏里的已隐藏），
+   因此这里的字号 = 面板字号（--file-font-size = 终端字号）。 */
 body.term-window {
-  /* SSH 下拉 / 条目字号：头栏字号 - 2px（默认 14 → 12）。 */
-  --term-dropdown-font-size: calc(var(--term-header-font-size) - 2px);
+  /* SSH 下拉 / 条目字号：头栏字号 - 2px（默认 14 → 12），并保留下限 10px（小字号时可读）。 */
+  --term-dropdown-font-size: max(10px, calc(var(--term-header-font-size) - 2px));
 }
 body.term-window:not(.file-window) .select-menu {
   width: 120px;
-  padding: 3px;
+  padding: calc(3 * var(--fm-unit));
   border-radius: var(--radius-card);
 }
 /* 终端头栏的 SSH 下拉走「紧凑」规格；文件管理 / 文件传输窗口用自己的规格（见下方 file-window 规则）。 */
 body.term-window:not(.file-window) .select-menu .select-option {
   width: 100%;
-  height: max(22px, calc(var(--term-header-font-size) + 8px));
+  height: calc(22 * var(--fm-unit));
   margin: 0;
-  padding: 1px 8px;
-  border-radius: 5px;
-  font-size: var(--term-dropdown-font-size);
+  padding: calc(1 * var(--fm-unit)) calc(8 * var(--fm-unit));
+  border-radius: calc(5 * var(--fm-unit));
+  /* 比面板字号小 1px，与内嵌传输面板的 SSH 下拉触发器一致。 */
+  font-size: calc(var(--file-font-size, 12px) - 1px);
 }
 body.term-window .select-menu .select-option .select-option-label {
   min-width: 0;
 }
 /* 条目之间留 3px（与四周留白一致）。 */
 body.term-window:not(.file-window) .select-menu .select-option + .select-option {
-  margin-top: 3px;
+  margin-top: calc(3 * var(--fm-unit));
 }
 body.term-window:not(.file-window) .select-menu .select-option svg {
-  width: var(--term-dropdown-font-size);
-  height: var(--term-dropdown-font-size);
-}
-/* 终端窗口头栏的 SSH 下拉条目：与触发器同字号。 */
-body.term-window:not(.file-window) .select-menu .select-option {
-  font-size: var(--term-dropdown-font-size);
-}
-body.term-window:not(.file-window) .select-menu .select-option svg {
-  width: var(--term-dropdown-font-size);
-  height: var(--term-dropdown-font-size);
+  width: var(--file-font-size, 12px);
+  height: var(--file-font-size, 12px);
 }
 /* 终端窗口头栏 SSH 下拉里的分组小标题：更紧凑。 */
 body.term-window:not(.file-window) .select-menu .select-group-title {
-  padding: 3px 8px 1px;
+  padding: calc(3 * var(--fm-unit)) calc(8 * var(--fm-unit)) calc(1 * var(--fm-unit));
   font-size: max(10px, calc(var(--term-header-font-size) - 2px));
 }
 
 /* 文件管理 / 文件传输窗口的 SSH 下拉：触发器高 22px（`--fm-control-height`，
-   与该行其它输入框 / 按钮严格等高）；菜单条目与右键菜单（`.fm-menu-item`）规格一致 ——
-   高 25px、上下各 1px 边距、左右 10px 内边距、圆角 5px、12px 字号。
+   与该行其它输入框 / 按钮严格等高）；菜单条目与右键菜单（`.fm-menu-item`）同高同内边距 ——
+   高 25px、上下各 1px 边距、左右 10px 内边距、圆角 5px（下拉条目 12px 字号；
+   右键菜单条目固定 13px 字号，不随终端字号缩放）。
    分组标题行高沿用基础样式不变。 */
 body.file-window .select-trigger {
   height: var(--fm-control-height);
@@ -1296,14 +1300,36 @@ body.file-window .select-menu .select-group-title {
   color: var(--color-fg);
 }
 /* 终端内嵌的文件传输面板（穿梭框）：与文件管理互斥，共用同一条分隔条与面板高度。
-   尺寸变量与内嵌文件管理保持一致（字号 / 行高 / 控件高），视觉与文件管理同一套。 */
+   尺寸变量与内嵌文件管理保持一致（字号 / 行高 / 控件高），视觉与文件管理同一套。
+
+   ---------------- 内嵌面板的等比缩放 ----------------
+   终端窗口里的内嵌文件管理 / 内嵌文件传输面板与终端**同号**：
+   --file-font-size 由 terminal.js 写成终端字号（写在 <html> 上）。
+   为了让「放大字号」看起来是整体等比放大、而不是比例走样，面板里所有固定 px 尺寸
+   （间距 / 内边距 / 图标 / 分隔条 / 进度条 / 目录树缩进）都按 --fm-unit 换算：
+     --fm-unit = 终端字号 ÷ 12（「基准像素」在当前字号下的长度，见 styles/constants.css）
+   行高 / 控件高本来就是 em（相对面板字号），天然等比。
+   用户可拖动的 px 布局值（目录树宽 / 各列列宽）按 --fm-scale（纯数字 = 终端字号 ÷ 12，
+   由 terminal.js 写入）换算。
+   独立文件 / 传输窗口把 --fm-unit 固定为 1px、也没有 --fm-scale → 尺寸与放大前完全一致。 */
 #file-panel,
 #transfer-panel {
-  --file-font-size: 12px;
-  /* 行高 / 控件高与文件管理的 .fm-path-row（1.9em）保持一致。 */
+  /* 行高 / 控件高与文件管理的 .fm-path-row（1.9em）保持一致，并随字号自适应。 */
   --fm-row-height: 1.9em;
-  --fm-control-height: 22px;
+  --fm-control-height: 1.7em;
 }
+/* 目录树 / 列表里的图标：SVG 自带 11px / 13px 的固定属性值，这里按字号换算成等比尺寸。 */
+.fm-tree-caret svg {
+  width: calc(11 * var(--fm-unit, 1px));
+  height: calc(11 * var(--fm-unit, 1px));
+}
+.fm-tree-icon svg,
+.fm-cell-icon svg {
+  width: calc(13 * var(--fm-unit, 1px));
+  height: calc(13 * var(--fm-unit, 1px));
+}
+/* 终端窗口里的右键菜单挂在 <body> 上（不在面板内）：字号固定 14px、不随终端字号缩放
+   （见上方 .fm-menu 规则）；下拉菜单（.select-menu）才按终端字号等比缩放。 */
 #transfer-panel:not(.hidden) {
   display: flex;
   flex: 0 0 auto;
@@ -1336,29 +1362,28 @@ body.file-window .select-menu .select-group-title {
   min-width: 0;
   min-height: 0;
 }
-/* 内嵌面板首行 SSH 下拉与路径输入框同高（1.7em），避免在终端窗口里套用头栏 34px 尺寸。 */
+/* 内嵌面板首行 SSH 下拉：比路径输入框再矮 1px、字号小 1px（1.9em 行里不再贴住行底边框）。
+   高度用面板字号换算（--file-font-size），不随触发器自身缩小后的字号二次缩水。 */
 .transfer-embedded .transfer-pane-head .select-trigger {
-  height: 1.7em;
-  font-size: 12px;
-  padding: 0 6px;
+  height: calc(1.7 * var(--file-font-size, 12px) - 1px);
+  font-size: calc(1em - 1px);
+  padding: 0 calc(6 * var(--fm-unit, 1px));
+}
+/* 内嵌面板的「同步」按钮：字号跟随面板字号（独立传输窗口保持 12px 固定）。 */
+#transfer-panel .transfer-sync {
+  font-size: 1em;
 }
 /* 内嵌面板：SSH 下拉行与路径行合并为同一行。
-   左栏 = 分离 / 主页 / 刷新图标 + 路径栏 + 同步图标按钮（不显示 SSH 下拉）；
-   右栏 = SSH 下拉 + 路径栏（各占 50%，没有图标）。 */
+   两栏顺序一致：家目录 / 刷新图标在最左，路径栏占满剩余宽度；
+   右栏在图标与路径栏之间多一个 SSH 下拉（固定基准宽度、可收缩）。 */
 .transfer-pane-head.transfer-pane-head-merged {
-  padding: 0 6px;
-  gap: 6px;
+  padding: 0 calc(6 * var(--fm-unit, 1px));
+  gap: calc(6 * var(--fm-unit, 1px));
 }
 .transfer-pane-head-merged .transfer-pane-picker {
-  flex: 1 1 0;
-}
-.transfer-pane-head-merged .transfer-path-half {
-  flex: 1 1 0;
-  width: auto;
-  min-width: 0;
-  height: 100%;
-  padding: 0;
-  border-bottom: none;
+  /* 固定基准宽度（可收缩到 min-width），剩余宽度全部留给路径栏。 */
+  flex: 0 1 calc(104 * var(--fm-unit, 1px));
+  min-width: calc(64 * var(--fm-unit, 1px));
 }
 /* 同步按钮：与路径栏输入框严格等高（1.7em）的长方形图标按钮（非圆形外框）。 */
 .transfer-pane-head-merged .transfer-sync {
@@ -1370,7 +1395,7 @@ body.file-window .select-menu .select-group-title {
 .transfer-pane-head-merged .transfer-sync-icon-only {
   flex: 0 0 auto;
   width: auto;
-  padding: 0 7px;
+  padding: 0 calc(7 * var(--fm-unit, 1px));
   justify-content: center;
 }
 /* 未连接时禁用的路径栏 / 同步按钮。 */
@@ -1430,7 +1455,9 @@ body.file-window .select-menu .select-group-title {
 .fm-tree-pane {
   display: flex;
   flex: 0 0 auto;
-  width: 300px;
+  /* 目录树宽：JS 写入 --fm-tree-width（px），内嵌面板按 --fm-scale 等比缩放，
+     独立文件窗口没有 --fm-scale → 取 1，宽度与之前一致。 */
+  width: calc(var(--fm-tree-width, 300px) * var(--fm-scale, 1));
   min-width: 0;
   min-height: 0;
   flex-direction: column;
@@ -1440,7 +1467,7 @@ body.file-window .select-menu .select-group-title {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 6px;
+  width: calc(6 * var(--fm-unit, 1px));
   cursor: col-resize;
   background: transparent;
 }
@@ -1466,9 +1493,9 @@ body.file-window .select-menu .select-group-title {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 4px;
+  gap: calc(4 * var(--fm-unit, 1px));
   height: 1.9em;
-  padding: 0 6px;
+  padding: 0 calc(6 * var(--fm-unit, 1px));
   border-bottom: 1px solid var(--color-border);
 }
 .fm-path-btn {
@@ -1484,7 +1511,7 @@ body.file-window .select-menu .select-group-title {
   flex: 1 1 auto;
   min-width: 0;
   height: 1.7em;
-  padding: 0 6px;
+  padding: 0 calc(6 * var(--fm-unit, 1px));
   border-radius: var(--radius-control-sm);
   border: 1px solid var(--color-border);
   background: var(--color-control);
@@ -1500,7 +1527,7 @@ body.file-window .select-menu .select-group-title {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 3px 0;
+  padding: calc(3 * var(--fm-unit, 1px)) 0;
 }
 /* 独立文件窗口：原生标题栏 / 红绿灯，字号固定 14px、行高 32px，不跟随终端设置。
    主题跟随全局设置（跟随系统 / 浅色 / 深色），背景取 --file-window-bg（深浅各一套）。 */
@@ -1511,6 +1538,9 @@ body.file-window {
   /* 文件管理 / 文件传输窗口的严格尺寸：行高 32px，行内控件（输入框 / 下拉 / 按钮）高 22px。 */
   --fm-row-height: 32px;
   --fm-control-height: 22px;
+  /* 独立窗口不随终端字号缩放：缩放单位固定为 1px（面板里的固定 px 尺寸保持原样），
+     也没有 --fm-scale（目录树宽 / 列宽不被放大）。 */
+  --fm-unit: 1px;
   background: var(--file-window-bg);
 }
 body.file-window .fm-root,
@@ -1671,9 +1701,9 @@ body.file-window .fm-tree-row {
 .fm-tree-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4 * var(--fm-unit, 1px));
   height: 1.85em;
-  padding-right: 8px;
+  padding-right: calc(8 * var(--fm-unit, 1px));
   white-space: nowrap;
   cursor: default;
 }
@@ -1683,7 +1713,7 @@ body.file-window .fm-tree-row {
 .fm-tree-row.selected {
   background: var(--color-accent-soft);
   color: var(--color-accent);
-  box-shadow: inset 2px 0 0 var(--color-accent);
+  box-shadow: inset calc(2 * var(--fm-unit, 1px)) 0 0 var(--color-accent);
 }
 .fm-tree-caret {
   display: inline-flex;
@@ -1710,17 +1740,17 @@ body.file-window .fm-tree-row {
 }
 .fm-tree-spinner {
   flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  margin-left: 2px;
-  border: 1.5px solid var(--color-border-strong);
+  width: calc(10 * var(--fm-unit, 1px));
+  height: calc(10 * var(--fm-unit, 1px));
+  margin-left: calc(2 * var(--fm-unit, 1px));
+  border: calc(1.5 * var(--fm-unit, 1px)) solid var(--color-border-strong);
   border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: ships-term-files-spin 0.7s linear infinite;
 }
 .fm-tree-hint,
 .fm-list-hint {
-  padding: 8px 10px;
+  padding: calc(8 * var(--fm-unit, 1px)) calc(10 * var(--fm-unit, 1px));
   color: var(--color-fg-muted);
   font-size: 0.92em;
 }
@@ -1728,11 +1758,19 @@ body.file-window .fm-tree-row {
 .fm-list-head,
 .fm-row {
   display: grid;
-  /* 顺序：图标 / 文件名 / 体积 / 权限 / 时间（上传 / 分离按钮就放在时间列表头里，不单独开列） */
-  grid-template-columns: 1.9em var(--fm-name, 160px) var(--fm-size, 60px) var(--fm-perm, 90px) var(--fm-time, 130px);
+  /* 顺序：图标 / 文件名 / 体积 / 权限 / 时间（上传 / 分离按钮就放在时间列表头里，不单独开列）
+     四个数据列按**占比**分配（fr，JS 写入 --fm-name / --fm-size / --fm-perm / --fm-time，
+     四列合计恒为 100%）：图标列固定 1.9em，其余宽度全部按占比分给数据列 ——
+     窗口 / 面板怎么缩放，列表都被完整占满，既不留空也不溢出。 */
+  grid-template-columns:
+    1.9em
+    var(--fm-name, 36.4fr)
+    var(--fm-size, 13.6fr)
+    var(--fm-perm, 20.5fr)
+    var(--fm-time, 29.5fr);
   align-items: center;
-  gap: 8px;
-  padding: 0 10px;
+  gap: calc(8 * var(--fm-unit, 1px));
+  padding: 0 calc(10 * var(--fm-unit, 1px));
 }
 .fm-list-head {
   position: relative;
@@ -1743,7 +1781,7 @@ body.file-window .fm-tree-row {
 }
 .fm-head-cell {
   position: relative;
-  padding: 0 4px;
+  padding: 0 calc(4 * var(--fm-unit, 1px));
   white-space: nowrap;
 }
 /* 可排序列头：点击切换升 / 降序，右侧显示箭头。 */
@@ -1755,7 +1793,7 @@ body.file-window .fm-tree-row {
   color: var(--color-fg);
 }
 .fm-sort-ind {
-  margin-left: 4px;
+  margin-left: calc(4 * var(--fm-unit, 1px));
   font-size: 0.85em;
   color: var(--color-accent);
 }
@@ -1765,8 +1803,8 @@ body.file-window .fm-tree-row {
 .fm-col-resize {
   position: absolute;
   top: 0;
-  right: -3px;
-  width: 5px;
+  right: calc(-3 * var(--fm-unit, 1px));
+  width: calc(5 * var(--fm-unit, 1px));
   height: 100%;
   cursor: col-resize;
   z-index: 2;
@@ -1778,7 +1816,7 @@ body.file-window .fm-tree-row {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 2px 0;
+  padding: calc(2 * var(--fm-unit, 1px)) 0;
 }
 /* 列表可聚焦（便于 Cmd/Ctrl+C 复制选中行），但不显示焦点框。 */
 .fm-list:focus,
@@ -1799,7 +1837,7 @@ body.file-window .fm-tree-row {
 }
 .fm-row.selected {
   background: var(--color-accent-soft);
-  box-shadow: inset 2px 0 0 var(--color-accent);
+  box-shadow: inset calc(2 * var(--fm-unit, 1px)) 0 0 var(--color-accent);
 }
 /* 单元格选择：单击文件名 / 体积 / 权限 / 时间选中该单元格并复制内容。 */
 .fm-cell-icon,
@@ -1811,12 +1849,12 @@ body.file-window .fm-tree-row {
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 0 4px;
+  padding: 0 calc(4 * var(--fm-unit, 1px));
 }
 .fm-row [data-cell].cell-selected {
   background: var(--color-accent-soft);
   box-shadow: inset 0 0 0 1px var(--color-accent);
-  border-radius: 3px;
+  border-radius: calc(3 * var(--fm-unit, 1px));
 }
 .fm-cell-icon {
   color: var(--color-fg-muted);
@@ -1841,19 +1879,24 @@ body.file-window .fm-tree-row {
 .fm-head-time {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: calc(4 * var(--fm-unit, 1px));
 }
 .fm-head-time-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 文件 / 目录右键菜单 / cd 历史下拉：12px 字号、圆角高亮，条目高 25px、上下各 1px 边距，无分隔线。 */
+/* 右键菜单（终端 / 文件管理 / 文件传输共用 .fm-menu）固定规格：
+   字号固定 13px、条目高 25px、上下各 1px 边距、左右 10px 内边距、圆角 5px，无分隔线。
+   菜单不随终端字号 / 面板字号缩放：这里把 --fm-unit 固定为 --menu-unit（1px），
+   菜单内所有固定 px 尺寸（宽度 / 行高 / 图标）按它换算 → 恒为固定值。 */
 .fm-menu {
+  --fm-unit: var(--menu-unit, 1px);
+  font-size: var(--menu-font-size, 13px);
   position: fixed;
   z-index: 300;
-  min-width: 140px;
-  padding: 5px;
+  min-width: calc(140 * var(--fm-unit, 1px));
+  padding: calc(5 * var(--fm-unit, 1px));
   border-radius: var(--radius-card);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -1861,24 +1904,25 @@ body.file-window .fm-tree-row {
   animation: ships-pop 0.12s ease both;
 }
 .fm-menu-title {
-  padding: 2px 10px 5px;
-  font-size: 10px;
+  padding: calc(2 * var(--fm-unit, 1px)) calc(10 * var(--fm-unit, 1px))
+    calc(5 * var(--fm-unit, 1px));
+  font-size: calc(11 * var(--fm-unit, 1px));
   letter-spacing: 0.04em;
   color: var(--color-fg-muted);
 }
 .fm-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8 * var(--fm-unit, 1px));
   width: 100%;
-  height: 25px;
-  margin: 1px 0;
-  padding: 0 10px;
+  height: calc(25 * var(--fm-unit, 1px));
+  margin: calc(1 * var(--fm-unit, 1px)) 0;
+  padding: 0 calc(10 * var(--fm-unit, 1px));
   border: 0;
-  border-radius: 5px;
+  border-radius: calc(5 * var(--fm-unit, 1px));
   background: transparent;
   color: var(--color-fg);
-  font-size: 12px;
+  font-size: var(--menu-font-size, 13px);
   text-align: left;
   cursor: default;
 }
@@ -1896,33 +1940,42 @@ body.file-window .fm-tree-row {
 }
 /* cd 历史：条目为远端路径，单行省略。 */
 .fm-history-menu {
-  min-width: 200px;
-  max-width: 420px;
+  min-width: calc(200 * var(--fm-unit, 1px));
+  max-width: calc(420 * var(--fm-unit, 1px));
 }
 .fm-history-menu .fm-menu-item {
   display: block;
-  line-height: 23px;
-  max-width: 420px;
+  line-height: calc(23 * var(--fm-unit, 1px));
+  max-width: calc(420 * var(--fm-unit, 1px));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 /* 终端内容区右键菜单：复用 .fm-menu 的外观，追加右侧子菜单（SSH 主机）。 */
 .term-menu {
-  min-width: 180px;
+  min-width: calc(180 * var(--fm-unit, 1px));
   max-height: calc(100vh - 20px);
   overflow-y: auto;
 }
 .term-menu-item {
-  gap: 8px;
+  gap: calc(8 * var(--fm-unit, 1px));
 }
 .term-menu-icon {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 14px;
+  width: calc(14 * var(--fm-unit, 1px));
   color: var(--color-fg-muted);
+}
+/* 菜单里的图标 / 箭头：SVG 自带 13px / 11px 的固定属性值，按缩放单位等比换算。 */
+.term-menu-icon svg {
+  width: calc(13 * var(--fm-unit, 1px));
+  height: calc(13 * var(--fm-unit, 1px));
+}
+.term-menu-caret svg {
+  width: calc(11 * var(--fm-unit, 1px));
+  height: calc(11 * var(--fm-unit, 1px));
 }
 .term-menu-label {
   flex: 1 1 auto;
@@ -1945,23 +1998,23 @@ body.file-window .fm-tree-row {
 .term-submenu {
   position: fixed;
   z-index: 301;
-  min-width: 180px;
-  max-width: 320px;
-  max-height: min(360px, calc(100vh - 20px));
+  min-width: calc(180 * var(--fm-unit, 1px));
+  max-width: calc(320 * var(--fm-unit, 1px));
+  max-height: min(calc(360 * var(--fm-unit, 1px)), calc(100vh - 20px));
   overflow-y: auto;
 }
 .fm-list.drag-over {
-  outline: 2px dashed var(--color-accent);
-  outline-offset: -4px;
+  outline: calc(2 * var(--fm-unit, 1px)) dashed var(--color-accent);
+  outline-offset: calc(-4 * var(--fm-unit, 1px));
 }
 
 .fm-status {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 10px;
+  gap: calc(10 * var(--fm-unit, 1px));
   height: 1.9em;
-  padding: 0 10px;
+  padding: 0 calc(10 * var(--fm-unit, 1px));
   border-top: 1px solid var(--color-border);
   background: var(--color-bg);
   color: var(--color-fg-muted);
@@ -1983,8 +2036,8 @@ body.file-window .fm-tree-row {
 }
 .fm-progress {
   flex: 1 1 auto;
-  min-width: 40px;
-  height: 4px;
+  min-width: calc(40 * var(--fm-unit, 1px));
+  height: calc(4 * var(--fm-unit, 1px));
   border-radius: 999px;
   background: var(--color-surface-3);
   overflow: hidden;
@@ -2001,9 +2054,9 @@ body.file-window .fm-tree-row {
 .fm-progress-stack {
   display: flex;
   flex: 1 1 auto;
-  min-width: 80px;
+  min-width: calc(80 * var(--fm-unit, 1px));
   flex-direction: column;
-  gap: 3px;
+  gap: calc(3 * var(--fm-unit, 1px));
 }
 .fm-progress-stack.hidden {
   display: none;
@@ -2011,14 +2064,14 @@ body.file-window .fm-tree-row {
 .fm-progress-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6 * var(--fm-unit, 1px));
 }
 .fm-progress-row.hidden {
   display: none;
 }
 .fm-progress-label {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: calc(10 * var(--fm-unit, 1px));
   line-height: 1;
   color: var(--color-fg-muted);
   white-space: nowrap;
@@ -3378,10 +3431,10 @@ body.editor-window {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
+  gap: calc(6 * var(--fm-unit, 1px));
   /* 与第二行路径行（`.fm-path-row`）同高：内嵌面板取 --fm-row-height（1.9em），独立窗口 32px。 */
   height: var(--fm-row-height, 32px);
-  padding: 0 8px;
+  padding: 0 calc(8 * var(--fm-unit, 1px));
   border-bottom: 1px solid var(--color-border);
 }
 .transfer-pane-picker {
@@ -3401,7 +3454,7 @@ body.editor-window {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 6px;
+  width: calc(6 * var(--fm-unit, 1px));
   cursor: col-resize;
   background: transparent;
 }
@@ -3419,19 +3472,23 @@ body.editor-window {
 .transfer-sync {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: calc(5 * var(--fm-unit, 1px));
+  padding: calc(5 * var(--fm-unit, 1px)) calc(10 * var(--fm-unit, 1px));
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-control);
   color: var(--color-fg-muted);
-  font-size: 12px;
+  font-size: calc(12 * var(--fm-unit, 1px));
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 .transfer-sync-icon {
   display: inline-flex;
   align-items: center;
+}
+.transfer-sync-icon svg {
+  width: calc(13 * var(--fm-unit, 1px));
+  height: calc(13 * var(--fm-unit, 1px));
 }
 .transfer-sync:hover {
   border-color: var(--color-accent);

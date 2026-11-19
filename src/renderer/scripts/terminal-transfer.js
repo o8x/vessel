@@ -13,6 +13,8 @@
     const opts = options || {};
     const onStateChange = typeof opts.onStateChange === 'function' ? opts.onStateChange : () => {};
     const onShow = typeof opts.onShow === 'function' ? opts.onShow : () => {};
+    // 在当前终端的 shell 里 cd 到某个目录（右键「进入该目录」，与文件管理器一致）。
+    const onCd = typeof opts.onCd === 'function' ? opts.onCd : null;
 
     const panel = document.getElementById('transfer-panel');
     const rootEl = document.getElementById('transfer-panel-root');
@@ -80,6 +82,8 @@
         },
         {
           onDetach: () => detach(),
+          // 左栏右键「进入该目录」→ 在当前 shell 里 cd 过去。
+          onEnterDir: onCd ? (info) => onCd(info && info.path) : null,
         }
       );
       return ui;

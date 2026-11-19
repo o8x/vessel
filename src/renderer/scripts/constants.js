@@ -11,12 +11,20 @@ window.ShipsConstants = {
   TERMINAL_FONT_MIN: 8,
   TERMINAL_FONT_MAX: 64,
   TERMINAL_FONT_DEFAULT: 14,
-  // 终端窗口标题栏：字号取自终端字号并夹在 10–20px；
-  // 高度按字号线性映射并夹在 20–32px（10px 字号 → 20px，20px 字号 → 32px）。
+  // 终端窗口标题栏：字号 = 终端字号（完全一致，不再夹取）；
+  // 高度按字号线性映射（字号 × 1.6），仅保留下限，避免小字号时压扁红绿灯。
+  TERMINAL_HEADER_HEIGHT_RATIO: 1.6,
+  TERMINAL_HEADER_HEIGHT_MIN: 16,
+  // 历史值（保留兼容，已不再用于夹取字号 / 高度上限）。
   TERMINAL_HEADER_FONT_MIN: 10,
   TERMINAL_HEADER_FONT_MAX: 20,
-  TERMINAL_HEADER_HEIGHT_MIN: 16,
   TERMINAL_HEADER_HEIGHT_MAX: 32,
+  // 内嵌文件面板（文件管理 / 文件传输）的「设计基准字号」：面板里的 px 布局值
+  // （目录树宽、各列列宽、目录树缩进等）都是按这个字号设计的；
+  // 终端字号变化时按「实际字号 ÷ 基准字号」等比换算，放大后比例不变。
+  FILE_PANEL_BASE_FONT_SIZE: 12,
+  // 终端字号变化事件：terminal.js 在改写 CSS 变量后派发，内嵌面板据此重算布局。
+  FONT_SIZE_EVENT: 'vessel:font-size',
   // 终端查找（@xterm/addon-search）：高亮配色由当前主题强调色（--color-accent）压深得到，
   // 以下为压深比例（0 = 原色，1 = 全黑）。
   TERMINAL_SEARCH_MATCH_DARKEN: 0.45,
