@@ -17,6 +17,12 @@
         clearDataAction: '清除',
         clearDataConfirm: '确认清理？',
         open: '打开',
+        cli: '命令行工具（CLI）',
+        cliHint: '安装 vessel 命令到 {path}，并把该目录加入 ~/.zshrc 的 PATH（支持 tool / ssh / 2fa 的列出与补全）',
+        cliHintInstalled: '已安装：{path}（已写入 ~/.zshrc，新开一个终端即可使用 vessel）',
+        cliInstall: '安装 CLI',
+        cliReinstall: '重新安装',
+        cliFailed: '安装失败：{error}',
         backup: '导入 / 导出',
         exportConfig: '导出配置',
         exportHint: '把应用设置与 SSH 主机导出为 JSON 文件（SSH 密码为明文，请妥善保管）',
@@ -43,6 +49,12 @@
         clearDataAction: 'Clear',
         clearDataConfirm: 'Clear data?',
         open: 'Open',
+        cli: 'Command-line tool (CLI)',
+        cliHint: 'Install the vessel command to {path} and add that folder to PATH in ~/.zshrc (lists and completes tool / ssh / 2fa)',
+        cliHintInstalled: 'Installed: {path} (added to ~/.zshrc — open a new terminal to use vessel)',
+        cliInstall: 'Install CLI',
+        cliReinstall: 'Reinstall',
+        cliFailed: 'Install failed: {error}',
         backup: 'Import / Export',
         exportConfig: 'Export config',
         exportHint: 'Export app settings and SSH hosts as a JSON file (SSH passwords are plaintext — keep it safe)',
@@ -81,6 +93,48 @@
     );
     folderBtn.addEventListener('click', () => window.ships.openDataFolder());
     dataSection.appendChild(row(i18n.t('settingsPage.dataFolder'), info.dataDir || '', folderBtn));
+
+    // 命令行工具（CLI，仅 macOS）：装到 <数据目录>/bin/vessel 并写入 ~/.zshrc 的 PATH。
+    if (info.platform === 'darwin') {
+      const cliRow = el('div', {
+        class: 'flex items-center justify-between gap-4 rounded-card border border-border bg-surface px-4 py-3',
+      });
+      const cliLeft = el('div', { class: 'min-w-0' });
+      cliLeft.appendChild(el('div', { class: 'text-[13px] font-medium text-fg' }, i18n.t('settingsPage.cli')));
+      const cliHint = el('div', { class: 'mt-0.5 break-all text-[11px] text-fg-muted' }, '');
+      cliLeft.appendChild(cliHint);
+      const cliBtn = el('button', { class: 'btn shrink-0', type: 'button' }, i18n.t('settingsPage.cliInstall'));
+      cliRow.append(cliLeft, cliBtn);
+      dataSection.appendChild(cliRow);
+
+      function renderCli(status) {
+        const installed = Boolean(status && status.installed);
+        cliBtn.textContent = installed ? i18n.t('settingsPage.cliReinstall') : i18n.t('settingsPage.cliInstall');
+        cliHint.style.color = '';
+        cliHint.textContent = installed
+          ? i18n.t('settingsPage.cliHintInstalled', { path: status.path })
+          : i18n.t('settingsPage.cliHint', { path: (status && status.binDir) || '' });
+      }
+      if (window.ships.cliStatus) {
+        window.ships.cliStatus().then(renderCli).catch(() => {});
+        cliBtn.addEventListener('click', async () => {
+          cliBtn.disabled = true;
+          try {
+            const result = await window.ships.cliInstall();
+            if (result && result.ok) {
+              renderCli(result);
+            } else {
+              cliHint.style.color = 'var(--color-danger)';
+              cliHint.textContent = i18n.t('settingsPage.cliFailed', {
+                error: (result && result.error) || 'error',
+              });
+            }
+          } finally {
+            cliBtn.disabled = false;
+          }
+        });
+      }
+    }
 
     // 文件下载目录：下载到本地 / 从 VS Code / Wireshark 打开 / 编辑器下载 / 文件传输中转都落在这里。
     const downloadField = field(null, {

@@ -1,0 +1,41 @@
+# Vessel CLI — zsh completion (installed to <data-dir>/bin/_vessel and sourced from ~/.zshrc).
+# Needs compinit (compdef); when it is not loaded this file does nothing and never breaks the shell.
+# Candidates come from the running app (`vessel __complete …`), so completion always reflects
+# the current tools / SSH hosts / 2FA accounts.
+
+if (( $+functions[compdef] )); then
+  _vessel() {
+    local -a items
+    local line
+
+    if (( CURRENT == 2 )); then
+      compadd tool ssh 2fa completion help
+      return
+    fi
+
+    case "${words[2]}" in
+      tool)
+        (( CURRENT == 3 )) || return
+        for line in ${(f)"$(vessel __complete tool 2>/dev/null)"}; do
+          [[ -n $line ]] && items+=("$line")
+        done
+        ;;
+      ssh)
+        (( CURRENT == 3 )) || return
+        for line in ${(f)"$(vessel __complete ssh 2>/dev/null)"}; do
+          [[ -n $line ]] && items+=("$line")
+        done
+        ;;
+      2fa)
+        # `vessel 2fa` 只列出，不接受参数。
+        return
+        ;;
+      completion|help)
+        return
+        ;;
+    esac
+
+    (( ${#items} )) && compadd -a items
+  }
+  compdef _vessel vessel
+fi

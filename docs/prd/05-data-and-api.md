@@ -27,6 +27,8 @@
 | `cd-history.json` | 同上目录 | `{ [“用户名@主机”]: string[] }`（文件面板每个 ssh 目标最近 cd 到的远端目录，去重、越新越靠前、最多 `CD_HISTORY_MAX` = 10 条） | 持久；仅记录通过 cd 到达的目录（终端跟随 / `cd 到此目录` 按钮 / 点历史条目），手动浏览不记录；「清理数据」可删除 |
 | 剪贴板历史 | 内存（不落盘） | 最近 5 条 `{ id, type, text?, thumb?, width?, height?, truncated?, at }` | 随进程退出丢失 |
 | `~/.ssh/config` | 用户主目录 | 标准 OpenSSH 配置；**分组用一行注释 `# group: <名称>` 标记**（紧随其后的 Host 属于该分组，直到下一个标记；未标记的属「未分组」；ssh 忽略注释，不影响连接） | 由设置内 SSH 管理读写；未加密（非机密） |
+| `bin/vessel` / `bin/_vessel` | `<数据目录>/bin/` | CLI 主脚本（`#!/bin/sh`，0755）与 zsh 补全（`_vessel`，0644）；由设置 → 数据 →「安装 CLI」从应用内 `assets/cli/vessel.sh` / `assets/cli/_vessel` 复制而来（见 §5.3） | 持久；仅用户主动安装时写入，重新安装覆盖 |
+| `vessel-cli.sock` | `<数据目录>/vessel-cli.sock` | 运行期 Unix domain socket（权限 0600）：`vessel` 命令与主进程通信的唯一通道，**不监听网络端口、不落盘令牌**；应用退出时删除 | 随进程存在；重启重建 |
 
 - 机密数据：**默认不保存密码**；仅当用户在设置 → SSH 主动填写登录密码时，密码以 **AES-256-GCM 加密**保存在 `ssh-credentials.json`（密钥 `ssh-credentials.key`，均 0600），明文不落盘。2FA（TOTP）密钥同理由用户主动添加，以 **AES-256-GCM 加密**保存在 `totp-accounts.json`（密钥 `totp-accounts.key`，均 0600），明文不落盘、且不下发到渲染层（验证码在主进程计算）。导出备份文件时密码为**明文**（用户自行保管）。SSH 私钥仍由用户自行管理与使用，不复制、不落盘到应用数据目录。
 - 设置默认值来自 `package.json` 的 `vessel.defaultLocale/defaultTheme/defaultAccent`。
@@ -44,6 +46,8 @@
 | `app:local-address` | `{ kind }`（`'public4'` / `'public6'` / `'lan4'` / `'lan6'`） | `{ ok, address }` 或 `{ ok: false, error }` | 取本机地址供 IP / 网段工具的下拉使用：`lan4` / `lan6` 从 `os.networkInterfaces()` 取对应地址族的非内部地址（v4 优先 RFC 1918 私有网段；v6 去掉作用域后缀并优先非链路本地）；`public4` / `public6` 按地址族（`family: 4` / `6`）请求 `ipv4.icanhazip.com` / `ipv6.icanhazip.com`（失败退回 `ifconfig.me/ip`）获取出口 IP（遵循系统代理，5s 超时，任一成功即返回）；均失败返回 `{ ok: false }` |
 | `font-picker:open` | — | `{ ok }` | 打开设置窗口的非模态字体选择子窗口（`font-picker.html`）；已打开时聚焦现有窗口 |
 | `app:open-data-folder` | — | `{ ok, error? }` | 打开数据目录 |
+| `cli:status` | — | `{ supported, installed, path, binDir, completionPath, zshrcPath, zshrcConfigured }` | 设置 → 数据 → 命令行工具：查询 `vessel` 是否已安装（`<数据目录>/bin/vessel` 是否存在）以及 `~/.zshrc` 里是否已写入 PATH 块（见 §5.3），仅 macOS |
+| `cli:install` | — | `{ ok, ...status }` 或 `{ ok:false, error }` | 安装 CLI：把 `assets/cli/vessel.sh` / `_vessel` 复制到 `<数据目录>/bin/`（0755 / 0644），并在 `~/.zshrc` 写入 / 原地更新带起止标记的 PATH 块（可重复安装，不产生重复块），仅 macOS |
 | `app:open-log` | — | `{ ok, error? }` | 打开**日志文件夹**（macOS：`~/Library/Logs/Vessel`；不存在则创建；**只打开文件夹，不打开日志文件**） |
 | `app:open-console` | — | `{ ok, error? }` | 打开 macOS 系统「控制台」App（`/System/Applications/Utilities/Console.app`，缺失时退回 `/Applications/Utilities/Console.app`）；非 macOS 返回 `{ ok: false, error: 'unsupported' }`；由设置 → 日志的「打开控制台 App」按钮调用 |
 | `app:clear-data` | — | `{ ok }` | 一键清理**非业务数据**：删除 `main-window.json`、`terminal-window.json`、`file-window.json`、`game-window.json`、`file-layout.json`、`file-window-layout.json`、`cd-history.json`（窗口位置 / 尺寸、列宽 / 面板高度、cd 历史）；**不动** `settings.json`、日志、`~/.ssh/config` 与游戏 ROM / 存档；由设置 → 应用 的「清理数据」（二次确认后）调用 |
@@ -222,8 +226,39 @@
 - **应用菜单**（`src/main/menu.js`）：自定义模板 = 应用菜单 / 编辑（撤销、剪切、拷贝、粘贴、全选；终端窗口另有**右键菜单**可复制选区 / 粘贴剪贴板，见 §3.8-4，因此编辑菜单只是快捷键层面的补充）/ 视图（放大、缩小、实际大小、全屏、开发者工具）/ 窗口菜单。视图里的三个缩放项 **只显示快捷键、不向系统注册**（`registerAccelerator: false`），改由主进程 `before-input-event` 统一处理：`Cmd + = / +` / `Cmd + -` / `Cmd + 0` —— **焦点在悬浮终端窗口时直接修改设置里的字号**（`terminal:zoom` → 写 `settings.terminalFontSize`，8–64px、默认 14px、持久化，改完重新 fit 并同步 PTY，并在头栏临时显示字号；同时改写 `--file-font-size`，文件管理部分一并缩放；**不改页面缩放因子**）；**焦点在独立文件窗口时不缩放**（字号固定 14px，`Cmd +/-` 无效）；其它窗口保持原来的整页缩放。两个悬浮窗口另外用 `setVisualZoomLevelLimits(1, 1)` 关掉 pinch 缩放、`zoom-changed` 把 `Cmd+滚轮` 也接到字号缩放上；页面缩放因子固定为 1，头栏 / 图标 / 内嵌文件面板随字号**等比缩放**（字号 = 终端字号，不再夹取 10–20px）。
 - 不涉及系统权限申请（无摄像头/麦克风等）；SSH 连接依赖用户本机 iTerm 与 `~/.ssh/config`。
 
-### 5.4 本地 HTTP API
+### 5.4 本地 API（CLI）
 
-- 无。应用不监听任何本地端口。
+- **不监听任何 TCP 端口**。命令行支持走 `<数据目录>/vessel-cli.sock` 的 **Unix domain socket**（`src/main/services/cli-service.js`，仅 macOS 启动）：只有本机同一用户可连接（socket 文件权限 **0600**，应用退出时删除），不落盘任何令牌 / 密钥。
+- 接口（HTTP over Unix socket，请求 `curl --unix-socket <sock> http://localhost<path>`）：
+
+| 方法 / 路径 | 返回（`text/plain`） | 说明 |
+| --- | --- | --- |
+| `GET /v1/ping` | `ok` | 探活 |
+| `GET /v1/tools` | 对齐表格：`ID` / `NAME`（**英文名**） | 工具清单；顺序取渲染层上报的清单，主界面从未打开时用内置英文兜底表；名称固定英文、不随界面语言变化 |
+| `GET /v1/ssh` | 对齐表格：`HOST`（**归一化为 `用户名@地址`**）/ `GROUP` / `ALIAS` | 与 `~/.ssh/config` 解析结果一致；无用户名时 `HOST` 退回地址 |
+| `GET /v1/2fa` | 对齐表格：`ACCOUNT` / `CODE` / `LEFT`（如 `18s`） | 验证码由主进程解密 TOTP 密钥后计算（明文密钥仍不下发） |
+| `GET /v1/complete?kind=tool\|ssh` | 每行一个候选（纯文本、无表头） | 供 shell 补全：tool = id、ssh = `用户名@地址`（去重） |
+| `POST /v1/tool`（请求体 = 工具 id 或名称） | `Opened tool: <id>` / 4xx `Unknown tool: …` | 显示主界面并加载该工具（`window-manager.showMainWindowWithTool`） |
+| `POST /v1/ssh`（请求体两行：`<目标>` + 换行 + `<密码，可空>`） | `Connecting to <别名>` / 4xx `Target required…`、`Invalid target…` / 5xx | 命中已保存主机（别名，或同一「用户名@地址」且未给新密码）→ 直接连接；否则按「快速连接」逻辑连接（见下） |
+
+- **`POST /v1/ssh` 的目标解析**：`用户名@地址` / `地址` / `地址:端口` / `[IPv6]:端口`。**别名精确命中**，或**同一「用户名@地址」且没有提供新密码** → 用现有主机直接连接（自动沿用已存密码 / `~/.ssh/id_ed25519`）；其余写法走**快速连接**（`ssh-quick-connect-service`，与 SSH 工具的连接表单同一套实现）：`用户名@地址` 已存在时复用（给了密码则更新凭据），否则写入 `~/.ssh/config` 的「快速连接」分组并置于最前，然后**新开一扇内置终端**执行 `ssh`。密码可含空格（作为第 2 行原样传入），不需要密码时留空（走密钥）。
+- **输出语言**：CLI 的 usage / 帮助 / 错误 / 表头 / 提示**全部为英文**；工具名固定用英文（不随界面语言变化），主机 / 账号名是数据本身、保持原样。列表按显示宽度（CJK / 全角按 2 列）对齐为固定列宽表格。
+- **命令行 `vessel`**（安装位置 `<数据目录>/bin/vessel`，用法与终端内联命令 `\v` 同风格；**列表命令不带 `list` 子命令**，直接执行即列出）：
+  - `vessel tool` 列出工具（英文名）；`vessel tool <id|名称>` 打开主界面并加载该工具。
+  - `vessel ssh` 列出已保存主机（`用户名@地址` 归一化显示）；`vessel ssh <user@host> [password]` 连接或快速连接；`vessel ssh <别名>` 仍可按别名连接。
+  - `vessel 2fa` 列出账号与**当前验证码**（含剩余秒数）；不接受其它参数。
+  - `vessel completion` 输出 zsh 补全函数；隐藏命令 `vessel __complete <kind>` 供补全取候选（应用未运行时静默返回空）。
+  - 应用未运行：先尝试 `open -b cn.com.stdout.vessel` 拉起（菜单栏应用，启动不弹主窗口），最多等 **10 秒**（50 × 200ms）再执行。
+- **安装**（设置 → 数据 →「安装 CLI」，IPC `cli:install`）：复制 `assets/cli/vessel.sh` → `<数据目录>/bin/vessel`（0755）、`assets/cli/_vessel` → `<数据目录>/bin/_vessel`（0644），并在 `~/.zshrc` 写入（或原地替换，保证只有一块）如下标记块后重新安装也不会重复：
+
+  ```zsh
+  # >>> vessel cli >>>
+  export PATH="<数据目录>/bin:$PATH"
+  [ -r "<数据目录>/bin/_vessel" ] && . "<数据目录>/bin/_vessel"
+  # <<< vessel cli <<<
+  ```
+
+  `_vessel` 只在已加载 `compinit`（存在 `compdef`）时注册补全，不影响未使用补全的 shell；补全候选来自 `vessel __complete`（`tool` = 工具 id、`ssh` = `用户名@地址`）。新开终端后生效。
+- 设置页的「安装 CLI」按钮仅在 macOS 显示（`app:info` 的 `platform === 'darwin'`）；已安装时按钮变为「重新安装」并显示安装路径。
 
 ---

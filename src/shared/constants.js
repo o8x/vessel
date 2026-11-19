@@ -23,6 +23,8 @@ const IPC = {
   OPEN_LOG: 'app:open-log',
   OPEN_CONSOLE: 'app:open-console',
   CLEAR_DATA: 'app:clear-data',
+  CLI_STATUS: 'cli:status',
+  CLI_INSTALL: 'cli:install',
   OPEN_EXTERNAL: 'app:open-external',
   OPEN_PATH: 'app:open-path',
   UPDATER_CHECK: 'app:check-updates',

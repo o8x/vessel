@@ -16,15 +16,22 @@ const SSH_TOOL_ID = 'ssh';
 /* 右键菜单里的工具清单由渲染层上报（主进程不硬编码工具列表）：
    渲染层知道自己的工具注册顺序与当前语言下的名称，上报后托盘菜单据此生成条目。 */
 let toolItems = [];
+// 完整清单（不过滤隐藏项）：CLI 的 `vessel tool list` 也要能看到不显示在托盘里的工具。
+let allToolItems = [];
 
 function setTools(list) {
   if (!Array.isArray(list)) return;
   const hidden = new Set(TRAY_HIDDEN_TOOL_IDS || []);
-  toolItems = list
+  allToolItems = list
     .filter((item) => item && item.id && typeof item.label === 'string' && item.label)
-    .filter((item) => !hidden.has(String(item.id)))
     .map((item) => ({ id: String(item.id), label: String(item.label) }));
+  toolItems = allToolItems.filter((item) => !hidden.has(item.id));
   logger.file(`[tray] tools updated: ${toolItems.map((t) => t.id).join(',') || '(none)'}`);
+}
+
+/* 命令行（vessel tool list）用：返回含隐藏项的完整工具清单。 */
+function getAllTools() {
+  return allToolItems.slice();
 }
 
 /* 重启应用：先登记「退出后重新拉起当前可执行文件」，再正常走退出流程，
@@ -128,7 +135,8 @@ function totpAccountLabel(account) {
   return title || subtitle || label('未命名', 'Unnamed');
 }
 
-/* 连接主机：新开一扇内置终端并执行 ssh；已存密码时自动注入。 */
+/* 连接主机：新开一扇内置终端并执行 ssh；已存密码时自动注入。
+   返回是否成功打开终端（命令行 `vessel ssh` 据此反馈）。 */
 async function connectHost(host) {
   const sshService = require('./services/ssh-service');
   const credentials = require('./services/ssh-credentials-service');
@@ -143,8 +151,10 @@ async function connectHost(host) {
     logger.file(`[tray] ssh connect(alias=${host.alias}) -> new terminal: ${command}`);
     const started = runInNewTerminal(command, secret, host.alias);
     if (!started) logger.warn(`[tray] ssh connect(alias=${host.alias}) failed: terminal unavailable`);
+    return Boolean(started);
   } catch (err) {
     logger.error(`[tray] ssh connect(alias=${host.alias}) failed: ${err.message}`);
+    return false;
   }
 }
 
@@ -219,4 +229,4 @@ function createTray({ onLeftClick }) {
   return tray;
 }
 
-module.exports = { createTray, setTools, buildMenuTemplate };
+module.exports = { createTray, setTools, getAllTools, openTool, connectHost, buildMenuTemplate };

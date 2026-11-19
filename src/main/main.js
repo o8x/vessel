@@ -47,6 +47,7 @@ const { registerTransferIpc } = require('./ipc/transfer-ipc');
 const { registerGameIpc } = require('./ipc/game-ipc');
 const { registerUpdateIpc } = require('./ipc/update-ipc');
 const { registerBackupIpc } = require('./ipc/backup-ipc');
+const { registerCliIpc } = require('./ipc/cli-ipc');
 const { installApplicationMenu } = require('./menu');
 const { requestLocalNetworkAccess } = require('./services/local-network-service');
 const proxyService = require('./services/proxy-service');
@@ -145,9 +146,13 @@ function onReady() {
   registerUpdateIpc(ipcMain);
   gameService.registerGameProtocol();
   registerBackupIpc(ipcMain);
+  registerCliIpc(ipcMain);
 
   installApplicationMenu();
   wm.createMainWindow();
+
+  // 命令行支持（macOS）：本机 Unix socket 接口，供 `<数据目录>/bin/vessel` 读取数据 / 打开工具。
+  require('./services/cli-service').start();
 
   // 自动更新：打包后静默检查一次，发现新版本再提示下载 / 安装。
   require('./services/updater-service').initUpdater();
@@ -181,6 +186,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  require('./services/cli-service').stop();
   require('./services/clipboard-service').stop();
   require('./services/sftp-service').closeAll();
   require('./services/terminal-service').killAll();
