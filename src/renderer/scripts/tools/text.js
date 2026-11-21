@@ -10,6 +10,8 @@
 
   i18n.extend({
     zh: {
+      tools: { text: '文本处理' },
+      toolDesc: { text: '大小写转换、行处理、转义与文本统计' },
       text: {
         title: '文本处理',
         hint: '输入文本后使用下方按钮处理；所有操作都直接改写输入框，可随时重新输入。',
@@ -51,6 +53,8 @@
       },
     },
     en: {
+      tools: { text: 'Text tools' },
+      toolDesc: { text: 'Case conversion, line operations, escaping and text statistics' },
       text: {
         title: 'Text tools',
         hint: 'Type or paste text, then use the buttons below. Every action rewrites the input box.',

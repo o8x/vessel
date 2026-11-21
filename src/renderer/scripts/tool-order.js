@@ -12,6 +12,9 @@ window.ShipsToolOrder = [
     "json", // JSON 格式化
     "hash", // 哈希计算（MD5 / SHA1 / SHA256）
     "text", // 文本处理（大小写转换 / 行处理 / 转义 / 统计）
+    "regex", // 正则测试（匹配 / 捕获组 / 替换预览 / 模式解释）
+    "color", // 颜色转换（HEX / RGB / HSL / HSV / OKLCH + WCAG 对比度）
+    "ids", // ID 与密码（UUID v4 / v7、ULID、随机字符串、随机密码）
     "nutrient", // 营养成分
     "clipboard", // 剪贴板
     "games", // 游戏（EmulatorJS）
