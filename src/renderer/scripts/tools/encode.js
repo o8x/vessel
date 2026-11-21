@@ -6,6 +6,35 @@
 
   i18n.extend({
     zh: {
+      tools: { encode: '文本处理' },
+      toolDesc: { encode: '文本编码转换、二维码 / Data Matrix、大小写与行处理、文本统计' },
+      textTools: {
+        section: '文本处理',
+        hint: '在「字符串」框输入后，可直接转换大小写、整理行或查看统计（会直接改写该框内容）。',
+        case: '大小写转换',
+        caseUpper: '全大写',
+        caseLower: '全小写',
+        caseCamel: '驼峰',
+        casePascal: '帕斯卡',
+        caseSnake: '下划线',
+        caseKebab: '短横线',
+        caseConstant: '常量',
+        caseTitle: '标题',
+        lines: '行处理',
+        lineDedupe: '去重',
+        lineSortAsc: '升序',
+        lineSortDesc: '降序',
+        lineReverse: '反转',
+        lineDropBlank: '去空行',
+        lineTrim: '去首尾空格',
+        lineTrimAll: '去空白行与首尾空格',
+        stats: '统计',
+        statLines: '行数',
+        statChars: '字符数',
+        statWords: '单词数',
+        statBytes: '字节数',
+        statUnique: '去重行',
+      },
       encode: {
         hint: '任意一侧输入即可实时互转（UTF-8）',
         text: '字符串',
@@ -41,6 +70,35 @@
       },
     },
     en: {
+      tools: { encode: 'Text tools' },
+      toolDesc: { encode: 'Encodings, QR / Data Matrix, case and line tools, text statistics' },
+      textTools: {
+        section: 'Text tools',
+        hint: 'Type in the “Text” box, then convert case, tidy lines or read the stats (it rewrites that box).',
+        case: 'Case',
+        caseUpper: 'UPPER',
+        caseLower: 'lower',
+        caseCamel: 'camelCase',
+        casePascal: 'PascalCase',
+        caseSnake: 'snake_case',
+        caseKebab: 'kebab-case',
+        caseConstant: 'CONSTANT',
+        caseTitle: 'Title Case',
+        lines: 'Lines',
+        lineDedupe: 'Dedupe',
+        lineSortAsc: 'Sort ↑',
+        lineSortDesc: 'Sort ↓',
+        lineReverse: 'Reverse',
+        lineDropBlank: 'Drop blanks',
+        lineTrim: 'Trim spaces',
+        lineTrimAll: 'Trim all',
+        stats: 'Stats',
+        statLines: 'Lines',
+        statChars: 'Characters',
+        statWords: 'Words',
+        statBytes: 'Bytes',
+        statUnique: 'Unique lines',
+      },
       encode: {
         hint: 'Type on either side to convert live (UTF-8)',
         text: 'Text',
@@ -203,17 +261,18 @@
   function mount(container) {
     container.classList.add('encode-root');
 
-    function area(label, placeholder) {
+    function area(label, placeholder, rows) {
       const input = el('textarea', {
         class: 'field font-mono',
-        rows: 2,
+        rows: String(rows || 2),
         spellcheck: 'false',
         placeholder,
       });
       return { input, wrapper: inputField(label, input) };
     }
 
-    const textField = area(i18n.t('encode.text'), i18n.t('encode.textPlaceholder'));
+    // 第一个「字符串」框更高（其余转换结果保持两行），并提供更大的编辑区域。
+    const textField = area(i18n.t('encode.text'), i18n.t('encode.textPlaceholder'), 5);
     const base64Field = area(i18n.t('encode.base64'), i18n.t('encode.base64Placeholder'));
     const hexField = area(i18n.t('encode.hex'), i18n.t('encode.hexPlaceholder'));
     const urlField = area(i18n.t('encode.url'), i18n.t('encode.urlPlaceholder'));
@@ -461,6 +520,93 @@
       asciiField.wrapper
     );
 
+    /* ------------------------------ 文本处理 ------------------------------
+       作用于最上面的「字符串」框：大小写转换 / 行处理 / 统计（直接改写内容）。 */
+    const TEXT = window.ShipsTextTransforms;
+    const textToolsSection = section(i18n.t('textTools.section'));
+    textToolsSection.appendChild(
+      el('div', { class: 'mb-2 text-[11px] text-fg-muted' }, i18n.t('textTools.hint'))
+    );
+
+    // 统计刷新函数（仅在加载到 text-transforms.js 时才有实现）。
+    let updateStats = () => {};
+
+    function applyText(transform) {
+      const current = textField.input.value;
+      const next = transform(current);
+      if (next === current) return;
+      textField.input.value = next;
+      handle(fields.text);
+      updateStats();
+    }
+
+    function textButtonRow(labelKey, items) {
+      const wrap = el('div', { class: 'mb-2' });
+      wrap.appendChild(el('div', { class: 'mb-1.5 text-[11px] text-fg-muted' }, i18n.t(labelKey)));
+      const row = el('div', { class: 'flex flex-wrap gap-1.5' });
+      for (const item of items) {
+        const button = el('button', { class: 'btn shrink-0 px-2 py-1 text-[11px]', type: 'button' }, item.label);
+        button.addEventListener('click', item.onClick);
+        row.appendChild(button);
+      }
+      wrap.appendChild(row);
+      return wrap;
+    }
+
+    if (TEXT) {
+      textToolsSection.appendChild(
+        textButtonRow('textTools.case', [
+          { label: i18n.t('textTools.caseUpper'), onClick: () => applyText(TEXT.CASE_TRANSFORMS.upper) },
+          { label: i18n.t('textTools.caseLower'), onClick: () => applyText(TEXT.CASE_TRANSFORMS.lower) },
+          { label: i18n.t('textTools.caseCamel'), onClick: () => applyText(TEXT.CASE_TRANSFORMS.camel) },
+          { label: i18n.t('textTools.casePascal'), onClick: () => applyText(TEXT.CASE_TRANSFORMS.pascal) },
+          { label: i18n.t('textTools.caseSnake'), onClick: () => applyText(TEXT.CASE_TRANSFORMS.snake) },
+          { label: i18n.t('textTools.caseKebab'), onClick: () => applyText(TEXT.CASE_TRANSFORMS.kebab) },
+          { label: i18n.t('textTools.caseConstant'), onClick: () => applyText(TEXT.CASE_TRANSFORMS.constant) },
+          { label: i18n.t('textTools.caseTitle'), onClick: () => applyText(TEXT.CASE_TRANSFORMS.title) },
+        ])
+      );
+      textToolsSection.appendChild(
+        textButtonRow('textTools.lines', [
+          { label: i18n.t('textTools.lineDedupe'), onClick: () => applyText(TEXT.LINE_TRANSFORMS.dedupe) },
+          { label: i18n.t('textTools.lineSortAsc'), onClick: () => applyText(TEXT.LINE_TRANSFORMS.sortAsc) },
+          { label: i18n.t('textTools.lineSortDesc'), onClick: () => applyText(TEXT.LINE_TRANSFORMS.sortDesc) },
+          { label: i18n.t('textTools.lineReverse'), onClick: () => applyText(TEXT.LINE_TRANSFORMS.reverse) },
+          { label: i18n.t('textTools.lineDropBlank'), onClick: () => applyText(TEXT.LINE_TRANSFORMS.dropBlank) },
+          { label: i18n.t('textTools.lineTrim'), onClick: () => applyText(TEXT.LINE_TRANSFORMS.trim) },
+          { label: i18n.t('textTools.lineTrimAll'), onClick: () => applyText(TEXT.LINE_TRANSFORMS.trimAll) },
+        ])
+      );
+
+      const statDefs = [
+        { key: 'lines', labelKey: 'textTools.statLines' },
+        { key: 'chars', labelKey: 'textTools.statChars' },
+        { key: 'words', labelKey: 'textTools.statWords' },
+        { key: 'bytes', labelKey: 'textTools.statBytes' },
+        { key: 'unique', labelKey: 'textTools.statUnique' },
+      ];
+      const statValues = {};
+      const statGrid = el('div', { class: 'grid grid-cols-5 gap-2' });
+      for (const def of statDefs) {
+        const card = el('div', { class: 'rounded-card border border-border bg-surface px-2 py-1.5' });
+        const value = el('div', { class: 'font-mono text-[13px] text-fg' }, '0');
+        card.append(el('div', { class: 'text-[10px] text-fg-muted' }, i18n.t(def.labelKey)), value);
+        statValues[def.key] = value;
+        statGrid.appendChild(card);
+      }
+      textToolsSection.append(
+        el('div', { class: 'mb-1.5 mt-1 text-[11px] text-fg-muted' }, i18n.t('textTools.stats')),
+        statGrid
+      );
+
+      updateStats = () => {
+        const result = TEXT.stats(textField.input.value);
+        for (const key of Object.keys(statValues)) statValues[key].textContent = String(result[key]);
+      };
+      updateStats();
+      textField.input.addEventListener('input', updateStats);
+    }
+
     // 底部：左=二维码，右=参数（纠错 / 尺寸 / 边距）+「复制 / 下载到本地」按钮。
     const qrWrap = el('div', { class: 'flex items-start gap-3' });
     qrWrap.append(qrBox, qrParams);
@@ -617,7 +763,7 @@
     const dmSection = section(i18n.t('encode.dataMatrix'));
     dmSection.append(dmWrap, dmNote);
 
-    container.append(body, qrSection, dmSection);
+    container.append(body, textToolsSection, qrSection, dmSection);
     renderQr('');
     renderDm('');
 

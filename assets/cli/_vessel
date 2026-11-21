@@ -1,46 +1,60 @@
 # Vessel CLI — zsh completion (installed to <data-dir>/bin/_vessel and sourced from ~/.zshrc).
 # Needs compinit (compdef); when it is not loaded this file does nothing and never breaks the shell.
-# Candidates come from the running app (`vessel __complete …`), so completion always reflects
-# the current tools / SSH hosts / 2FA accounts.
+# SSH candidates come from the running app (`vess __complete ssh`), so completion always
+# reflects the current hosts. Everything else is static.
 
 if (( $+functions[compdef] )); then
   _vessel() {
     local -a items
     local line
+    local -a commands=(
+      'ssh:List saved SSH hosts, or connect to a host'
+      '2fa:List 2FA accounts with their current codes'
+      'timestamp:Show the current time and epoch timestamps'
+      'network:Show network / subnet details for an address'
+      'codec:Show a text as Base64 / hex / URL / ASCII'
+      'hash:Show every hash of a text or file'
+      'uuid:Generate UUID v4 values'
+      'edit:Open a scratch file or a local file in the editor'
+      'json:Open the JSON tool in the app'
+      'regex:Open the regex tester in the app'
+      'color:Open the color converter in the app'
+      'ids:Open the ID / password generator in the app'
+      'clipboard:Open the clipboard history in the app'
+      'nutrient:Open the nutrition tool in the app'
+      'games:Open the games tool in the app'
+      'completion:Print the zsh completion function'
+      'help:Show help'
+    )
 
     if (( CURRENT == 2 )); then
-      compadd tool ssh edit 2fa completion help
+      _describe -t commands 'vess command' commands
       return
     fi
 
     case "${words[2]}" in
-      tool)
-        (( CURRENT == 3 )) || return
-        for line in ${(f)"$(vessel __complete tool 2>/dev/null)"}; do
-          [[ -n $line ]] && items+=("$line")
-        done
-        ;;
       ssh)
-        (( CURRENT == 3 )) || return
-        for line in ${(f)"$(vessel __complete ssh 2>/dev/null)"}; do
-          [[ -n $line ]] && items+=("$line")
-        done
-        ;;
-      edit)
-        # `vessel edit <file>`：补全本地文件路径（不联网、不询问应用）。
-        _files
+        if (( CURRENT == 3 )); then
+          for line in ${(f)"$(vess __complete ssh 2>/dev/null)"}; do
+            [[ -n $line ]] && items+=("$line")
+          done
+          (( ${#items} )) && _describe -t hosts 'saved host' items
+        fi
         return
         ;;
-      2fa)
-        # `vessel 2fa` 只列出，不接受参数。
+      edit|hash)
+        # 本地文件补全（hash 也接受纯文本，直接回车即可）。
+        (( CURRENT == 3 )) && _files
         return
         ;;
-      completion|help)
+      uuid|timestamp|network|codec|json|regex|color|ids|clipboard|nutrient|games|2fa|completion|help)
+        # 这些命令要么不需要补全，要么参数是自由文本。
+        return
+        ;;
+      *)
         return
         ;;
     esac
-
-    (( ${#items} )) && compadd -a items
   }
-  compdef _vessel vessel
+  compdef _vessel vess vessel
 fi

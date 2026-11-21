@@ -46,7 +46,7 @@
 | `app:local-address` | `{ kind }`（`'public4'` / `'public6'` / `'lan4'` / `'lan6'`） | `{ ok, address }` 或 `{ ok: false, error }` | 取本机地址供 IP / 网段工具的下拉使用：`lan4` / `lan6` 从 `os.networkInterfaces()` 取对应地址族的非内部地址（v4 优先 RFC 1918 私有网段；v6 去掉作用域后缀并优先非链路本地）；`public4` / `public6` 按地址族（`family: 4` / `6`）请求 `ipv4.icanhazip.com` / `ipv6.icanhazip.com`（失败退回 `ifconfig.me/ip`）获取出口 IP（遵循系统代理，5s 超时，任一成功即返回）；均失败返回 `{ ok: false }` |
 | `font-picker:open` | — | `{ ok }` | 打开设置窗口的非模态字体选择子窗口（`font-picker.html`）；已打开时聚焦现有窗口 |
 | `app:open-data-folder` | — | `{ ok, error? }` | 打开数据目录 |
-| `cli:status` | — | `{ supported, installed, path, binDir, completionPath, zshrcPath, zshrcConfigured }` | 设置 → 数据 → 命令行工具：查询 `vessel` 是否已安装（`<数据目录>/bin/vessel` 是否存在）以及 `~/.zshrc` 里是否已写入 PATH 块（见 §5.3），仅 macOS |
+| `cli:status` | — | `{ supported, installed, path, binDir, aliasPath, aliasInstalled, completionPath, zshrcPath, zshrcConfigured }` | 设置 → 数据 → 命令行工具：查询 `vessel` 是否已安装（`<数据目录>/bin/vessel` 是否存在）以及 `~/.zshrc` 里是否已写入 PATH 块（见 §5.3），仅 macOS |
 | `cli:install` | — | `{ ok, ...status }` 或 `{ ok:false, error }` | 安装 CLI：把 `assets/cli/vessel.sh` / `_vessel` 复制到 `<数据目录>/bin/`（0755 / 0644），并在 `~/.zshrc` 写入 / 原地更新带起止标记的 PATH 块（可重复安装，不产生重复块），仅 macOS |
 | `app:open-log` | — | `{ ok, error? }` | 打开**日志文件夹**（macOS：`~/Library/Logs/Vessel`；不存在则创建；**只打开文件夹，不打开日志文件**） |
 | `app:open-console` | — | `{ ok, error? }` | 打开 macOS 系统「控制台」App（`/System/Applications/Utilities/Console.app`，缺失时退回 `/Applications/Utilities/Console.app`）；非 macOS 返回 `{ ok: false, error: 'unsupported' }`；由设置 → 日志的「打开控制台 App」按钮调用 |
@@ -244,14 +244,22 @@
 | `POST /v1/tool`（请求体 = 工具 id 或名称） | `Opened tool: <id>` / 4xx `Unknown tool: …` | 显示主界面并加载该工具（`window-manager.showMainWindowWithTool`） |
 | `POST /v1/ssh`（请求体两行：`<目标>` + 换行 + `<密码，可空>`） | `Connecting to <别名>` / 4xx `Target required…`、`Invalid target…` / 5xx | 命中已保存主机（别名，或同一「用户名@地址」且未给新密码）→ 直接连接；否则按「快速连接」逻辑连接（见下） |
 
+- **数据命令路由**：`GET /v1/timestamp`（当前时间）、`POST /v1/timestamp`（转换一个值）、`POST /v1/network`（网段信息）、`POST /v1/codec`（编码结果）、`POST /v1/hash`（请求体首行 `text` / `file`，其余为内容）、`POST /v1/uuid`（数量）、`POST /v1/open`（在应用里打开工具，替代原来的 `/v1/tool`；`GET /v1/tools` 已移除）。响应均为纯文本表格。
 - **`POST /v1/edit`**：请求体为文件路径（可为空）。空 → 新建本地草稿并用编辑器打开；非空 → 解析为绝对路径后打开（不存在返回 404、非文件 / 超过 8MB 返回 400）。编辑器窗口**无归属窗口**（不随任何窗口关闭）。
 - **`POST /v1/ssh` 的目标解析**：`用户名@地址` / `地址` / `地址:端口` / `[IPv6]:端口`。**别名精确命中**，或**同一「用户名@地址」且没有提供新密码** → 用现有主机直接连接（自动沿用已存密码 / `~/.ssh/id_ed25519`）；其余写法走**快速连接**（`ssh-quick-connect-service`，与 SSH 工具的连接表单同一套实现）：`用户名@地址` 已存在时复用（给了密码则更新凭据），否则写入 `~/.ssh/config` 的「快速连接」分组并置于最前，然后**新开一扇内置终端**执行 `ssh`。密码可含空格（作为第 2 行原样传入），不需要密码时留空（走密钥）。
 - **输出语言**：CLI 的 usage / 帮助 / 错误 / 表头 / 提示**全部为英文**；工具名固定用英文（不随界面语言变化），主机 / 账号名是数据本身、保持原样。列表按显示宽度（CJK / 全角按 2 列）对齐为固定列宽表格。
 - **命令行 `vessel`**（安装位置 `<数据目录>/bin/vessel`，用法与终端内联命令 `\v` 同风格；**列表命令不带 `list` 子命令**，直接执行即列出）：
-  - `vessel tool` 列出工具（英文名）；`vessel tool <id|名称>` 打开主界面并加载该工具。
-  - `vessel ssh` 列出已保存主机（`用户名@地址` 归一化显示）；`vessel ssh <user@host> [password]` 连接或快速连接；`vessel ssh <别名>` 仍可按别名连接。
-  - `vessel edit` 用内置编辑器新建一个本地草稿（`<文件下载目录>/scratch-<时间戳>.txt`）；`vessel edit <file>` 打开指定本地文件（支持 `~` 与相对路径，超过 8MB 拒绝）。
-  - `vessel 2fa` 列出账号与**当前验证码**（含剩余秒数）；不接受其它参数。
+  - 命令**平铺**（不再有 `vessel tool` 子命令）：`vessel <命令> [参数]`；安装时同时创建 **`vess` 别名**（`<数据目录>/bin/vess` → symbol link 指向 `vessel`），两者等价。
+  - `ssh`：不带参数列出已保存主机（`用户名@地址` 归一化显示）；`ssh <user@host> [password]` 连接或快速连接；`ssh <别名>` 按别名连接。
+  - `2fa`：列出账号与**当前验证码**（含剩余秒数）；不接受其它参数（不再接受 `twofa`）。
+  - `timestamp [value]`：不带参数输出当前时间（本地时间 / UTC / 秒 / 毫秒 / **纳秒**，纳秒用 `process.hrtime` 补出亚毫秒）；带参数时自动识别 `≤11 位秒 / ≤15 位毫秒 / 其余纳秒`，非纯数字按日期字符串解析。
+  - `network <ip|cidr|mask>`（别名 `net` / `subnet` / `ip`）：输出网段信息（地址 / 类型 / CIDR / 前缀 / 网络地址 / 广播或最后地址 / 可用范围或地址总数 / 主机数 / 掩码 / 反掩码 / 地址类型）；支持 IPv4 / IPv6 / 纯数字 / `0x` 十六进制。
+  - `codec <text>`（别名 `encode` / `text`）：输出文本的 Text / Base64 / Hex / URL 编码 / URL 解码 / ASCII 十进制。
+  - `hash <text|file>`：参数是**已存在的文件**时按文件计算，否则按文本计算；输出全部 10 种算法；无参数时从 stdin 读取。
+  - `uuid [count]`（别名 `ulid`）：生成 UUID v4，默认 **5** 个、最多 100。
+  - `edit [file]`：用内置编辑器新建本地草稿或打开指定本地文件（见上）。
+  - 其余工具（`json` / `regex` / `color` / `ids` / `clipboard` / `nutrient` / `games`）：`vessel <工具 id>` 在应用里打开该工具（`/v1/open`）。
+  - `completion` 输出 zsh 补全函数（同时注册给 `vess` 与 `vessel`）；隐藏命令 `__complete ssh` 供补全取主机候选。
   - `vessel completion` 输出 zsh 补全函数；隐藏命令 `vessel __complete <kind>` 供补全取候选（应用未运行时静默返回空）。
   - 应用未运行：先尝试 `open -b cn.com.stdout.vessel` 拉起（菜单栏应用，启动不弹主窗口），最多等 **10 秒**（50 × 200ms）再执行。
 - **安装**（设置 → 数据 →「安装 CLI」，IPC `cli:install`）：复制 `assets/cli/vessel.sh` → `<数据目录>/bin/vessel`（0755）、`assets/cli/_vessel` → `<数据目录>/bin/_vessel`（0644），并在 `~/.zshrc` 写入（或原地替换，保证只有一块）如下标记块后重新安装也不会重复：

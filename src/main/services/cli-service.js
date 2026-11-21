@@ -11,6 +11,7 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const { app } = require('electron');
 
 const { DATA_DIR } = require('../utils/paths');
@@ -20,6 +21,8 @@ const logger = require('../utils/logger');
 const BIN_DIR = path.join(DATA_DIR, 'bin');
 const SCRIPT_FILE = path.join(BIN_DIR, 'vessel');
 const COMPLETION_FILE = path.join(BIN_DIR, '_vessel');
+// 短别名：安装时把 `vess` 指向 `vessel`（同一条脚本，symlink 保持同步）。
+const ALIAS_FILE = path.join(BIN_DIR, 'vess');
 const SOCKET_FILE = path.join(DATA_DIR, 'vessel-cli.sock');
 const ZSHRC_FILE = path.join(os.homedir(), '.zshrc');
 const BLOCK_START = '# >>> vessel cli >>>';
@@ -34,11 +37,10 @@ const FALLBACK_TOOLS = [
   { id: 'twofa', label: '2FA codes' },
   { id: 'timestamp', label: 'Timestamp' },
   { id: 'subnet', label: 'IP / Subnet' },
-  { id: 'encode', label: 'Encode' },
+  { id: 'encode', label: 'Text & encoding' },
   { id: 'radix', label: 'Units' },
   { id: 'json', label: 'JSON' },
   { id: 'hash', label: 'Hash' },
-  { id: 'text', label: 'Text' },
   { id: 'regex', label: 'Regex' },
   { id: 'color', label: 'Color' },
   { id: 'ids', label: 'IDs & passwords' },
@@ -158,15 +160,6 @@ function formatTable(headers, rows) {
   return `${[line(headers), ...rows.map(line)].join('\n')}\n`;
 }
 
-function toolsText() {
-  const list = tools();
-  if (!list.length) return 'No tools.\n';
-  return formatTable(
-    ['ID', 'NAME'],
-    list.map((tool) => [tool.id, clean(tool.label)])
-  );
-}
-
 /* 主机显示名统一成「用户名@地址」（与 SSH 工具列表一致）；无用户名时退回地址。 */
 function sshAddress(host) {
   const user = clean(host.user);
@@ -202,9 +195,7 @@ function twofaText() {
 
 function completeText(kind) {
   const values = [];
-  if (kind === 'tool') {
-    for (const tool of tools()) values.push(tool.id);
-  } else if (kind === 'ssh') {
+  if (kind === 'ssh') {
     // 与 `vessel ssh ls` 的显示一致：补全「用户名@地址」。
     const seen = new Set();
     for (const row of sshRows()) {
@@ -217,12 +208,186 @@ function completeText(kind) {
   return values.length ? `${values.join('\n')}\n` : '';
 }
 
+/* ------------------------------- 数据命令 ------------------------------- */
+
+/* 本地时间：`YYYY-MM-DD HH:mm:ss.SSS +08:00`。 */
+function formatLocal(date) {
+  const pad = (value, width) => String(value).padStart(width || 2, '0');
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const abs = Math.abs(offset);
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.` +
+    `${pad(date.getMilliseconds(), 3)} ${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+  );
+}
+
+/* `vessel timestamp [value]`：不带参数输出当前时间 + 秒 / 毫秒 / 纳秒；
+   带参数时自动识别时间戳单位（≤11 位秒 / ≤15 位毫秒 / 其余纳秒）或解析日期字符串。 */
+function timestampCommand(body) {
+  const raw = String(body == null ? '' : body).trim();
+  let millis;
+  let nanos;
+  let source = '';
+  if (!raw) {
+    millis = Date.now();
+    // 用 hrtime 补出亚毫秒部分，纳秒时间戳不至于全是 0
+    nanos = BigInt(millis) * 1000000n + (process.hrtime.bigint() % 1000000n);
+    source = 'now';
+  } else if (/^-?\d+$/.test(raw)) {
+    const negative = raw.startsWith('-');
+    const digits = negative ? raw.slice(1) : raw;
+    const number = Number(raw);
+    if (digits.length <= 11) {
+      millis = number * 1000;
+      source = 'seconds';
+    } else if (digits.length <= 15) {
+      millis = number;
+      source = 'milliseconds';
+    } else {
+      millis = Math.floor(number / 1e6);
+      source = 'nanoseconds';
+    }
+    nanos = BigInt(Math.round(millis)) * 1000000n;
+  } else {
+    const parsed = Date.parse(raw);
+    if (!Number.isFinite(parsed)) return { code: 400, message: `Cannot parse: ${raw}` };
+    millis = parsed;
+    nanos = BigInt(millis) * 1000000n;
+    source = 'date';
+  }
+  const date = new Date(millis);
+  if (Number.isNaN(date.getTime())) return { code: 400, message: `Cannot parse: ${raw}` };
+  const seconds = Math.floor(millis / 1000);
+  const rows = [];
+  if (raw) rows.push(['Input', `${raw}  (${source})`]);
+  rows.push(
+    ['Date', formatLocal(date)],
+    ['UTC', date.toISOString()],
+    ['Seconds', String(seconds)],
+    ['Millis', String(millis)],
+    ['Nanos', nanos.toString()]
+  );
+  return { code: 200, body: formatTable(['FIELD', 'VALUE'], rows) };
+}
+
+/* `vessel network <ip|cidr|mask>`：输出网段信息（与 IP 工具一致）。 */
+function networkCommand(body) {
+  const raw = String(body == null ? '' : body).trim();
+  if (!raw) return { code: 400, message: 'IP address or network required' };
+  const netService = require('./net-service');
+  const result = netService.describe(raw);
+  if (!result.ok) {
+    const message = result.error === 'badPrefix' ? 'Invalid prefix length' : `Invalid IP address or network: ${raw}`;
+    return { code: 400, message };
+  }
+  const info = result.info;
+  const scopeLabels = {
+    private: 'private',
+    public: 'public',
+    loopback: 'loopback',
+    linkLocal: 'link-local',
+    cgnat: 'CGNAT',
+    unspecified: 'unspecified',
+    mapped: 'IPv4-mapped',
+    multicast: 'multicast',
+  };
+  const rows =
+    info.kind === 'ipv4'
+      ? [
+          ['Address', info.address],
+          ['CIDR', info.cidr],
+          ['Prefix', `/${info.prefix}`],
+          ['Network', info.network],
+          ['Broadcast', info.broadcast],
+          ['Usable', info.range],
+          ['Hosts', info.hosts.toLocaleString('en-US')],
+          ['Netmask', info.netmask],
+          ['Wildcard', info.wildcard],
+          ['Scope', scopeLabels[info.scope] || info.scope],
+        ]
+      : [
+          ['Address', info.compressed],
+          ['CIDR', info.cidr],
+          ['Prefix', `/${info.prefix}`],
+          ['Network', info.network],
+          ['Last', info.last],
+          ['Addresses', BigInt(info.total).toLocaleString('en-US')],
+          ['Netmask', info.netmask],
+          ['Wildcard', info.wildcard],
+          ['Expanded', info.expanded],
+          ['Scope', scopeLabels[info.scope] || info.scope],
+        ];
+  const note = result.defaulted ? 'No prefix given, assuming /24.\n' : '';
+  return { code: 200, body: note + formatTable(['FIELD', 'VALUE'], rows) };
+}
+
+/* `vessel codec <text>`：输出各种编码（与「文本处理」工具一致）。 */
+function codecCommand(body) {
+  const text = String(body == null ? '' : body);
+  const codec = require('./codec-service');
+  const out = codec.encodeAll(text);
+  const rows = [
+    ['Text', out.text],
+    ['Base64', out.base64],
+    ['Hex', out.hex],
+    ['URL encode', out.url],
+    ['URL decode', out.urlDecode],
+    ['ASCII', out.ascii],
+  ];
+  return { code: 200, body: formatTable(['FIELD', 'VALUE'], rows) };
+}
+
+/* 请求体第一行是类型（text / file），其余是内容。 */
+function parseKindBody(body) {
+  const text = String(body == null ? '' : body);
+  const index = text.indexOf('\n');
+  if (index < 0) return { kind: '', value: text };
+  return { kind: text.slice(0, index).trim(), value: text.slice(index + 1) };
+}
+
+/* `vessel hash <text|file>`：输出全部 10 种算法。 */
+async function hashCommand(body) {
+  const parsed = parseKindBody(body);
+  const isFile = parsed.kind === 'file';
+  const value = isFile ? parsed.value.trim() : parsed.value;
+  if (!value) return { code: 400, message: 'Text or file path required' };
+  const hashService = require('./hash-service');
+  let hashes;
+  if (isFile) {
+    try {
+      const stat = fs.statSync(value);
+      if (!stat.isFile()) return { code: 400, message: `Not a file: ${value}` };
+    } catch (err) {
+      return { code: 404, message: `File not found: ${value}` };
+    }
+    hashes = await hashService.hashFile(value);
+  } else {
+    hashes = hashService.hashText(value);
+  }
+  const rows = hashService.ALGORITHMS.map((algorithm) => [algorithm.label, hashes[algorithm.id] || '-']);
+  const head = isFile ? `File  ${value}\n` : '';
+  return { code: 200, body: head + formatTable(['ALGORITHM', 'HASH'], rows) };
+}
+
+/* `vessel uuid [count]`：生成 UUID v4（默认 5 个，最多 100）。 */
+function uuidCommand(body) {
+  const raw = String(body == null ? '' : body).trim();
+  const count = raw ? Math.floor(Number(raw)) : 5;
+  if (!Number.isFinite(count) || count < 1) return { code: 400, message: 'Count must be a positive number' };
+  const total = Math.min(Math.max(count, 1), 100);
+  const lines = [];
+  for (let i = 0; i < total; i += 1) lines.push(crypto.randomUUID());
+  return { code: 200, body: `${lines.join('\n')}\n` };
+}
+
 /* ------------------------------- 动作 ------------------------------- */
 
 function openTool(key) {
   const wanted = String(key || '').trim();
   const tool = findTool(wanted);
-  if (!tool) return { code: 404, message: `Unknown tool: ${wanted}` };
+  if (!tool) return { code: 404, message: `Unknown command or tool: ${wanted}` };
   require('../tray').openTool(tool.id);
   logger.file(`[cli] open tool ${tool.id}`);
   return { code: 200, message: `Opened tool: ${tool.id}` };
@@ -403,13 +568,47 @@ function handle(req, res) {
   const route = url.pathname;
   try {
     if (req.method === 'GET' && route === '/v1/ping') return send(res, 200, 'ok\n');
-    if (req.method === 'GET' && route === '/v1/tools') return send(res, 200, toolsText());
     if (req.method === 'GET' && route === '/v1/ssh') return send(res, 200, sshText());
     if (req.method === 'GET' && route === '/v1/2fa') return send(res, 200, twofaText());
     if (req.method === 'GET' && route === '/v1/complete') {
       return send(res, 200, completeText(String(url.searchParams.get('kind') || '')));
     }
-    if (req.method === 'POST' && route === '/v1/tool') {
+    if (req.method === 'GET' && route === '/v1/timestamp') {
+      const result = timestampCommand('');
+      return send(res, result.code, result.body);
+    }
+    if (req.method === 'POST' && route === '/v1/timestamp') {
+      return readBody(req, res, (body) => {
+        const result = timestampCommand(body);
+        send(res, result.code, result.body || `${result.message}\n`);
+      });
+    }
+    if (req.method === 'POST' && route === '/v1/network') {
+      return readBody(req, res, (body) => {
+        const result = networkCommand(body);
+        send(res, result.code, result.body || `${result.message}\n`);
+      });
+    }
+    if (req.method === 'POST' && route === '/v1/codec') {
+      return readBody(req, res, (body) => {
+        const result = codecCommand(body);
+        send(res, result.code, result.body);
+      });
+    }
+    if (req.method === 'POST' && route === '/v1/hash') {
+      return readBody(req, res, (body) => {
+        hashCommand(body)
+          .then((result) => send(res, result.code, result.body || `${result.message}\n`))
+          .catch((err) => send(res, 500, `${err.message}\n`));
+      });
+    }
+    if (req.method === 'POST' && route === '/v1/uuid') {
+      return readBody(req, res, (body) => {
+        const result = uuidCommand(body);
+        send(res, result.code, result.body || `${result.message}\n`);
+      });
+    }
+    if (req.method === 'POST' && route === '/v1/open') {
       return readBody(req, res, (body) => {
         const result = openTool(body);
         send(res, result.code, `${result.message}\n`);
@@ -501,6 +700,8 @@ function cliStatus() {
     installed: fs.existsSync(SCRIPT_FILE),
     path: SCRIPT_FILE,
     binDir: BIN_DIR,
+    aliasPath: ALIAS_FILE,
+    aliasInstalled: fs.existsSync(ALIAS_FILE),
     completionPath: COMPLETION_FILE,
     zshrcPath: ZSHRC_FILE,
     zshrcConfigured: zshrc.includes(BLOCK_START),
@@ -537,8 +738,15 @@ function installCli() {
     fs.writeFileSync(SCRIPT_FILE, fs.readFileSync(sourceFile('vessel.sh')), { mode: 0o755 });
     fs.chmodSync(SCRIPT_FILE, 0o755);
     fs.writeFileSync(COMPLETION_FILE, fs.readFileSync(sourceFile('_vessel')), { mode: 0o644 });
+    // 短别名 vess → vessel（符号链接；已存在则先删掉）
+    try {
+      fs.rmSync(ALIAS_FILE, { force: true });
+    } catch (err) {
+      /* 忽略 */
+    }
+    fs.symlinkSync('vessel', ALIAS_FILE);
     updateZshrc();
-    logger.file(`[cli] installed: ${SCRIPT_FILE} (+ ~/.zshrc PATH)`);
+    logger.file(`[cli] installed: ${SCRIPT_FILE} (+ alias ${ALIAS_FILE}, ~/.zshrc PATH)`);
     return Object.assign({ ok: true }, cliStatus());
   } catch (err) {
     logger.error(`[cli] install failed: ${err.message}`);
@@ -546,4 +754,19 @@ function installCli() {
   }
 }
 
-module.exports = { start, stop, status: cliStatus, install: installCli, openEditor, SCRIPT_FILE, BIN_DIR };
+module.exports = {
+  start,
+  stop,
+  status: cliStatus,
+  install: installCli,
+  openEditor,
+  handle,
+  timestampCommand,
+  networkCommand,
+  codecCommand,
+  hashCommand,
+  uuidCommand,
+  SCRIPT_FILE,
+  BIN_DIR,
+  ALIAS_FILE,
+};
