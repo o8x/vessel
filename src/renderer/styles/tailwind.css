@@ -3821,15 +3821,18 @@ body.editor-window {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 0;
+  padding-left: 10px;
   margin-top: 2px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--color-fg-muted);
 }
+/* 保留小标题左侧的粗重强调色竖条（与工具标题的视觉语言一致）。 */
 .section > .tool-title::before {
-  display: none;
+  top: 1px;
+  bottom: 1px;
+  width: 3px;
 }
 .section > .tool-title::after {
   content: '';
