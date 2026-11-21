@@ -18,7 +18,7 @@ if (( $+functions[compdef] )); then
       'uuid:Alias of `id` (generate UUID values)'
       'ulid:Alias of `id ulid`'
       'edit:Open a scratch file or a local file in the editor'
-      'json:Open the JSON tool in the app'
+      'json:Pretty-print JSON from a file, text or stdin (or open the tool)'
       'regex:Open the regex tester in the app'
       'color:Open the color converter in the app'
       'ids:Open the ID / password generator in the app'
@@ -44,8 +44,8 @@ if (( $+functions[compdef] )); then
         fi
         return
         ;;
-      edit|hash)
-        # 本地文件补全（hash 也接受纯文本，直接回车即可）。
+      edit|hash|json)
+        # 本地文件补全（hash / json 也接受纯文本，直接回车即可）。
         (( CURRENT == 3 )) && _files
         return
         ;;
@@ -66,7 +66,7 @@ if (( $+functions[compdef] )); then
         fi
         return
         ;;
-      timestamp|network|codec|json|regex|color|ids|clipboard|nutrient|games|2fa|completion)
+      timestamp|network|codec|regex|color|ids|clipboard|nutrient|games|2fa|completion)
         # 这些命令要么不需要补全，要么参数是自由文本。
         return
         ;;

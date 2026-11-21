@@ -45,12 +45,14 @@ Commands:
                                with a value: network and subnet details for it
   codec <text>                 Show the text as Base64 / hex / URL / ASCII
   hash <text|file>             Show every hash of a text or an existing file
+  json [file|text]             Pretty-print JSON from a file, text or stdin;
+                               no argument opens the JSON tool in the app
   id [type] [length]           Generate 5 values: uuid4 (default) / uuid7 / ulid /
                                random / password; length applies to random / password
   uuid [type]                  Alias of `id` (e.g. uuid uuid7; uuid = id uuid4)
   ulid                         Alias of `id ulid`
   edit [file]                  Open a scratch file (or <file>) in the Vessel editor
-  json | regex | color | ids   Open that tool in the Vessel app
+  regex | color | ids          Open that tool in the Vessel app
   clipboard | nutrient | games Open that tool in the Vessel app
   completion                   Print the zsh completion function
   help [command]               Show this help, or detailed help / examples for a command
@@ -124,6 +126,25 @@ Examples:
   vess network 0xc0a80101
 EOF
       ;;
+    json)
+      cat <<'EOF'
+Usage: vess json <file|text>
+       vess json -                 # read JSON from stdin
+       printf '{"a":1}' | vess json
+
+Arguments:
+  file|text   Existing file path → format that file; otherwise treat the
+              argument as JSON text. Use `-` or pipe to read from stdin.
+              With no arguments, opens the JSON tool in the Vessel app.
+
+Output: formatted JSON with 4-space indentation (invalid JSON returns an error).
+
+Examples:
+  vess json '{"b":2,"a":1}'
+  vess json ./package.json
+  cat data.json | vess json
+EOF
+      ;;
     codec|encode|text)
       cat <<'EOF'
 Usage: vess codec [text]
@@ -188,7 +209,7 @@ Examples:
   vess edit ./README.md
 EOF
       ;;
-    json|regex|color|ids|clipboard|nutrient|games)
+    regex|color|ids|clipboard|nutrient|games)
       cat <<EOF
 Usage: vess ${1}
 
@@ -363,6 +384,34 @@ cmd_codec() {
   api POST /v1/codec "$_text"
 }
 
+cmd_json() {
+  _input=${1:-}
+  if [ -z "$_input" ]; then
+    if [ ! -t 0 ]; then
+      _input=$(cat)
+    else
+      # 无参数且非管道：保持原有行为，打开应用里的 JSON 工具。
+      cmd_open json
+      return
+    fi
+  elif [ "$_input" = "-" ]; then
+    _input=$(cat)
+  fi
+  if [ -z "$_input" ]; then
+    err "json requires JSON text, a file path or stdin"
+    exit 1
+  fi
+  with_app
+  if [ -f "$_input" ]; then
+    _abs=$(CDPATH= cd -- "$(dirname -- "$_input")" && pwd)/$(basename -- "$_input")
+    api POST /v1/json "file
+$_abs"
+  else
+    api POST /v1/json "text
+$_input"
+  fi
+}
+
 cmd_hash() {
   _input=${1:-}
   if [ -z "$_input" ]; then
@@ -448,6 +497,10 @@ case "${1:-}" in
     shift
     cmd_hash "${1:-}"
     ;;
+  json)
+    shift
+    cmd_json "${1:-}"
+    ;;
   id)
     shift
     cmd_id "${1:-}" "${2:-}"
@@ -471,7 +524,7 @@ case "${1:-}" in
     shift
     cmd_complete "${1:-}"
     ;;
-  json|regex|color|ids|clipboard|nutrient|games)
+  regex|color|ids|clipboard|nutrient|games)
     cmd_open "$1"
     ;;
   *)

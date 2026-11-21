@@ -29,6 +29,8 @@ const BLOCK_START = '# >>> vessel cli >>>';
 const BLOCK_END = '# <<< vessel cli <<<';
 // 请求体上限（工具 id / SSH 别名都远小于它）。
 const MAX_BODY = 4096;
+// `vess json "<JSON 文本>"` 的请求体会包含完整 JSON，单独放宽上限。
+const JSON_MAX_BODY = 2 * 1024 * 1024;
 
 /* 工具清单（英文名）：CLI 统一用英文输出，不随界面语言变化；
    顺序与 renderer 的 tool-order.js 一致（渲染层从未上报时也按这个顺序列出）。 */
@@ -372,6 +374,31 @@ function parseKindBody(body) {
   return { kind: text.slice(0, index).trim(), value: text.slice(index + 1) };
 }
 
+/* `vessel json <file|text>`：把 JSON 文件 / 文本格式化后输出（4 空格缩进，与 JSON 工具一致）。 */
+function jsonCommand(body) {
+  const parsed = parseKindBody(body);
+  const isFile = parsed.kind === 'file';
+  let text = isFile ? parsed.value.trim() : parsed.value;
+  if (!text) return { code: 400, message: 'JSON text or file required' };
+  if (isFile) {
+    try {
+      const stat = fs.statSync(text);
+      if (!stat.isFile()) return { code: 400, message: `Not a file: ${text}` };
+      if (stat.size > FILE_EDITOR_MAX_BYTES) return { code: 400, message: 'File is larger than 8 MB' };
+      text = fs.readFileSync(text, 'utf8');
+    } catch (err) {
+      return { code: 404, message: `File not found: ${text}` };
+    }
+  }
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (err) {
+    return { code: 400, message: `Invalid JSON: ${(err && err.message) || 'parse error'}` };
+  }
+  return { code: 200, body: `${JSON.stringify(value, null, 4)}\n` };
+}
+
 /* `vessel hash <text|file>`：输出全部 10 种算法。 */
 async function hashCommand(body) {
   const parsed = parseKindBody(body);
@@ -658,14 +685,15 @@ function send(res, code, body) {
   res.end(body);
 }
 
-function readBody(req, res, callback) {
+function readBody(req, res, callback, maxSize) {
+  const limit = Number.isFinite(maxSize) && maxSize > 0 ? maxSize : MAX_BODY;
   let size = 0;
   let done = false;
   const chunks = [];
   req.on('data', (chunk) => {
     if (done) return;
     size += chunk.length;
-    if (size > MAX_BODY) {
+    if (size > limit) {
       done = true;
       send(res, 413, 'request too large\n');
       req.destroy();
@@ -718,6 +746,12 @@ function handle(req, res) {
           .then((result) => send(res, result.code, result.body || `${result.message}\n`))
           .catch((err) => send(res, 500, `${err.message}\n`));
       });
+    }
+    if (req.method === 'POST' && route === '/v1/json') {
+      return readBody(req, res, (body) => {
+        const result = jsonCommand(body);
+        send(res, result.code, result.body || `${result.message}\n`);
+      }, JSON_MAX_BODY);
     }
     if (req.method === 'POST' && route === '/v1/codec') {
       return readBody(req, res, (body) => {
@@ -900,6 +934,7 @@ module.exports = {
   timestampCommand,
   networkCommand,
   codecCommand,
+  jsonCommand,
   hashCommand,
   idCommand,
   uuidCommand,
