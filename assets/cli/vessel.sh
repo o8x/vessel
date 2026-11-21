@@ -43,7 +43,7 @@ Commands:
   2fa                          List 2FA accounts with their current codes
   timestamp [value]            Current date plus epoch seconds / millis / nanos;
                                a value is auto-detected (epoch or date string)
-  network [ip|cidr|mask]     With no argument: local LAN and public IP addresses;
+  network [ip|cidr|mask]       With no argument: local LAN and public IP addresses;
                                with a value: network and subnet details for it
   codec <text>                 Show the text as Base64 / hex / URL / ASCII
   hash <text|file>             Show every hash of a text or an existing file
@@ -55,28 +55,181 @@ Commands:
   json | regex | color | ids   Open that tool in the Vessel app
   clipboard | nutrient | games Open that tool in the Vessel app
   completion                   Print the zsh completion function
-  help                         Show this help
+  help [command]               Show this help, or detailed help / examples for a command
 
 Reading from stdin:
   echo -n hello | vess codec
   cat README.md | vess hash
+EOF
+}
+
+# Detailed help / examples for one command (`vess help <command>`).
+cmd_help() {
+  case "${1:-}" in
+    '')
+      usage
+      return 0
+      ;;
+    ssh)
+      cat <<'EOF'
+Usage: vess ssh [user@host] [password]
+       vess ssh <alias>
+
+Arguments:
+  user@host   Target host; user is optional.
+  password    Optional password (may contain spaces). Omit to use keys / saved credentials.
+  alias       A host alias from ~/.ssh/config.
+
+Examples:
+  vess ssh
+  vess ssh root@192.168.1.10
+  vess ssh root@192.168.1.10 "my password"
+  vess ssh my-server
+EOF
+      ;;
+    2fa)
+      cat <<'EOF'
+Usage: vess 2fa
+
+Lists saved 2FA accounts with their current TOTP codes and remaining seconds.
+2FA now lives inside the "IDs & passwords" tool.
 
 Examples:
   vess 2fa
+EOF
+      ;;
+    timestamp|ts)
+      cat <<'EOF'
+Usage: vess timestamp [value]
+
+Arguments:
+  value   Optional. Epoch seconds (≤11 digits), milliseconds (≤15 digits),
+          nanoseconds, or a date string (e.g. "2026-01-01 12:00").
+
+Examples:
   vess timestamp
   vess timestamp 1700000000
+  vess timestamp 1700000000000
+  vess timestamp "2026-01-01 12:00"
+EOF
+      ;;
+    network|net|subnet|ip)
+      cat <<'EOF'
+Usage: vess network [ip|cidr|mask]
+
+Arguments:
+  (none)          Show local LAN and public IPv4 / IPv6 addresses.
+  ip|cidr|mask    Show network details for an IPv4 / IPv6 address or network.
+
+Examples:
   vess network
   vess network 192.168.1.10/24
   vess network 2001:db8::/32
+  vess network 0xc0a80101
+EOF
+      ;;
+    codec|encode|text)
+      cat <<'EOF'
+Usage: vess codec [text]
+       printf 'hello' | vess codec
+
+Arguments:
+  text   Text to encode. When omitted, reads from stdin.
+
+Output: text, Base64, hex, URL encode / decode and ASCII decimal.
+
+Examples:
   vess codec "hello world"
+  echo -n hello | vess codec
+EOF
+      ;;
+    hash)
+      cat <<'EOF'
+Usage: vess hash <text|file>
+       printf 'hello' | vess hash
+
+Arguments:
+  text|file   Existing file path → hash the file; otherwise hash the text.
+              When omitted, reads from stdin.
+
+Output: all supported algorithms.
+
+Examples:
+  vess hash "hello"
   vess hash ./package.json
+  cat README.md | vess hash
+EOF
+      ;;
+    id|uuid|ulid)
+      cat <<'EOF'
+Usage: vess id [type] [length]
+
+Arguments:
+  type     uuid4 (default) | uuid7 | ulid | random | password
+  length   Only for random (4–64, default 16) and password (8–64, default 20).
+           Always generates 5 values.
+
+Aliases: `vess uuid` = `vess id uuid4`; `vess ulid` = `vess id ulid`.
+
+Examples:
   vess id
   vess id uuid7
+  vess id ulid
   vess id random 24
   vess id password
-  vess ssh root@192.168.1.10 "my-password"
+  vess id password 32
+EOF
+      ;;
+    edit)
+      cat <<'EOF'
+Usage: vess edit [file]
+
+Arguments:
+  file   Optional local file to open. Without it, creates a new scratch file.
+
+Examples:
+  vess edit
   vess edit ./README.md
 EOF
+      ;;
+    json|regex|color|ids|clipboard|nutrient|games)
+      cat <<EOF
+Usage: vess ${1}
+
+Opens the "${1}" tool in the Vessel app.
+
+Examples:
+  vess ${1}
+EOF
+      ;;
+    completion)
+      cat <<'EOF'
+Usage: vess completion
+
+Prints the zsh completion function (normally sourced from ~/.zshrc by the installer).
+
+Examples:
+  vess completion
+EOF
+      ;;
+    help)
+      cat <<'EOF'
+Usage: vess help [command]
+
+Shows the command list, or detailed arguments / examples for one command.
+
+Examples:
+  vess help
+  vess help network
+  vess help id
+EOF
+      ;;
+    *)
+      err "unknown command: $1"
+      usage
+      return 1
+      ;;
+  esac
 }
 
 err() {
@@ -261,9 +414,19 @@ cmd_complete() {
   esac
 }
 
+# `vess <command> --help` / `-h` → detailed help for that command.
+if [ "${2:-}" = "-h" ] || [ "${2:-}" = "--help" ]; then
+  cmd_help "$1"
+  exit $?
+fi
+
 case "${1:-}" in
-  ''|help|-h|--help)
+  ''|-h|--help)
     usage
+    ;;
+  help)
+    shift
+    cmd_help "${1:-}"
     ;;
   ssh)
     shift

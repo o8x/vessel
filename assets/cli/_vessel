@@ -26,7 +26,7 @@ if (( $+functions[compdef] )); then
       'nutrient:Open the nutrition tool in the app'
       'games:Open the games tool in the app'
       'completion:Print the zsh completion function'
-      'help:Show help'
+      'help:Show help, or detailed help / examples for a command'
     )
 
     if (( CURRENT == 2 )); then
@@ -59,7 +59,14 @@ if (( $+functions[compdef] )); then
       ulid)
         return
         ;;
-      timestamp|network|codec|json|regex|color|ids|clipboard|nutrient|games|2fa|completion|help)
+      help)
+        if (( CURRENT == 3 )); then
+          items=(ssh 2fa timestamp network codec hash id uuid ulid edit json regex color ids clipboard nutrient games completion)
+          _describe -t commands 'help topic' items
+        fi
+        return
+        ;;
+      timestamp|network|codec|json|regex|color|ids|clipboard|nutrient|games|2fa|completion)
         # 这些命令要么不需要补全，要么参数是自由文本。
         return
         ;;

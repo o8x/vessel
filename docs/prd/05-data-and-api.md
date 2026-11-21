@@ -258,6 +258,7 @@
 - **输出颜色**：`vessel.sh` 在**标准输出是终端**时给结果加 ANSI 颜色（表头加粗青色、UUID 绿色、`No …` / 错误类提示暗色、`键  值` 行的键为青色）；输出到管道 / 文件或 `vess` 被脚本调用时自动关闭颜色，保持纯文本。错误信息始终以红色写入 stderr。
 - **命令行 `vessel`**（安装位置 `<数据目录>/bin/vessel`，用法与终端内联命令 `\v` 同风格；**列表命令不带 `list` 子命令**，直接执行即列出）：
   - 命令**平铺**（不再有 `vessel tool` 子命令）：`vessel <命令> [参数]`；安装时同时创建 **`vess` 别名**（`<数据目录>/bin/vess` → symbol link 指向 `vessel`），两者等价。
+  - **分层帮助**：主 `vess` / `vess help` 的 usage **只列出命令，不再包含 Examples**；`vess help <命令>`（或 `vess <命令> -h` / `--help`）输出该命令的详细参数说明与示例（如 `vess help network`、`vess help id`），未知命令返回非零并回退到 usage。
   - `ssh`：不带参数列出已保存主机（`用户名@地址` 归一化显示）；`ssh <user@host> [password]` 连接或快速连接；`ssh <别名>` 按别名连接。
   - `2fa`：列出账号与**当前验证码**（含剩余秒数）；不接受其它参数。2FA 已并入「ID 与密码」，`vessel twofa` 会打开合并后的工具。
   - `timestamp [value]`：不带参数输出当前时间（本地时间 / UTC / 秒 / 毫秒 / **纳秒**，纳秒用 `process.hrtime` 补出亚毫秒）；带参数时自动识别 `≤11 位秒 / ≤15 位毫秒 / 其余纳秒`，非纯数字按日期字符串解析。
@@ -267,7 +268,7 @@
   - `id [type] [length]`（兼容别名：`uuid` = `id uuid4`，`ulid` = `id ulid`）：按类型生成**固定 5 个**值；`type` ∈ `uuid4`（默认）/ `uuid7` / `ulid` / `random` / `password`，其它值返回 400。`uuid7` = 48 位毫秒时间戳 + 版本位 7 + 变体位；`ulid` = Crockford base32 的 26 位 ULID；`random` = 默认 16 位的字母 + 数字随机串（长度 4–64）；`password` = 默认 20 位、包含小写 / 大写 / 数字 / 符号且每类至少一个（长度 8–64，Fisher–Yates 洗牌）；随机数一律来自 Node `crypto`（CSPRNG）。
   - `edit [file]`：用内置编辑器新建本地草稿或打开指定本地文件（见上）。
   - 其余工具（`json` / `regex` / `color` / `ids` / `clipboard` / `nutrient` / `games`）：`vessel <工具 id>` 在应用里打开该工具（`/v1/open`）。
-  - `completion` 输出 zsh 补全函数（同时注册给 `vess` 与 `vessel`）；隐藏命令 `__complete ssh` 供补全取主机候选。
+  - `completion` 输出 zsh 补全函数（同时注册给 `vess` 与 `vessel`）；隐藏命令 `__complete ssh` 供补全取主机候选；`vess help <TAB>` 补全命令名。
   - `vessel completion` 输出 zsh 补全函数；隐藏命令 `vessel __complete <kind>` 供补全取候选（应用未运行时静默返回空）。
   - 应用未运行：先尝试 `open -b cn.com.stdout.vessel` 拉起（菜单栏应用，启动不弹主窗口），最多等 **10 秒**（50 × 200ms）再执行。
 - **安装**（设置 → 数据 →「安装 CLI」，IPC `cli:install`）：复制 `assets/cli/vessel.sh` → `<数据目录>/bin/vessel`（0755）、`assets/cli/_vessel` → `<数据目录>/bin/_vessel`（0644），并在 `~/.zshrc` 写入（或原地替换，保证只有一块）如下标记块后重新安装也不会重复：
