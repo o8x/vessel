@@ -632,10 +632,7 @@
     previewRow.append(swatch, previewText);
 
     const inputSection = section();
-    inputSection.append(
-      el('div', { class: 'text-[11px] text-fg-muted' }, i18n.t('color.hint')),
-      previewRow
-    );
+    inputSection.append(previewRow);
 
     /* ---------- 格式换算区 ---------- */
 
