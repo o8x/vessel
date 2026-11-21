@@ -605,7 +605,7 @@
     const copyHexBtn = el('button', { class: 'btn shrink-0 px-2 py-1 text-[11px]', type: 'button' });
     copyHexBtn.append(el('span', { class: 'inline-flex' }, Icons.copy(13)), el('span', {}, i18n.t('color.copyHex')));
 
-    const inputActions = el('div', { class: 'flex flex-wrap gap-1.5' });
+    const inputActions = el('div', { class: 'mt-2 flex flex-wrap gap-1.5' });
     inputActions.append(randomBtn, copyHexBtn);
 
     /* ---------- 预览色块 + 输入框（合并为一行） ---------- */
@@ -626,16 +626,15 @@
     swatch.append(swatchFill, swatchPicker);
 
     const previewText = el('div', { class: 'min-w-0 flex-1' });
-    previewText.append(colorField);
+    previewText.append(colorField, inputActions);
 
-    const previewRow = el('div', { class: 'flex items-center gap-3' });
+    const previewRow = el('div', { class: 'flex items-start gap-3' });
     previewRow.append(swatch, previewText);
 
     const inputSection = section();
     inputSection.append(
       el('div', { class: 'text-[11px] text-fg-muted' }, i18n.t('color.hint')),
-      previewRow,
-      inputActions
+      previewRow
     );
 
     /* ---------- 格式换算区 ---------- */
