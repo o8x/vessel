@@ -25,7 +25,9 @@
         scrollback: '缓冲区大小',
         scrollbackHint: '保留的历史行数，默认 10000',
         opacity: '透明度',
-        opacityHint: '0% = 不透明，100% = 完全透明（实时生效）',
+        opacityHint: '0% = 不透明，100% = 完全透明（默认 20%，实时生效；双击滑块恢复默认值）',
+        blurOpacity: '失焦透明度',
+        blurOpacityHint: '终端失去焦点时自动切换到的透明度（0% = 不透明，100% = 完全透明，默认 75%；双击滑块恢复默认值）；重新聚焦时回到上面的「透明度」',
         builtinSsh: 'SSH 使用内置终端连接',
         builtinSshHint: '开 = 在悬浮终端执行，关 = 使用 iTerm',
         closeAction: '关闭按钮行为',
@@ -74,7 +76,9 @@
         scrollback: 'Scrollback',
         scrollbackHint: 'History lines to keep, default 10000',
         opacity: 'Transparency',
-        opacityHint: '0% = opaque, 100% = fully transparent (live)',
+        opacityHint: '0% = opaque, 100% = fully transparent (default 20%, live; double-click the slider to restore the default)',
+        blurOpacity: 'Unfocused transparency',
+        blurOpacityHint: 'Transparency applied automatically when the terminal loses focus (0% = opaque, 100% = fully transparent, default 75%; double-click the slider to restore the default); returns to the transparency above when focused again',
         builtinSsh: 'Connect SSH in the built-in terminal',
         builtinSshHint: 'On = built-in terminal, Off = iTerm',
         closeAction: 'Close button action',
@@ -250,43 +254,62 @@
     });
     wrap.appendChild(row(i18n.t('terminalSettings.windowSize'), i18n.t('terminalSettings.windowSizeHint'), sizeControls));
 
-    /* 终端窗口背景透明度（0 = 不透明，100 = 完全透明）；拖动实时写回设置，终端窗口即时生效。 */
-    const TERM_OPACITY_DEFAULT = 5;
-    const normalizeTerminalOpacity = (value) => {
+    /* 终端窗口背景透明度（0 = 不透明，100 = 完全透明）；拖动实时写回设置，终端窗口即时生效。
+       两项：聚焦时的「透明度」与失焦时自动切换到的「失焦透明度」；双击滑块恢复该项的默认值。 */
+    const OPACITY_DEFAULT = (window.ShipsConstants && window.ShipsConstants.TERMINAL_OPACITY_DEFAULT) || 20;
+    const BLUR_OPACITY_DEFAULT =
+      (window.ShipsConstants && window.ShipsConstants.TERMINAL_BLUR_OPACITY_DEFAULT) || 75;
+    const normalizeOpacity = (value, fallback) => {
       const n = Number(value);
-      return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : TERM_OPACITY_DEFAULT;
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fallback;
     };
-    let terminalOpacity = normalizeTerminalOpacity(ctx.settings.terminalOpacity);
-    const terminalOpacityLabel = el(
-      'span',
-      { class: 'w-[42px] shrink-0 text-right font-mono text-[11px] text-fg-muted' },
-      `${terminalOpacity}%`
-    );
-    const terminalOpacitySlider = el('input', {
-      type: 'range',
-      min: '0',
-      max: '100',
-      step: '1',
-      class: 'glass-slider',
-    });
-    terminalOpacitySlider.value = String(terminalOpacity);
-    terminalOpacitySlider.addEventListener('input', () => {
-      terminalOpacity = normalizeTerminalOpacity(terminalOpacitySlider.value);
-      terminalOpacityLabel.textContent = `${terminalOpacity}%`;
-      ctx.patch({ terminalOpacity });
-    });
-    syncers.push((next) => {
-      terminalOpacity = normalizeTerminalOpacity(next.terminalOpacity);
-      terminalOpacitySlider.value = String(terminalOpacity);
-      terminalOpacityLabel.textContent = `${terminalOpacity}%`;
-    });
-    const terminalOpacityControl = el('div', { class: 'flex w-[220px] shrink-0 items-center gap-2' });
-    terminalOpacityControl.append(terminalOpacitySlider, terminalOpacityLabel);
+    // 生成一行「标题 + 提示 + 滑块 + 数值」；值实时写回设置（ctx.patch）。
+    function opacitySliderRow(labelKey, hintKey, settingKey, fallback) {
+      let value = normalizeOpacity(ctx.settings[settingKey], fallback);
+      const valueLabel = el(
+        'span',
+        { class: 'w-[42px] shrink-0 text-right font-mono text-[11px] text-fg-muted' },
+        `${value}%`
+      );
+      const slider = el('input', {
+        type: 'range',
+        min: '0',
+        max: '100',
+        step: '1',
+        class: 'glass-slider',
+      });
+      slider.value = String(value);
+      const commit = (next) => {
+        value = normalizeOpacity(next, fallback);
+        slider.value = String(value);
+        valueLabel.textContent = `${value}%`;
+        ctx.patch({ [settingKey]: value });
+      };
+      slider.addEventListener('input', () => {
+        commit(slider.value);
+      });
+      // 双击滑块：恢复该项的默认值。
+      slider.addEventListener('dblclick', () => {
+        commit(fallback);
+      });
+      syncers.push((next) => {
+        value = normalizeOpacity(next[settingKey], fallback);
+        slider.value = String(value);
+        valueLabel.textContent = `${value}%`;
+      });
+      const control = el('div', { class: 'flex w-[220px] shrink-0 items-center gap-2' });
+      control.append(slider, valueLabel);
+      return row(i18n.t(labelKey), i18n.t(hintKey), control);
+    }
     wrap.appendChild(
-      row(
-        i18n.t('terminalSettings.opacity'),
-        i18n.t('terminalSettings.opacityHint'),
-        terminalOpacityControl
+      opacitySliderRow('terminalSettings.opacity', 'terminalSettings.opacityHint', 'terminalOpacity', OPACITY_DEFAULT)
+    );
+    wrap.appendChild(
+      opacitySliderRow(
+        'terminalSettings.blurOpacity',
+        'terminalSettings.blurOpacityHint',
+        'terminalBlurOpacity',
+        BLUR_OPACITY_DEFAULT
       )
     );
 

@@ -248,7 +248,9 @@ const TERMINAL_WINDOW = Object.assign(
     alwaysOnTop: false,
     scrollback: 10000,
     // 终端窗口背景透明度：0 = 不透明，100 = 完全透明。
-    opacity: 5,
+    opacity: 20,
+    // 终端窗口失焦（失去焦点）时的背景透明度：0 = 不透明，100 = 完全透明。
+    blurOpacity: 75,
     ballSize: 90,
     ballEnabled: true,
     ballDelayMs: 50,
@@ -402,7 +404,10 @@ const DEFAULT_SETTINGS = {
   // 终端查找条记住的上一次关键词（关闭 / 重启后重新打开时仅回填文本，不自动搜索）。
   terminalSearchQuery: '',
   // 终端窗口背景透明度：0 = 不透明，100 = 完全透明（实时生效）。
-  terminalOpacity: Number.isFinite(TERMINAL_WINDOW.opacity) ? TERMINAL_WINDOW.opacity : 5,
+  terminalOpacity: Number.isFinite(TERMINAL_WINDOW.opacity) ? TERMINAL_WINDOW.opacity : 20,
+  // 终端窗口**失焦**时的背景透明度：0 = 不透明，100 = 完全透明。
+  // 失去焦点时自动切到该值，重新获得焦点时回到上面的 terminalOpacity。
+  terminalBlurOpacity: Number.isFinite(TERMINAL_WINDOW.blurOpacity) ? TERMINAL_WINDOW.blurOpacity : 75,
   terminalWindowWidth: TERMINAL_WINDOW.width,
   terminalWindowHeight: TERMINAL_WINDOW.height,
   // 终端窗口不置顶（历史字段保留以兼容旧设置文件；启动时会把遗留的 true 归一为 false）。

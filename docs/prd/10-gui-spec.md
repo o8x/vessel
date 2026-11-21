@@ -48,7 +48,7 @@
 | `--term-header-font-size` | 14px（终端窗口头栏字号 = **终端字号（完全一致，不再夹取）**，`terminal.js` 的 `applyHeaderFontSize()` 改写；头栏内所有尺寸按它线性换算，见 §3.8-2） |
 | `--term-padding-y` | 0px（终端内容上下留白；左右为 0 / 左 2px，见 §3.8-4） |
 | `--term-cursor-line` | `rgba(15,18,25,0.055)`（白天）/ `rgba(255,255,255,0.07)`（暗色）（终端光标行高亮底色，见 §3.8-4 / §8.5） |
-| `--term-bg-alpha` | `95%`（终端窗口 `#term-shell` 底色的 alpha，由 `terminal.js` 按 `settings.terminalOpacity` 换算，默认透明度 5%；CSS 兜底 100%；见 §3.8-2 / §8.5） |
+| `--term-bg-alpha` | `80%`（终端窗口 `#term-shell` 底色的 alpha，由 `terminal.js` 按 `settings.terminalOpacity`（聚焦，默认 20% 透明 → alpha 80%）/ `settings.terminalBlurOpacity`（失焦，默认 75% 透明 → alpha 25%）换算；CSS 兜底 100%；见 §3.8-2 / §8.5） |
 | `--term-gutter-width` | `calc(var(--file-font-size) * 1.4)`（终端左侧行号栏宽，两位数字；见 §8.5） |
 | `--file-font-size` | 12px（文件管理基础字号；终端窗口里由 `terminal.js` 写成**终端字号**（内嵌文件管理 / 文件传输与终端、标题栏始终同号）；**独立文件 / 传输窗口固定 14px**，见 §8.6） |
 | `--fm-unit` | `calc(var(--file-font-size) / 12)`（内嵌面板的等比缩放单位 =「基准像素」在当前字号下的长度；面板内固定 px 尺寸按 `calc(N * var(--fm-unit))` 换算 → 放大字号时整体等比放大。独立文件 / 传输窗口固定 `1px`，尺寸不变，见 §8.6）。**右键菜单 `.fm-menu` 内把它覆盖为 `--menu-unit`（恒为 `1px`）→ 菜单字号固定 13px，不随终端字号缩放** |

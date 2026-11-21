@@ -134,6 +134,8 @@
   const HEADER_HEIGHT_RATIO = C.TERMINAL_HEADER_HEIGHT_RATIO || 1.6;
   const HEADER_HEIGHT_MIN = C.TERMINAL_HEADER_HEIGHT_MIN || 16;
   const FONT_SIZE_EVENT = C.FONT_SIZE_EVENT || 'vessel:font-size';
+  // 聚焦 / 失焦切换底色透明度时的淡入淡出时长（毫秒）。
+  const OPACITY_FADE_MS = C.TERMINAL_OPACITY_FADE_MS || 150;
 
   /* xterm 挂在 #term-fit（无内边距）里，留白由外层 #term-host（上下 5px、左右 0）提供：FitAddon 用
      「父元素的 border box 高度」算行数，父元素带内边距会把可用高度多算一份内边距，
@@ -207,6 +209,13 @@
   let ballMode = false;
   // 「固定」：开启后本窗口失焦不缩成悬浮球（仅当前窗口，**默认开**，不持久）
   let ballPinned = true;
+  // 终端窗口底色透明度（0 = 不透明，100 = 完全透明）：聚焦用聚焦值，失焦自动切到失焦值。
+  let terminalOpacityValue = 0;
+  let terminalBlurOpacityValue = 0;
+  // 实际生效的透明度（%）：淡入淡出期间逐帧变化；淡入淡出的 rAF 句柄。
+  // （必须在这里声明：syncWindowFocus() 在脚本加载阶段就会调用，会读到这两个变量。）
+  let appliedTransparency = 0;
+  let opacityFadeRaf = null;
 
   /* ------------------------------- 分屏状态 -------------------------------
      全局的 term / fit / host / sessionId / sshTarget / lastCols / lastRows / typedLine
@@ -1382,9 +1391,13 @@
     lightZoom.innerHTML = Icons.trafficZoom(6);
   }
 
-  /* 窗口失焦时红绿灯变灰（与系统观感一致） */
-  function syncWindowFocus() {
-    document.documentElement.dataset.windowFocus = document.hasFocus() ? 'on' : 'off';
+  /* 窗口失焦时红绿灯变灰（与系统观感一致）；同时切换底色透明度（聚焦 / 失焦两档）。
+     聚焦状态由 focus / blur 事件显式维护（不依赖事件里 document.hasFocus() 的时序）。 */
+  let windowFocused = document.hasFocus();
+  function syncWindowFocus(focused) {
+    windowFocused = typeof focused === 'boolean' ? focused : document.hasFocus();
+    document.documentElement.dataset.windowFocus = windowFocused ? 'on' : 'off';
+    applyTerminalOpacity(false);
   }
 
   /* ---------------------------- 头部 SSH 下拉 ----------------------------
@@ -3000,10 +3013,10 @@
     });
   }
   window.addEventListener('focus', () => {
-    syncWindowFocus();
+    syncWindowFocus(true);
     if (term && !ballMode) term.focus();
   });
-  window.addEventListener('blur', syncWindowFocus);
+  window.addEventListener('blur', () => syncWindowFocus(false));
   window.addEventListener('resize', onWindowResize);
   syncWindowFocus();
   if (fileWindowBtn) {
@@ -3073,10 +3086,66 @@
   }
   // 终端窗口背景透明度（0 = 不透明，100 = 完全透明）：只改 #term-shell 底色的 alpha，
   // 文字 / 图标保持不透明；xterm 背景透明后由 #term-shell 透出。
-  function applyTerminalOpacity(value) {
+  // 两档：聚焦用 terminalOpacityValue，失焦（窗口失去焦点）自动切到 terminalBlurOpacityValue；
+  // 由 syncWindowFocus 在焦点变化时刷新。
+  function normalizeTransparency(value, fallback) {
     const n = Number(value);
-    const transparency = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
-    document.documentElement.style.setProperty('--term-bg-alpha', `${100 - transparency}%`);
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : fallback;
+  }
+  // 实际生效的透明度（%）：淡入淡出期间逐帧变化。
+  function setTerminalTransparency(value) {
+    appliedTransparency = value;
+    document.documentElement.style.setProperty('--term-bg-alpha', `${100 - value}%`);
+  }
+  function stopOpacityFade() {
+    if (opacityFadeRaf == null) return;
+    cancelAnimationFrame(opacityFadeRaf);
+    opacityFadeRaf = null;
+  }
+  // 聚焦 / 失焦时平滑过渡到目标透明度：逐帧写 CSS 变量（不用 CSS transition，
+  // 以免与悬浮球写在 shellEl.style.transition 上的 transform 过渡互相干扰）。
+  function fadeTerminalOpacity(target) {
+    stopOpacityFade();
+    const start = appliedTransparency;
+    if (Math.abs(start - target) < 0.01) {
+      setTerminalTransparency(target);
+      return;
+    }
+    const t0 = performance.now();
+    const step = (now) => {
+      // 窗口不可见时 rAF 会被节流：直接落到目标值，避免淡出卡在中途。
+      if (document.hidden) {
+        opacityFadeRaf = null;
+        setTerminalTransparency(target);
+        return;
+      }
+      const progress = Math.min(1, (now - t0) / OPACITY_FADE_MS);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out
+      setTerminalTransparency(start + (target - start) * eased);
+      if (progress < 1) {
+        opacityFadeRaf = requestAnimationFrame(step);
+        return;
+      }
+      opacityFadeRaf = null;
+      setTerminalTransparency(target);
+    };
+    opacityFadeRaf = requestAnimationFrame(step);
+  }
+  // immediate = true 时直接落到目标值（设置变更 / 初始化）；否则平滑过渡（焦点变化）。
+  function applyTerminalOpacity(immediate) {
+    const target = windowFocused ? terminalOpacityValue : terminalBlurOpacityValue;
+    if (immediate) {
+      stopOpacityFade();
+      setTerminalTransparency(target);
+      return;
+    }
+    fadeTerminalOpacity(target);
+  }
+  // 写入两档透明度设置值，并按当前焦点状态立即刷新底色。
+  function setTerminalOpacity(opacity, blurOpacity) {
+    terminalOpacityValue = normalizeTransparency(opacity, 0);
+    terminalBlurOpacityValue = normalizeTransparency(blurOpacity, 0);
+    applyTerminalOpacity(true);
   }
   // 以「持续输出」判断程序是否仍在运行：连续 5s 没有输出即视为已停止。
   const BALL_IDLE_STOP_MS = 5000;
@@ -3332,7 +3401,7 @@
     applyBallIcon(BALL_ICON_OVERRIDE || (settings && settings.terminalBallIcon));
     applyTerminalDark((settings && settings.terminalBallDark) !== false);
     applyBallTransparent((settings && settings.terminalBallTransparent) !== false);
-    applyTerminalOpacity(settings && settings.terminalOpacity);
+    setTerminalOpacity(settings && settings.terminalOpacity, settings && settings.terminalBlurOpacity);
     renderHeader();
     // 新窗口默认「固定」（不缩成悬浮球）：同步给主进程，失焦时不缩球。
     if (window.ships.terminal && window.ships.terminal.setBallPin) {
@@ -3362,7 +3431,7 @@
       if (!BALL_ICON_OVERRIDE) applyBallIcon(next && next.terminalBallIcon);
       applyTerminalDark((next && next.terminalBallDark) !== false);
       applyBallTransparent((next && next.terminalBallTransparent) !== false);
-      applyTerminalOpacity(next && next.terminalOpacity);
+      setTerminalOpacity(next && next.terminalOpacity, next && next.terminalBlurOpacity);
       renderHeader();
       refreshSshPicker();
       for (const rec of paneRecords) {

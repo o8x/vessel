@@ -114,6 +114,16 @@ class SettingsService extends EventEmitter {
       this.data.terminalAlwaysOnTop = false;
       changed = true;
     }
+    // 终端窗口聚焦时的底色透明度默认值由 5% 调整为 20%：仍等于旧默认值（= 用户没有
+    // 手动改过）的历史设置迁移为新默认值。只在设置文件里还没有 terminalBlurOpacity
+    // （= 该文件由旧版本写出）时迁移一次，避免用户之后手动设成 5% 又被改回去。
+    if (
+      !Object.prototype.hasOwnProperty.call(stored, 'terminalBlurOpacity') &&
+      Number(this.data.terminalOpacity) === 5
+    ) {
+      this.data.terminalOpacity = DEFAULT_SETTINGS.terminalOpacity;
+      changed = true;
+    }
     // 悬浮模式已整体移除：清理旧版本遗留的 floatMode / pinWindow，避免继续写回设置文件。
     for (const key of ['floatMode', 'pinWindow']) {
       if (Object.prototype.hasOwnProperty.call(this.data, key)) {

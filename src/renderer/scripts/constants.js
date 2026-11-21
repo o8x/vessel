@@ -11,6 +11,12 @@ window.ShipsConstants = {
   TERMINAL_FONT_MIN: 8,
   TERMINAL_FONT_MAX: 64,
   TERMINAL_FONT_DEFAULT: 14,
+  // 终端窗口背景透明度（0 = 不透明，100 = 完全透明）：
+  // 聚焦时用 TERMINAL_OPACITY_DEFAULT，失焦时自动切到 TERMINAL_BLUR_OPACITY_DEFAULT。
+  TERMINAL_OPACITY_DEFAULT: 20,
+  TERMINAL_BLUR_OPACITY_DEFAULT: 75,
+  // 聚焦 / 失焦切换底色透明度时的淡入淡出时长（毫秒）。
+  TERMINAL_OPACITY_FADE_MS: 150,
   // 终端窗口标题栏：字号 = 终端字号（完全一致，不再夹取）；
   // 高度按字号线性映射（字号 × 1.6），仅保留下限，避免小字号时压扁红绿灯。
   TERMINAL_HEADER_HEIGHT_RATIO: 1.6,

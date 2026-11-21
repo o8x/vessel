@@ -18,6 +18,7 @@ const TERMINAL_SETTING_KEYS = [
   'terminalFontSize',
   'terminalScrollback',
   'terminalOpacity',
+  'terminalBlurOpacity',
   'terminalWindowWidth',
   'terminalWindowHeight',
   'terminalAlwaysOnTop',
