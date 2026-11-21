@@ -11,9 +11,11 @@
   i18n.extend({
     zh: {
       tools: { ids: 'ID 与密码' },
-      toolDesc: { ids: '生成 UUID v4 / v7、ULID、随机字符串与随机密码' },
+      toolDesc: { ids: '生成 UUID v4 / v7、ULID、随机字符串与随机密码，并管理 2FA 动态验证码' },
       ids: {
         type: '生成类型',
+        twofaSection: '2FA 验证码',
+        twofaHint: '粘贴 otpauth:// 链接或 Base32 密钥即可添加，验证码每 30 秒自动刷新。',
         typeUuid4: 'UUID v4',
         typeUuid7: 'UUID v7',
         typeUlid: 'ULID',
@@ -54,9 +56,11 @@
     },
     en: {
       tools: { ids: 'IDs & passwords' },
-      toolDesc: { ids: 'Generate UUID v4 / v7, ULID, random strings and passwords' },
+      toolDesc: { ids: 'Generate UUID v4 / v7, ULID, random strings and passwords, plus 2FA codes' },
       ids: {
         type: 'Generator',
+        twofaSection: '2FA codes',
+        twofaHint: 'Paste an otpauth:// link or Base32 secret to add an account; codes refresh every 30 seconds.',
         typeUuid4: 'UUID v4',
         typeUuid7: 'UUID v7',
         typeUlid: 'ULID',
@@ -613,10 +617,24 @@
       }, 1200);
     });
 
-    container.append(typeSection, optionSection, resultSection);
+    /* ---- 2FA 验证码（原独立工具并入本工具） ---- */
+    const twofaSection = section(i18n.t('ids.twofaSection'));
+    twofaSection.appendChild(
+      el('div', { class: 'mb-2 text-[11px] text-fg-muted' }, i18n.t('ids.twofaHint'))
+    );
+    let disposeTwofa = null;
+    if (window.ShipsTwofaTool && typeof window.ShipsTwofaTool.mount === 'function') {
+      disposeTwofa = window.ShipsTwofaTool.mount(twofaSection);
+    }
+
+    container.append(typeSection, optionSection, resultSection, twofaSection);
 
     syncOptions();
     generate();
+
+    return () => {
+      if (typeof disposeTwofa === 'function') disposeTwofa();
+    };
   }
 
   window.ShipsToolRegistry.register({ id: 'ids', icon: 'ids', mount });

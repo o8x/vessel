@@ -34,7 +34,6 @@ const MAX_BODY = 4096;
    顺序与 renderer 的 tool-order.js 一致（渲染层从未上报时也按这个顺序列出）。 */
 const FALLBACK_TOOLS = [
   { id: 'ssh', label: 'SSH' },
-  { id: 'twofa', label: '2FA codes' },
   { id: 'timestamp', label: 'Timestamp' },
   { id: 'subnet', label: 'IP / Subnet' },
   { id: 'encode', label: 'Text & encoding' },
@@ -76,6 +75,13 @@ function findTool(key) {
   if (!wanted) return null;
   const list = tools();
   const lower = wanted.toLowerCase();
+  // 兼容旧命令：2FA 已并入「ID 与密码」。
+  const aliases = { twofa: 'ids', totp: 'ids', '2fa': 'ids' };
+  const alias = aliases[lower];
+  if (alias) {
+    const hit = list.find((tool) => tool.id === alias);
+    if (hit) return hit;
+  }
   return (
     list.find((tool) => tool.id === wanted) ||
     list.find((tool) => String(tool.label).toLowerCase() === lower) ||

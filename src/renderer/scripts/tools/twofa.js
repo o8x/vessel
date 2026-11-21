@@ -334,5 +334,6 @@
     };
   }
 
-  window.ShipsToolRegistry.register({ id: 'twofa', icon: 'shield', mount });
+  // 2FA 已并入「ID 与密码」工具：不再单独注册 TAB，由 ids.js 调用该 mount。
+  window.ShipsTwofaTool = { mount };
 })();

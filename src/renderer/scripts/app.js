@@ -204,6 +204,13 @@
       id: tool.id,
       label: i18n.t(`tools.${tool.id}`) || tool.id,
     }));
+    // 2FA 已并入「ID 与密码」：仍向托盘上报一个入口，用于直接复制验证码。
+    if (!tools.some((tool) => tool.id === 'twofa')) {
+      tools.splice(Math.min(1, tools.length), 0, {
+        id: 'twofa',
+        label: i18n.t('tools.twofa') || '2FA',
+      });
+    }
     window.ships.setTrayTools(tools);
   }
 

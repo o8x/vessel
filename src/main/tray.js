@@ -161,7 +161,8 @@ async function connectHost(host) {
 /* 工具条目：显示主界面并加载对应工具。 */
 function openTool(id) {
   const wm = require('./window-manager');
-  wm.showMainWindowWithTool(id);
+  // 2FA 已并入「ID 与密码」工具：没有账号时打开合并后的工具添加账号。
+  wm.showMainWindowWithTool(id === TOTP_TOOL_ID ? 'ids' : id);
 }
 
 /* 「连接到服务器」条目：列出 ~/.ssh/config 里的主机（未分组的主机平铺）。 */

@@ -11,7 +11,7 @@
 | `ssh-detected.json` | 同上目录 | `{ [alias]: { os, family, label, at } }` | 持久；缓存探测结果 |
 | `ssh-credentials.json` | 同上目录 | `{ entries: { [别名]: { iv, tag, data } } }`（**AES-256-GCM 密文**，全 base64） | 持久；在设置里保存 / 清除 SSH 密码时更新。密钥随机生成、存 `ssh-credentials.key`（0600）；密码明文不落盘，连接时主进程解密后交给内置终端自动输入（见 §3.4） |
 | `ssh-credentials.key` | 同上目录 | base64 的 32 字节随机密钥（0600） | 持久；首次存密码时生成，用于加解密 `ssh-credentials.json` |
-| `totp-accounts.json` | 同上目录 | `{ accounts: [{ id, title, subtitle, period, digits, algorithm, secret: { iv, tag, data } }] }`（**TOTP 密钥为 AES-256-GCM 密文**，全 base64；标题 / 副标题 / 参数为明文）。`algorithm` ∈ `SHA1`（默认）/`SHA256`/`SHA512`，`period` 默认 30（1–600），`digits` ∈ 6（默认）/8 | 持久；2FA 工具添加 / 删除账号时更新。密钥随机生成、存 `totp-accounts.key`（0600）；密钥明文不落盘，验证码由主进程解密后计算（见 §4「2FA 验证码」） |
+| `totp-accounts.json` | 同上目录 | `{ accounts: [{ id, title, subtitle, period, digits, algorithm, secret: { iv, tag, data } }] }`（**TOTP 密钥为 AES-256-GCM 密文**，全 base64；标题 / 副标题 / 参数为明文）。`algorithm` ∈ `SHA1`（默认）/`SHA256`/`SHA512`，`period` 默认 30（1–600），`digits` ∈ 6（默认）/8 | 持久；「ID 与密码」工具内的 2FA 区块添加 / 删除账号时更新。密钥随机生成、存 `totp-accounts.key`（0600）；密钥明文不落盘，验证码由主进程解密后计算（见 §4「2FA 验证码」） |
 | `totp-accounts.key` | 同上目录 | base64 的 32 字节随机密钥（0600） | 持久；首次存 2FA 账号时生成，用于加解密 `totp-accounts.json` |
 | `main-window.json` | 同上目录 | `{ x, y }`（主窗口位置；兼容旧版 `{ bounds: { x, y, width, height } }`，只取 x / y；**不记录桌面 / 屏幕 / 尺寸**） | 持久；拖动后防抖 400ms 与关闭前写入；下次显示应用到当前鼠标所在屏幕并夹回工作区，无记录则居中；「清理数据」可删除 |
 | `terminal-window.json` | 同上目录 | `{ display: { id, scaleFactor, bounds: { x, y, width, height } }, bounds: { x, y, width, height } }`（悬浮终端窗口最近一次的所在屏幕 + 位置 + 尺寸） | 持久；打开 / 拖动 / 缩放 / 关闭时写入（含「实际生效」的几何，恢复时被夹取过也记夹取后的值）；同一块屏幕再次打开即沿用，换屏 / 拔屏 / 无记录则改用默认尺寸居中 |
@@ -170,8 +170,8 @@
 | `nutrient:save-product` | `{ name, energy, protein, fat, carbohydrate, sodium, total }` | `{ ok, products, tdee }` 或 `{ ok: false, error }` | 按商品名保存（忽略大小写去重、同名覆盖）；`name` 为空返回 `name-required` |
 | `nutrient:delete-product` | `{ name }` | `{ ok, products, tdee }` 或 `{ ok: false, error }` | 按商品名删除记录（忽略大小写匹配）；不存在返回 `not-found` |
 | `nutrient:save-tdee` | `{ sex, age, height, weight, activity, bmr, tdee }` | `{ ok, products, tdee }` | 保存 TDEE 输入与计算结果（覆盖最后状态） |
-| `totp:list` | — | `account[]` | 列出 2FA 账号（**不含密钥**）：`{ id, title, subtitle, period, digits, algorithm }`，用于渲染卡片 |
-| `totp:add` | `input`（`otpauth://` 链接或 Base32 密钥） | `{ ok, account? }` 或 `{ ok: false, error }` | 主进程校验并解析（`error` ∈ `empty`/`invalid-secret`/`invalid-url`/`unsupported-type`（非 TOTP）/`duplicate`），加密保存密钥并返回账号（不含密钥）；由 2FA 工具「添加」调用 |
+| `totp:list` | — | `account[]` | 列出 2FA 账号（**不含密钥**）：`{ id, title, subtitle, period, digits, algorithm }`，用于渲染「ID 与密码」工具内的 2FA 卡片 |
+| `totp:add` | `input`（`otpauth://` 链接或 Base32 密钥） | `{ ok, account? }` 或 `{ ok: false, error }` | 主进程校验并解析（`error` ∈ `empty`/`invalid-secret`/`invalid-url`/`unsupported-type`（非 TOTP）/`duplicate`），加密保存密钥并返回账号（不含密钥）；由「ID 与密码」工具内的 2FA 区块「添加」调用 |
 | `totp:remove` | `id` | `{ ok }` | 删除该账号（含其加密密钥）；由卡片二次确认后调用 |
 | `totp:codes` | — | `{ [id]: code }` | 返回全部账号**当前时间片**的 TOTP 验证码（主进程用 node `crypto` 计算，密钥不外传）；渲染层每 250ms 刷新倒计时、时间片切换时调用 |
 | `dialog:open-file` | — | `{ path, name, size }` 或 `null` | 打开系统文件选择对话框 |
@@ -259,7 +259,7 @@
 - **命令行 `vessel`**（安装位置 `<数据目录>/bin/vessel`，用法与终端内联命令 `\v` 同风格；**列表命令不带 `list` 子命令**，直接执行即列出）：
   - 命令**平铺**（不再有 `vessel tool` 子命令）：`vessel <命令> [参数]`；安装时同时创建 **`vess` 别名**（`<数据目录>/bin/vess` → symbol link 指向 `vessel`），两者等价。
   - `ssh`：不带参数列出已保存主机（`用户名@地址` 归一化显示）；`ssh <user@host> [password]` 连接或快速连接；`ssh <别名>` 按别名连接。
-  - `2fa`：列出账号与**当前验证码**（含剩余秒数）；不接受其它参数（不再接受 `twofa`）。
+  - `2fa`：列出账号与**当前验证码**（含剩余秒数）；不接受其它参数。2FA 已并入「ID 与密码」，`vessel twofa` 会打开合并后的工具。
   - `timestamp [value]`：不带参数输出当前时间（本地时间 / UTC / 秒 / 毫秒 / **纳秒**，纳秒用 `process.hrtime` 补出亚毫秒）；带参数时自动识别 `≤11 位秒 / ≤15 位毫秒 / 其余纳秒`，非纯数字按日期字符串解析。
   - `network [ip|cidr|mask]`（别名 `net` / `subnet` / `ip`）：不带参数输出本机 **内网（LAN）与公网（Public）IPv4 / IPv6** 地址；带参数输出网段信息（地址 / 类型 / CIDR / 前缀 / 网络地址 / 广播或最后地址 / 可用范围或地址总数 / 主机数 / 掩码 / 反掩码 / 地址类型）；支持 IPv4 / IPv6 / 纯数字 / `0x` 十六进制。
   - `codec <text>`（别名 `encode` / `text`）：输出文本的 Text / Base64 / Hex / URL 编码 / URL 解码 / ASCII 十进制。
