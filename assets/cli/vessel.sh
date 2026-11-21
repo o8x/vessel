@@ -37,9 +37,7 @@ usage() {
 Usage: vess <command> [args]        (vessel is an alias of vess)
 
 Commands:
-  ssh                          List saved SSH hosts (host, group, alias)
-  ssh <user@host> [password]   Connect, or quick-connect a new host
-  ssh <alias>                  Connect to a saved host by its alias
+  ssh [args]                   Manage saved SSH hosts / connect (see: vess help ssh)
   2fa                          List 2FA accounts with their current codes
   timestamp [value]            Current date plus epoch seconds / millis / nanos;
                                a value is auto-detected (epoch or date string)
@@ -57,9 +55,7 @@ Commands:
   completion                   Print the zsh completion function
   help [command]               Show this help, or detailed help / examples for a command
 
-Reading from stdin:
-  echo -n hello | vess codec
-  cat README.md | vess hash
+Run `vess help <command>` (or `vess <command> --help`) for detailed arguments and examples.
 EOF
 }
 
