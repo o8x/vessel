@@ -47,7 +47,10 @@ Commands:
                                with a value: network and subnet details for it
   codec <text>                 Show the text as Base64 / hex / URL / ASCII
   hash <text|file>             Show every hash of a text or an existing file
-  uuid [type]                  Generate 5 values: uuid4 (default) / uuid7 / ulid
+  id [type] [length]           Generate 5 values: uuid4 (default) / uuid7 / ulid /
+                               random / password; length applies to random / password
+  uuid [type]                  Alias of `id` (e.g. uuid uuid7; uuid = id uuid4)
+  ulid                         Alias of `id ulid`
   edit [file]                  Open a scratch file (or <file>) in the Vessel editor
   json | regex | color | ids   Open that tool in the Vessel app
   clipboard | nutrient | games Open that tool in the Vessel app
@@ -67,8 +70,10 @@ Examples:
   vess network 2001:db8::/32
   vess codec "hello world"
   vess hash ./package.json
-  vess uuid
-  vess uuid uuid7
+  vess id
+  vess id uuid7
+  vess id random 24
+  vess id password
   vess ssh root@192.168.1.10 "my-password"
   vess edit ./README.md
 EOF
@@ -230,9 +235,9 @@ $_input"
   fi
 }
 
-cmd_uuid() {
+cmd_id() {
   with_app
-  api POST /v1/uuid "${1:-}"
+  api POST /v1/id "${1:-}${2:+ $2}"
 }
 
 cmd_edit() {
@@ -284,13 +289,17 @@ case "${1:-}" in
     shift
     cmd_hash "${1:-}"
     ;;
+  id)
+    shift
+    cmd_id "${1:-}" "${2:-}"
+    ;;
   uuid)
     shift
-    cmd_uuid "${1:-}"
+    cmd_id "${1:-uuid4}" "${2:-}"
     ;;
   ulid)
     shift
-    cmd_uuid "${1:-ulid}"
+    cmd_id "ulid" "${1:-}"
     ;;
   edit)
     shift

@@ -14,7 +14,9 @@ if (( $+functions[compdef] )); then
       'network:Show local LAN / public IPs, or subnet details for an address'
       'codec:Show a text as Base64 / hex / URL / ASCII'
       'hash:Show every hash of a text or file'
-      'uuid:Generate 5 UUID v4 / v7 or ULID values'
+      'id:Generate 5 UUID / ULID / random string / password values'
+      'uuid:Alias of `id` (generate UUID values)'
+      'ulid:Alias of `id ulid`'
       'edit:Open a scratch file or a local file in the editor'
       'json:Open the JSON tool in the app'
       'regex:Open the regex tester in the app'
@@ -47,11 +49,14 @@ if (( $+functions[compdef] )); then
         (( CURRENT == 3 )) && _files
         return
         ;;
-      uuid)
+      id|uuid)
         if (( CURRENT == 3 )); then
-          items=(uuid4 uuid7 ulid)
-          _describe -t types 'uuid type' items
+          items=(uuid4 uuid7 ulid random password)
+          _describe -t types 'id type' items
         fi
+        return
+        ;;
+      ulid)
         return
         ;;
       timestamp|network|codec|json|regex|color|ids|clipboard|nutrient|games|2fa|completion|help)

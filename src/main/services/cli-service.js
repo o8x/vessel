@@ -390,12 +390,49 @@ async function hashCommand(body) {
   return { code: 200, body: head + formatTable(['ALGORITHM', 'HASH'], rows) };
 }
 
-/* `vessel uuid [type]`：按类型生成 5 个值（uuid4 / uuid7 / ulid）。
+/* `vessel id [type] [length]`：按类型生成 5 个值（uuid4 / uuid7 / ulid / random / password）。
    - uuid4：标准随机 UUID v4；
    - uuid7：48 位毫秒时间戳 + 版本 7（按时间排序）；
-   - ulid：Crockford base32 的 26 位 ULID（同样按时间排序）。 */
-const UUID_COUNT = 5;
+   - ulid：Crockford base32 的 26 位 ULID（同样按时间排序）；
+   - random：随机字符串（默认 16 位，字符集为大小写字母 + 数字；可选第二参数指定 4–64 位）；
+   - password：随机密码（默认 20 位，包含小写 / 大写 / 数字 / 符号且每类至少一个；可选第二参数指定 8–64 位）。 */
+const ID_COUNT = 5;
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const RANDOM_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const PASSWORD_CLASSES = [
+  'abcdefghijklmnopqrstuvwxyz',
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  '0123456789',
+  '!@#$%^&*()_+-=[]{}|;:,.<>?/~',
+];
+const ID_TYPES = ['uuid4', 'uuid7', 'ulid', 'random', 'password'];
+
+function clampInt(value, min, max, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(num)));
+}
+
+/* 用 crypto.randomInt（CSPRNG）从字符集取字符，均匀分布。 */
+function randomFrom(alphabet, length) {
+  let out = '';
+  for (let i = 0; i < length; i += 1) out += alphabet[crypto.randomInt(alphabet.length)];
+  return out;
+}
+
+function randomPassword(length) {
+  const chars = PASSWORD_CLASSES.map((set) => set[crypto.randomInt(set.length)]);
+  const alphabet = PASSWORD_CLASSES.join('');
+  while (chars.length < length) chars.push(alphabet[crypto.randomInt(alphabet.length)]);
+  // Fisher–Yates 洗牌，保证各类别位置随机。
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = crypto.randomInt(i + 1);
+    const tmp = chars[i];
+    chars[i] = chars[j];
+    chars[j] = tmp;
+  }
+  return chars.join('');
+}
 
 function uuidV7(timestamp) {
   const bytes = crypto.randomBytes(16);
@@ -427,20 +464,39 @@ function ulidValue(timestamp) {
   return encodeBase32(timestamp, 10) + encodeBase32(random, 16);
 }
 
-function uuidCommand(body) {
-  const type = String(body == null ? '' : body).trim().toLowerCase() || 'uuid4';
-  const aliases = { uuid: 'uuid4', v4: 'uuid4', v7: 'uuid7' };
+function idCommand(body) {
+  const parts = String(body == null ? '' : body).trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const type = parts[0] || 'uuid4';
+  const aliases = {
+    uuid: 'uuid4',
+    v4: 'uuid4',
+    v7: 'uuid7',
+    randomstring: 'random',
+    rand: 'random',
+    pass: 'password',
+    pwd: 'password',
+  };
   const kind = aliases[type] || type;
-  if (kind !== 'uuid4' && kind !== 'uuid7' && kind !== 'ulid') {
-    return { code: 400, message: 'Type must be uuid4, uuid7 or ulid' };
+  if (ID_TYPES.indexOf(kind) === -1) {
+    return { code: 400, message: 'Type must be one of: uuid4, uuid7, ulid, random, password' };
   }
+  let length = 0;
+  if (kind === 'random') length = clampInt(parts[1], 4, 64, 16);
+  if (kind === 'password') length = clampInt(parts[1], 8, 64, 20);
   const lines = [];
-  for (let i = 0; i < UUID_COUNT; i += 1) {
+  for (let i = 0; i < ID_COUNT; i += 1) {
     if (kind === 'uuid7') lines.push(uuidV7());
     else if (kind === 'ulid') lines.push(ulidValue(Date.now()));
+    else if (kind === 'random') lines.push(randomFrom(RANDOM_ALPHABET, length));
+    else if (kind === 'password') lines.push(randomPassword(length));
     else lines.push(crypto.randomUUID());
   }
   return { code: 200, body: `${lines.join('\n')}\n` };
+}
+
+/* 兼容旧命令：`/v1/uuid` 等价于 `/v1/id`。 */
+function uuidCommand(body) {
+  return idCommand(body);
 }
 
 /* ------------------------------- 动作 ------------------------------- */
@@ -672,7 +728,13 @@ function handle(req, res) {
     }
     if (req.method === 'POST' && route === '/v1/uuid') {
       return readBody(req, res, (body) => {
-        const result = uuidCommand(body);
+        const result = idCommand(body);
+        send(res, result.code, result.body || `${result.message}\n`);
+      });
+    }
+    if (req.method === 'POST' && route === '/v1/id') {
+      return readBody(req, res, (body) => {
+        const result = idCommand(body);
         send(res, result.code, result.body || `${result.message}\n`);
       });
     }
@@ -833,6 +895,7 @@ module.exports = {
   networkCommand,
   codecCommand,
   hashCommand,
+  idCommand,
   uuidCommand,
   SCRIPT_FILE,
   BIN_DIR,
