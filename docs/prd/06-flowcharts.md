@@ -100,6 +100,24 @@ flowchart TD
   L[终端里切换 / 断开 ssh] --> M[销毁内嵌面板的 sftp:close]
 ```
 
+### 6.5.1 内置编辑器：自动保存与恢复
+
+```mermaid
+flowchart TD
+  A[打开文件 file-editor:info / read] --> B[加载完成 → 查询恢复副本 file-editor:backups]
+  B -->|有副本| C[弹出恢复弹窗：按时间列出 ≤ 5 个版本]
+  C -->|恢复所选| D[file-editor:backup-read → 写入编辑器（仍是未保存状态）]
+  C -->|忽略并删除| E[file-editor:backup-clear]
+  B -->|无副本| F[正常编辑]
+  F --> G{有未保存修改?}
+  G -->|是，每 30s 且内容有变化| H[file-editor:backup → 本地副本（最多 5 份）]
+  G -->|保存 / 另存为 / 重新加载成功| I[file-editor:backup-clear]
+  F --> J[关闭窗口]
+  J --> K{有未保存修改?}
+  K -->|是| L[主进程二次确认：取消 / 不保存退出]
+  K -->|否| M[直接关闭]
+```
+
 ### 6.6 自动更新（electron-updater）
 
 ```mermaid

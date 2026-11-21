@@ -272,10 +272,29 @@ function timestampCommand(body) {
   return { code: 200, body: formatTable(['FIELD', 'VALUE'], rows) };
 }
 
-/* `vessel network <ip|cidr|mask>`：输出网段信息（与 IP 工具一致）。 */
-function networkCommand(body) {
+/* 无参数的 `vessel network`：本机内网（局域网）与公网出口 IP（v4 / v6）。 */
+async function localAddressOutput() {
+  const localAddress = require('./local-address-service');
+  const [lan4, lan6, public4, public6] = await Promise.all([
+    Promise.resolve(localAddress.lanAddress('lan4')),
+    Promise.resolve(localAddress.lanAddress('lan6')),
+    localAddress.publicAddress('public4').catch(() => null),
+    localAddress.publicAddress('public6').catch(() => null),
+  ]);
+  const rows = [
+    ['LAN IPv4', lan4 || '-'],
+    ['LAN IPv6', lan6 || '-'],
+    ['Public IPv4', public4 || '-'],
+    ['Public IPv6', public6 || '-'],
+  ];
+  return { code: 200, body: formatTable(['KIND', 'ADDRESS'], rows) };
+}
+
+/* `vessel network [ip|cidr|mask]`：无参数时输出本机内网 / 公网地址；
+   带参数时输出网段信息（与 IP 工具一致）。 */
+async function networkCommand(body) {
   const raw = String(body == null ? '' : body).trim();
-  if (!raw) return { code: 400, message: 'IP address or network required' };
+  if (!raw) return localAddressOutput();
   const netService = require('./net-service');
   const result = netService.describe(raw);
   if (!result.ok) {
@@ -371,14 +390,56 @@ async function hashCommand(body) {
   return { code: 200, body: head + formatTable(['ALGORITHM', 'HASH'], rows) };
 }
 
-/* `vessel uuid [count]`：生成 UUID v4（默认 5 个，最多 100）。 */
+/* `vessel uuid [type]`：按类型生成 5 个值（uuid4 / uuid7 / ulid）。
+   - uuid4：标准随机 UUID v4；
+   - uuid7：48 位毫秒时间戳 + 版本 7（按时间排序）；
+   - ulid：Crockford base32 的 26 位 ULID（同样按时间排序）。 */
+const UUID_COUNT = 5;
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+function uuidV7(timestamp) {
+  const bytes = crypto.randomBytes(16);
+  const ts = Number.isFinite(timestamp) ? Math.floor(timestamp) : Date.now();
+  bytes[0] = Math.floor(ts / 2 ** 40) & 0xff;
+  bytes[1] = Math.floor(ts / 2 ** 32) & 0xff;
+  bytes[2] = Math.floor(ts / 2 ** 24) & 0xff;
+  bytes[3] = Math.floor(ts / 2 ** 16) & 0xff;
+  bytes[4] = Math.floor(ts / 2 ** 8) & 0xff;
+  bytes[5] = ts & 0xff;
+  bytes[6] = (bytes[6] & 0x0f) | 0x70;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function encodeBase32(value, length) {
+  let rest = BigInt(value);
+  let out = '';
+  for (let i = 0; i < length; i += 1) {
+    out = CROCKFORD[Number(rest & 31n)] + out;
+    rest >>= 5n;
+  }
+  return out;
+}
+
+function ulidValue(timestamp) {
+  const random = BigInt(`0x${crypto.randomBytes(10).toString('hex')}`) & ((1n << 80n) - 1n);
+  return encodeBase32(timestamp, 10) + encodeBase32(random, 16);
+}
+
 function uuidCommand(body) {
-  const raw = String(body == null ? '' : body).trim();
-  const count = raw ? Math.floor(Number(raw)) : 5;
-  if (!Number.isFinite(count) || count < 1) return { code: 400, message: 'Count must be a positive number' };
-  const total = Math.min(Math.max(count, 1), 100);
+  const type = String(body == null ? '' : body).trim().toLowerCase() || 'uuid4';
+  const aliases = { uuid: 'uuid4', v4: 'uuid4', v7: 'uuid7' };
+  const kind = aliases[type] || type;
+  if (kind !== 'uuid4' && kind !== 'uuid7' && kind !== 'ulid') {
+    return { code: 400, message: 'Type must be uuid4, uuid7 or ulid' };
+  }
   const lines = [];
-  for (let i = 0; i < total; i += 1) lines.push(crypto.randomUUID());
+  for (let i = 0; i < UUID_COUNT; i += 1) {
+    if (kind === 'uuid7') lines.push(uuidV7());
+    else if (kind === 'ulid') lines.push(ulidValue(Date.now()));
+    else lines.push(crypto.randomUUID());
+  }
   return { code: 200, body: `${lines.join('\n')}\n` };
 }
 
@@ -583,10 +644,17 @@ function handle(req, res) {
         send(res, result.code, result.body || `${result.message}\n`);
       });
     }
+    if (req.method === 'GET' && route === '/v1/network') {
+      networkCommand('')
+        .then((result) => send(res, result.code, result.body || `${result.message}\n`))
+        .catch((err) => send(res, 500, `${err.message}\n`));
+      return;
+    }
     if (req.method === 'POST' && route === '/v1/network') {
       return readBody(req, res, (body) => {
-        const result = networkCommand(body);
-        send(res, result.code, result.body || `${result.message}\n`);
+        networkCommand(body)
+          .then((result) => send(res, result.code, result.body || `${result.message}\n`))
+          .catch((err) => send(res, 500, `${err.message}\n`));
       });
     }
     if (req.method === 'POST' && route === '/v1/codec') {

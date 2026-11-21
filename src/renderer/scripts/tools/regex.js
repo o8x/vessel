@@ -553,8 +553,8 @@
     const patternRow = el('div', { class: 'flex flex-wrap items-end gap-2' });
     const patternField = inputField(i18n.t('regex.sectionPattern'), patternInput);
     const flagsField = inputField(i18n.t('regex.sectionFlags'), flagsInput);
-    patternField.classList.add('min-w-[220px] flex-1');
-    flagsField.classList.add('w-[92px] shrink-0');
+    patternField.classList.add('min-w-[220px]', 'flex-1');
+    flagsField.classList.add('w-[92px]', 'shrink-0');
     patternField.appendChild(patternError);
     flagsField.appendChild(flagsError);
     patternRow.append(patternField, flagsField, clearBtn);
@@ -617,7 +617,7 @@
 
     const replaceRow = el('div', { class: 'flex flex-wrap items-end gap-2' });
     const replaceField = inputField(i18n.t('regex.sectionReplace'), replaceInput);
-    replaceField.classList.add('min-w-[220px] flex-1');
+    replaceField.classList.add('min-w-[220px]', 'flex-1');
     replaceRow.append(replaceField, copyBtn);
     const replaceSection = section(i18n.t('regex.sectionReplace'));
     replaceSection.append(

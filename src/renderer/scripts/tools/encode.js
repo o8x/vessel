@@ -763,7 +763,9 @@
     const dmSection = section(i18n.t('encode.dataMatrix'));
     dmSection.append(dmWrap, dmNote);
 
-    container.append(body, textToolsSection, qrSection, dmSection);
+    container.append(body, qrSection, dmSection);
+    // 文本处理按钮紧跟在第一个输入框（「字符串」）下方，效果直接作用于该框。
+    body.insertBefore(textToolsSection, base64Field.wrapper);
     renderQr('');
     renderDm('');
 

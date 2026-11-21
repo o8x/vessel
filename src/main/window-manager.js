@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { BrowserWindow, screen, nativeTheme, app } = require('electron');
+const { BrowserWindow, screen, nativeTheme, app, dialog } = require('electron');
 const {
   MAIN_WINDOW,
   SETTINGS_WINDOW,
@@ -1861,6 +1861,9 @@ function openFileEditorWindow(ownerSender, payload) {
     local: isLocal,
     target: String((payload && payload.target) || ''),
   };
+  win.__editorDirty = false;
+  win.__editorAllowClose = false;
+  win.__editorClosePrompt = false;
   const windowId = win.id;
   fileEditorWindows.add(win);
   logger.file(`[file-editor] window created (${windowId}) ${filePath}`);
@@ -1887,6 +1890,33 @@ function openFileEditorWindow(ownerSender, payload) {
     logger.file(`[file-editor] window destroyed (${windowId})`);
     fileEditorWindows.delete(win);
   });
+  // 有未保存修改时关闭窗口先弹二次确认（恢复副本已定时保存在本地）。
+  win.on('close', (event) => {
+    if (win.__editorAllowClose || !win.__editorDirty) return;
+    event.preventDefault();
+    if (win.__editorClosePrompt) return;
+    win.__editorClosePrompt = true;
+    dialog
+      .showMessageBox(win, {
+        type: 'warning',
+        buttons: ['Cancel', 'Quit without saving'],
+        defaultId: 0,
+        cancelId: 0,
+        message: 'This file has unsaved changes.',
+        detail:
+          'The editor keeps local recovery copies, so you can restore them the next time you open this file.',
+      })
+      .then((result) => {
+        win.__editorClosePrompt = false;
+        if (result.response === 1 && !win.isDestroyed()) {
+          win.__editorAllowClose = true;
+          win.close();
+        }
+      })
+      .catch(() => {
+        win.__editorClosePrompt = false;
+      });
+  });
   // 文件管理器窗口被销毁时（关闭 / 分离 / 断开连接），自动关闭其打开的编辑器。
   const ownerId = hasOwner ? ownerSender.id : -1;
   if (hasOwner && !fileEditorOwnerCleanup.has(ownerId)) {
@@ -1912,6 +1942,17 @@ function getFileEditorInfoForWebContents(id) {
   return null;
 }
 
+/* 记录编辑器是否有未保存修改（关闭窗口时用于二次确认）。 */
+function setFileEditorDirty(id, dirty) {
+  for (const win of fileEditorWindows) {
+    if (!win.isDestroyed() && win.webContents.id === id) {
+      win.__editorDirty = Boolean(dirty);
+      return true;
+    }
+  }
+  return false;
+}
+
 function updateFileEditorPath(id, nextPath) {
   const info = getFileEditorInfoForWebContents(id);
   if (!info) return null;
@@ -1933,7 +1974,10 @@ function updateFileEditorTarget(id, next) {
   info.path = String(payload.path || '');
   info.name = String(payload.name || '') || (info.local ? path.basename(info.path) : path.posix.basename(info.path));
   for (const win of fileEditorWindows) {
-    if (!win.isDestroyed() && win.webContents.id === id) win.setTitle(fileEditorTitle(info));
+    if (!win.isDestroyed() && win.webContents.id === id) {
+      win.__editorDirty = false;
+      win.setTitle(fileEditorTitle(info));
+    }
   }
   return info;
 }
@@ -2516,6 +2560,7 @@ module.exports = {
   openFileEditorWindow,
   openStandaloneFileEditor,
   getFileEditorInfoForWebContents,
+  setFileEditorDirty,
   updateFileEditorPath,
   updateFileEditorTarget,
   closeFileEditorsForOwner,

@@ -82,6 +82,17 @@
         fontBigger: '放大字号',
         fontSmaller: '缩小字号',
         fontReset: '重置字号',
+        copyImage: '复制为图片',
+        copiedImage: '已复制为图片',
+        copyImageFailed: '复制图片失败：{error}',
+        copyImageEmpty: '没有可复制的内容',
+        recoveryTitle: '发现未保存的恢复副本',
+        recoveryHint: '上次退出时该文件有未保存的修改。可按时间选择一个版本恢复到编辑器中（本地最多保留最近 5 份）。',
+        recoveryRestore: '恢复所选版本',
+        recoveryDiscard: '忽略并删除',
+        recoveryItem: '{time} · {size}',
+        recoveryRestored: '已恢复 {time} 的副本，保存前仍是未保存状态',
+        recoveryCleared: '已删除恢复副本',
         menuSeparator: '—',
       },
     },
@@ -158,6 +169,17 @@
         fontBigger: 'Increase font size',
         fontSmaller: 'Decrease font size',
         fontReset: 'Reset font size',
+        copyImage: 'Copy as image',
+        copiedImage: 'Copied as image',
+        copyImageFailed: 'Copy image failed: {error}',
+        copyImageEmpty: 'Nothing to copy',
+        recoveryTitle: 'Unsaved recovery found',
+        recoveryHint: 'This file had unsaved changes when the editor last closed. Pick a version by time to restore it (the last 5 local copies are kept).',
+        recoveryRestore: 'Restore selected',
+        recoveryDiscard: 'Ignore and delete',
+        recoveryItem: '{time} · {size}',
+        recoveryRestored: 'Restored the {time} copy; it is still unsaved',
+        recoveryCleared: 'Recovery copies deleted',
         menuSeparator: '—',
       },
     },
@@ -252,6 +274,15 @@
     preview: document.getElementById('ed-preview'),
     lines: document.getElementById('ed-lines'),
     more: document.getElementById('ed-more'),
+    fontSmaller: document.getElementById('ed-font-smaller'),
+    fontBigger: document.getElementById('ed-font-bigger'),
+    copyImage: document.getElementById('ed-copy-image'),
+    recovery: document.getElementById('ed-recovery'),
+    recoveryTitle: document.getElementById('ed-recovery-title'),
+    recoveryHint: document.getElementById('ed-recovery-hint'),
+    recoveryList: document.getElementById('ed-recovery-list'),
+    recoveryDiscard: document.getElementById('ed-recovery-discard'),
+    recoveryRestore: document.getElementById('ed-recovery-restore'),
     menu: document.getElementById('ed-menu'),
     split: document.getElementById('editor-split'),
     previewPane: document.getElementById('ed-preview-pane'),
@@ -309,6 +340,11 @@
     cm: null,
     sizeBytes: 0,
     sizeTimer: null,
+    // 本地恢复副本：有未保存修改时定时保存，关闭 / 重新打开时可按时间恢复。
+    backupTimer: null,
+    lastBackupContent: '',
+    dirtySent: false,
+    recovery: { items: [], selected: -1 },
     // 查找 / 替换（Command + F）
     find: {
       visible: false,
@@ -398,8 +434,31 @@
     const value = String(src == null ? '' : src).trim();
     if (/^https?:/i.test(value)) return value;
     if (/^data:image\//i.test(value)) return value;
-    if (/^[./]/.test(value)) return value;
-    return '';
+    // 相对路径（如 ![](images/a.png)）一并保留，渲染后按当前文件目录解析。
+    if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return '';
+    return value;
+  }
+
+  /* 把预览里的相对图片路径解析成可加载的 file:// 地址（仅本地文件可解析）。
+     远端文件没有可访问的本地目录，相对图片保持原样（可能显示为破图）。 */
+  function resolvePreviewImage(img) {
+    const raw = String(img.getAttribute('src') || '');
+    if (!raw) return;
+    if (/^(https?:|data:|file:)/i.test(raw)) return;
+    if (!state.local || !state.path) return;
+    const slash = state.path.lastIndexOf('/');
+    if (slash < 0) return;
+    const dir = state.path.slice(0, slash + 1);
+    try {
+      img.src = new URL(raw, `file://${encodeURI(dir)}`).href;
+    } catch (err) {
+      /* 非法路径保持原样 */
+    }
+  }
+
+  function fixPreviewImages(pane) {
+    if (!pane) return;
+    for (const img of pane.querySelectorAll('img')) resolvePreviewImage(img);
   }
 
   let markdownReady = false;
@@ -457,6 +516,7 @@
       return;
     }
     pane.innerHTML = markdownHtml(source);
+    fixPreviewImages(pane);
   }
 
   function schedulePreview() {
@@ -478,6 +538,28 @@
     requestAnimationFrame(() => {
       if (state.cm) state.cm.refresh();
     });
+  }
+
+  /* 把当前 Markdown 预览渲染成带四周留白的 PNG 并复制到剪贴板。
+     由主进程创建离屏窗口渲染（可完整截取长文档，不受当前可视区域限制）。 */
+  async function copyPreviewImage() {
+    if (!state.previewOn || !dom.previewPane || !state.cm) {
+      setStatus(i18n.t('editor.copyImageEmpty'));
+      return;
+    }
+    if (!state.cm.getValue('\n').trim()) {
+      setStatus(i18n.t('editor.copyImageEmpty'));
+      return;
+    }
+    const html = dom.previewPane.innerHTML;
+    let result = null;
+    try {
+      result = await window.ships.fileEditor.copyImage(html);
+    } catch (err) {
+      result = { ok: false, error: err.message };
+    }
+    if (result && result.ok) setStatus(i18n.t('editor.copiedImage'), 'is-success');
+    else setStatus(i18n.t('editor.copyImageFailed', { error: (result && result.error) || 'error' }), 'is-error');
   }
 
   /* ------------------------------ 编辑器命令 ------------------------------ */
@@ -638,6 +720,7 @@
     if (dom.host) dom.host.innerHTML = '';
     if (dom.previewPane) dom.previewPane.hidden = true;
     if (dom.split) dom.split.classList.remove('preview-on');
+    closeRecovery();
     await loadFile();
     applyLocale();
   }
@@ -697,6 +780,124 @@
     state.dirty = state.cm.getValue('\n') !== state.original;
     renderStatus();
     scheduleSize();
+    notifyDirty();
+  }
+
+  /* 把未保存状态同步给主进程：关闭窗口时据此弹出二次确认。 */
+  function notifyDirty() {
+    if (state.dirty === state.dirtySent) return;
+    state.dirtySent = state.dirty;
+    try {
+      window.ships.fileEditor.setDirty(state.dirty).catch(() => {});
+    } catch (err) {
+      /* 忽略：主进程未注册时不影响编辑 */
+    }
+  }
+
+  /* ------------------------------ 本地恢复副本 ------------------------------
+     有未保存修改时，每隔 EDITOR_BACKUP_INTERVAL_MS 写一份本地副本（主进程只保留
+     最近 5 份）。正常保存后清空；意外关闭后重新打开该文件时提示按时间恢复。 */
+  function backupIfNeeded() {
+    if (!state.cm || state.readOnly || !state.dirty) return;
+    const content = state.cm.getValue('\n');
+    if (!content || content === state.lastBackupContent) return;
+    state.lastBackupContent = content;
+    window.ships.fileEditor.backup(content).catch(() => {
+      state.lastBackupContent = '';
+    });
+  }
+
+  function startBackupTimer() {
+    if (state.backupTimer) clearInterval(state.backupTimer);
+    const interval = (window.ShipsConstants && window.ShipsConstants.EDITOR_BACKUP_INTERVAL_MS) || 30000;
+    state.backupTimer = setInterval(backupIfNeeded, interval);
+  }
+
+  function clearBackups() {
+    state.lastBackupContent = '';
+    try {
+      window.ships.fileEditor.clearBackups().catch(() => {});
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function formatBackupTime(time) {
+    try {
+      return new Date(time).toLocaleString();
+    } catch (err) {
+      return String(time);
+    }
+  }
+
+  function renderRecoveryList() {
+    if (!dom.recoveryList) return;
+    dom.recoveryList.innerHTML = '';
+    state.recovery.items.forEach((item, index) => {
+      const button = el('button', {
+        class: `editor-recovery-item${index === state.recovery.selected ? ' is-active' : ''}`,
+        type: 'button',
+      });
+      button.appendChild(el('span', { class: 'editor-recovery-time' }, formatBackupTime(item.time)));
+      button.appendChild(el('span', { class: 'editor-recovery-size' }, formatBytes(item.size)));
+      button.addEventListener('click', () => {
+        state.recovery.selected = index;
+        renderRecoveryList();
+      });
+      dom.recoveryList.appendChild(button);
+    });
+  }
+
+  function closeRecovery() {
+    if (dom.recovery) dom.recovery.hidden = true;
+    state.recovery.items = [];
+    state.recovery.selected = -1;
+  }
+
+  /* 打开文件后检查是否有上次意外退出留下的恢复副本。 */
+  async function checkRecovery() {
+    if (!window.ships.fileEditor || typeof window.ships.fileEditor.backups !== 'function') return;
+    let result = null;
+    try {
+      result = await window.ships.fileEditor.backups();
+    } catch (err) {
+      return;
+    }
+    if (!result || !result.ok || !result.items || !result.items.length) return;
+    state.recovery.items = result.items;
+    state.recovery.selected = 0;
+    if (!dom.recovery) return;
+    dom.recoveryTitle.textContent = i18n.t('editor.recoveryTitle');
+    dom.recoveryHint.textContent = i18n.t('editor.recoveryHint');
+    dom.recoveryDiscard.textContent = i18n.t('editor.recoveryDiscard');
+    dom.recoveryRestore.textContent = i18n.t('editor.recoveryRestore');
+    renderRecoveryList();
+    dom.recovery.hidden = false;
+  }
+
+  async function restoreSelectedBackup() {
+    const item = state.recovery.items[state.recovery.selected];
+    if (!item || !state.cm) return;
+    let result = null;
+    try {
+      result = await window.ships.fileEditor.readBackup(item.id);
+    } catch (err) {
+      result = { ok: false, error: err.message };
+    }
+    if (!result || !result.ok) {
+      setStatus(i18n.t('editor.loadFailed', { error: (result && result.error) || 'error' }), 'is-error');
+      return;
+    }
+    state.cm.setValue(normalize(result.content));
+    syncDirty();
+    closeRecovery();
+    setStatus(i18n.t('editor.recoveryRestored', { time: formatBackupTime(item.time) }), 'is-success');
+  }
+
+  function discardRecovery() {
+    clearBackups();
+    closeRecovery();
+    setStatus(i18n.t('editor.recoveryCleared'), 'is-success');
   }
 
   function createEditor(mode, value) {
@@ -980,11 +1181,15 @@
       state.modeLabel = i18n.t('editor.plainText');
     }
     state.dirty = false;
+    state.dirtySent = true;
+    state.lastBackupContent = '';
     createEditor(state.mode, state.original);
+    notifyDirty();
     applyReadOnlyState();
     // Markdown 文件默认打开预览（要求：打开 md 即可预览）；其他文件关闭预览。
     setPreview(isMarkdownFile());
     setStatus(state.binary ? i18n.t('editor.binaryReadOnly') : '');
+    void checkRecovery();
   }
 
   async function save() {
@@ -1006,6 +1211,9 @@
       state.original = state.cm.getValue('\n');
       state.sizeBytes = Number(result.bytes) || docByteLength();
       state.dirty = false;
+      state.dirtySent = true;
+      notifyDirty();
+      clearBackups();
       setStatus('');
       renderStatus();
       return true;
@@ -1096,6 +1304,9 @@
       state.original = state.cm.getValue('\n');
       state.sizeBytes = Number(result.bytes) || docByteLength();
       state.dirty = false;
+      state.dirtySent = true;
+      notifyDirty();
+      clearBackups();
       const info = await window.ships.fileEditor.info();
       if (info && info.ok) state.reference = info.reference || state.path;
       // 另存为 .md（或其他 Markdown 扩展名）后自动打开预览。
@@ -1162,6 +1373,9 @@
     state.binary = Boolean(read.binary);
     state.readOnly = state.binary;
     state.dirty = false;
+    state.dirtySent = true;
+    notifyDirty();
+    clearBackups();
     state.cm.setValue(state.original);
     applyReadOnlyState();
     setStatus(state.binary ? i18n.t('editor.binaryReadOnly') : '');
@@ -1194,6 +1408,10 @@
       dom.preview.setAttribute('aria-label', i18n.t(key));
       dom.preview.style.color = state.previewOn ? 'var(--color-accent)' : '';
       dom.preview.disabled = !isMarkdownFile();
+    }
+    if (dom.copyImage) {
+      dom.copyImage.disabled = !state.previewOn;
+      dom.copyImage.style.opacity = state.previewOn ? '' : '0.4';
     }
   }
 
@@ -1228,10 +1446,6 @@
       { label: i18n.t('editor.indent2'), run: () => setTabSize(2) },
       { label: i18n.t('editor.indent4'), run: () => setTabSize(4) },
       { label: i18n.t('editor.linesOff'), run: () => setLineNumbers(!state.lineNumbers) },
-      { separator: true },
-      { label: i18n.t('editor.fontBigger'), hint: '⌘+', run: () => zoomFont(1) },
-      { label: i18n.t('editor.fontSmaller'), hint: '⌘−', run: () => zoomFont(-1) },
-      { label: i18n.t('editor.fontReset'), hint: '⌘0', run: resetFontSize },
     ];
   }
 
@@ -1274,6 +1488,15 @@
     setIconButton(dom.redo, Icons.redo, 'editor.redo');
     setIconButton(dom.preview, Icons.eye, 'editor.preview');
     setIconButton(dom.lines, Icons.hash, 'editor.linesOff');
+    setIconButton(dom.copyImage, Icons.image, 'editor.copyImage');
+    if (dom.fontSmaller) {
+      dom.fontSmaller.setAttribute('data-tip', i18n.t('editor.fontSmaller'));
+      dom.fontSmaller.setAttribute('aria-label', i18n.t('editor.fontSmaller'));
+    }
+    if (dom.fontBigger) {
+      dom.fontBigger.setAttribute('data-tip', i18n.t('editor.fontBigger'));
+      dom.fontBigger.setAttribute('aria-label', i18n.t('editor.fontBigger'));
+    }
     setIconButton(dom.more, Icons.chevronDown, 'editor.more');
     updateToggleTips();
     if (dom.findLabel) dom.findLabel.textContent = i18n.t('editor.findLabel');
@@ -1304,6 +1527,9 @@
   dom.undo.addEventListener('click', () => state.cm && state.cm.undo());
   dom.redo.addEventListener('click', () => state.cm && state.cm.redo());
   if (dom.more) dom.more.addEventListener('click', () => (dom.menu && dom.menu.hidden ? openMenu() : closeMenu()));
+  if (dom.fontSmaller) dom.fontSmaller.addEventListener('click', () => zoomFont(-1));
+  if (dom.fontBigger) dom.fontBigger.addEventListener('click', () => zoomFont(1));
+  if (dom.copyImage) dom.copyImage.addEventListener('click', () => copyPreviewImage());
   if (dom.preview) {
     dom.preview.addEventListener('click', () => setPreview(!state.previewOn));
   }
@@ -1395,6 +1621,8 @@
   dom.modal.addEventListener('mousedown', (event) => {
     if (event.target === dom.modal) closeModal();
   });
+  if (dom.recoveryRestore) dom.recoveryRestore.addEventListener('click', () => restoreSelectedBackup());
+  if (dom.recoveryDiscard) dom.recoveryDiscard.addEventListener('click', () => discardRecovery());
 
   window.addEventListener('keydown', (event) => {
     const mod = event.metaKey || event.ctrlKey;
@@ -1464,12 +1692,7 @@
     }
   });
 
-  window.addEventListener('beforeunload', (event) => {
-    if (!state.dirty) return;
-    event.preventDefault();
-    event.returnValue = '';
-  });
-
+  // 退出确认由主进程负责（见 window-manager 的 close 处理），这里只维护恢复副本定时器。
   async function boot() {
     let settings = null;
     try {
@@ -1482,6 +1705,7 @@
     applyLocale();
     await loadFile();
     applyLocale();
+    startBackupTimer();
     window.ships.onSettingsChanged((next) => {
       i18n.setLocale((next && next.locale) || 'zh');
       window.ShipsTheme.set({ theme: 'light', accent: (next && next.accent) || '#2e6bfc' });

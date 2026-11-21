@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: https: http:"
     />
     <title>Vessel Editor</title>
     <link rel="stylesheet" href="../../node_modules/codemirror/lib/codemirror.css" />
@@ -30,6 +30,9 @@
         <button id="ed-undo" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-redo" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-reload" class="icon-btn editor-toolbar-btn" type="button"></button>
+        <button id="ed-font-smaller" class="icon-btn editor-toolbar-btn" type="button">A−</button>
+        <button id="ed-font-bigger" class="icon-btn editor-toolbar-btn" type="button">A+</button>
+        <button id="ed-copy-image" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-more" class="icon-btn editor-toolbar-btn" type="button"></button>
       </header>
       <!-- 更多命令（跳转行 / 行操作 / 缩进 / 字号）：点工具栏最右侧「…」弹出 -->
@@ -77,6 +80,19 @@
         <div class="editor-modal-actions">
           <button id="ed-modal-cancel" class="editor-btn" type="button"></button>
           <button id="ed-modal-confirm" class="editor-btn primary" type="button"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 意外退出后的恢复提示：按时间列出本地自动保存的副本（最多 5 份） -->
+    <div id="ed-recovery" class="editor-modal" hidden>
+      <div class="editor-modal-card editor-recovery-card">
+        <div id="ed-recovery-title" class="editor-modal-title"></div>
+        <div id="ed-recovery-hint" class="editor-recovery-hint"></div>
+        <div id="ed-recovery-list" class="editor-recovery-list"></div>
+        <div class="editor-modal-actions">
+          <button id="ed-recovery-discard" class="editor-btn" type="button"></button>
+          <button id="ed-recovery-restore" class="editor-btn primary" type="button"></button>
         </div>
       </div>
     </div>

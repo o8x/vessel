@@ -25,6 +25,7 @@
 | `file-window-layout.json` | 同上目录 | 同 `file-layout.json` 结构（**独立文件窗口**自己的布局记录，与内嵌面板**分开保存**） | 持久；独立窗口拖动分隔线 / 列宽时写入 |
 | `nutrient-records.json` | 同上目录 | `{ products: { [name]: { name, energy, protein, fat, carbohydrate, sodium, total, savedAt } }, tdee: { sex, age, height, weight, activity, bmr, tdee, savedAt } 或 null }`（商品名去重、同名覆盖；TDEE 保存输入与计算结果） | 持久；营养成分工具保存商品 / TDEE 变化时写入 |
 | `cd-history.json` | 同上目录 | `{ [“用户名@主机”]: string[] }`（文件面板每个 ssh 目标最近 cd 到的远端目录，去重、越新越靠前、最多 `CD_HISTORY_MAX` = 10 条） | 持久；仅记录通过 cd 到达的目录（终端跟随 / `cd 到此目录` 按钮 / 点历史条目），手动浏览不记录；「清理数据」可删除 |
+| `editor-backups/*.json` | `<数据目录>/editor-backups/` | 内置编辑器的本地恢复副本：每个文件（本地路径，或「远端目标 + 路径」的哈希）一个 JSON 数组，元素为 `{ id, time, size, name, content }`，按时间倒序、最多保留 **5** 份（`file-editor:backup` 写入，正常保存后清空） | 持久；仅在有未保存修改时每 30s 写入一份（内容未变化则跳过）；文件权限 0600；用于意外退出后按时间恢复 |
 | 剪贴板历史 | 内存（不落盘） | 最近 5 条 `{ id, type, text?, thumb?, width?, height?, truncated?, at }` | 随进程退出丢失 |
 | `~/.ssh/config` | 用户主目录 | 标准 OpenSSH 配置；**分组用一行注释 `# group: <名称>` 标记**（紧随其后的 Host 属于该分组，直到下一个标记；未标记的属「未分组」；ssh 忽略注释，不影响连接） | 由设置内 SSH 管理读写；未加密（非机密） |
 | `bin/vessel` / `bin/_vessel` | `<数据目录>/bin/` | CLI 主脚本（`#!/bin/sh`，0755）与 zsh 补全（`_vessel`，0644）；由设置 → 数据 →「安装 CLI」从应用内 `assets/cli/vessel.sh` / `assets/cli/_vessel` 复制而来（见 §5.3） | 持久；仅用户主动安装时写入，重新安装覆盖 |
@@ -43,7 +44,7 @@
 | --- | --- | --- | --- |
 | `app:info` | — | `{ version, platform, arch, systemLocale, dataDir, dataFiles, terminalScrollback }` | 版本取 `package.json`；`terminalScrollback` 取 `vessel.terminalWindow.scrollback` |
 | `app:list-fonts` | — | `{ ok, fonts?, error? }`（`fonts: [{ family, mono }]`） | 通过 AppKit `NSFontManager`（`osascript -l JavaScript`）读取系统已安装字体家族，并标记是否为等宽字体；**等宽字体排在前面**，同组按名称排序，结果缓存。供字体选择子窗口使用。仅 macOS |
-| `app:local-address` | `{ kind }`（`'public4'` / `'public6'` / `'lan4'` / `'lan6'`） | `{ ok, address }` 或 `{ ok: false, error }` | 取本机地址供 IP / 网段工具的下拉使用：`lan4` / `lan6` 从 `os.networkInterfaces()` 取对应地址族的非内部地址（v4 优先 RFC 1918 私有网段；v6 去掉作用域后缀并优先非链路本地）；`public4` / `public6` 按地址族（`family: 4` / `6`）请求 `ipv4.icanhazip.com` / `ipv6.icanhazip.com`（失败退回 `ifconfig.me/ip`）获取出口 IP（遵循系统代理，5s 超时，任一成功即返回）；均失败返回 `{ ok: false }` |
+| `app:local-address` | `{ kind }`（`'public4'` / `'public6'` / `'lan4'` / `'lan6'`） | `{ ok, address }` 或 `{ ok: false, error }` | 取本机地址供 IP / 网段工具的下拉使用：`lan4` / `lan6` 从 `os.networkInterfaces()` 取对应地址族的非内部地址（v4 优先 RFC 1918 私有网段；v6 去掉作用域后缀并优先非链路本地）；`public4` / `public6` 按地址族（`family: 4` / `6`）请求 `ipv4.icanhazip.com` / `ipv6.icanhazip.com`（失败退回 `ifconfig.me/ip`，返回值必须与请求的地址族匹配，避免把 IPv4 当作 IPv6）获取出口 IP（遵循系统代理，5s 超时，任一成功即返回）；均失败返回 `{ ok: false }` |
 | `font-picker:open` | — | `{ ok }` | 打开设置窗口的非模态字体选择子窗口（`font-picker.html`）；已打开时聚焦现有窗口 |
 | `app:open-data-folder` | — | `{ ok, error? }` | 打开数据目录 |
 | `cli:status` | — | `{ supported, installed, path, binDir, aliasPath, aliasInstalled, completionPath, zshrcPath, zshrcConfigured }` | 设置 → 数据 → 命令行工具：查询 `vessel` 是否已安装（`<数据目录>/bin/vessel` 是否存在）以及 `~/.zshrc` 里是否已写入 PATH 块（见 §5.3），仅 macOS |
@@ -111,6 +112,12 @@
 | `file-editor:open-vscode` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「从 VS Code 打开」：远端文件把当前内容写成本地文件（下载目录，重名自动加 ` (n)`）后用 VS Code 打开；本地临时文件先落盘当前内容再直接打开该文件；不修改远端文件；只接受来自编辑器窗口的请求 |
 | `file-editor:download` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「下载到本地」：把编辑器当前内容写成本地文件到设置的下载目录（同名自动加 ` (n)`）；只接受来自编辑器窗口的请求 |
 | `file-editor:close-all` | — | `{ ok, closed }` | 关闭发起窗口打开的所有编辑器窗口（文件管理器销毁 / 断开 / 切换目标时调用）；只接受终端窗口 / 独立文件窗口的请求 |
+| `file-editor:set-dirty` | `{ dirty }` | `{ ok }` | 编辑器把「是否有未保存修改」同步给主进程；有未保存修改时关闭窗口先弹二次确认（取消 / 不保存退出），只接受来自编辑器窗口的请求 |
+| `file-editor:backup` | `{ content }` | `{ ok, count?, skipped?, error? }` | 写入当前文件的本地恢复副本（`<数据目录>/editor-backups/<key>.json`，最多 5 份；内容与最新一份相同则 `skipped:true`）；只接受来自编辑器窗口的请求 |
+| `file-editor:backups` | — | `{ ok, items: [{ id, time, size, name }] }` | 列出当前文件的恢复副本元数据（按时间倒序），打开文件后据此提示是否恢复；只接受来自编辑器窗口的请求 |
+| `file-editor:backup-read` | `{ id }` | `{ ok, content, time, size }` | 读取指定恢复副本的内容（恢复到编辑器）；只接受来自编辑器窗口的请求 |
+| `file-editor:backup-clear` | — | `{ ok }` | 删除当前文件的全部恢复副本（正常保存 / 用户选择忽略后调用）；只接受来自编辑器窗口的请求 |
+| `file-editor:copy-image` | `{ html }` | `{ ok, width?, height?, error? }` | Markdown 预览「复制为图片」：主进程用离屏窗口按 900px 宽渲染预览 HTML，四周留 32×36px 边距，截图为 PNG 后写入系统剪贴板（高度上限 12000px）；只接受来自编辑器窗口的请求 |
 | `games:scan` | — | `{ ok, workDir, resolvedWorkDir, isDefault, engines }` | 扫描游戏工作目录；`engines[].games[]` 含 `{ id, name, engine, label, core, romRelativePath, size, mtime, played, coverUrl, romUrl }`（`played` 表示该游戏是否启动过）；支持 `roms/<engine>/<文件夹>/xxx.rom`（单 ROM 子目录以文件夹名为游戏名；多 ROM 子目录生成 `<引擎> - <文件夹>` 独立分类），扩展名匹配不区分大小写；已启动过的游戏会以 `id: recent` 的「最近启动」分类置顶（按 `lastPlayedAt` 倒序最多 8 个）；只接受主窗口 / 设置窗口请求 |
 | `games:open` | `{ gameId }` | `{ ok, error? }` | 打开 / 复用游戏窗口并加载游戏，同时更新 `meta.json` 的 `lastPlayedAt`；只接受主窗口请求 |
 | `games:window-info` | — | `{ ok, game, emulatorVersion, settings }` | 游戏窗口启动时读取当前游戏与按键 / 音量 / `hasFdsBios` 设置；只接受游戏窗口请求 |
@@ -244,19 +251,20 @@
 | `POST /v1/tool`（请求体 = 工具 id 或名称） | `Opened tool: <id>` / 4xx `Unknown tool: …` | 显示主界面并加载该工具（`window-manager.showMainWindowWithTool`） |
 | `POST /v1/ssh`（请求体两行：`<目标>` + 换行 + `<密码，可空>`） | `Connecting to <别名>` / 4xx `Target required…`、`Invalid target…` / 5xx | 命中已保存主机（别名，或同一「用户名@地址」且未给新密码）→ 直接连接；否则按「快速连接」逻辑连接（见下） |
 
-- **数据命令路由**：`GET /v1/timestamp`（当前时间）、`POST /v1/timestamp`（转换一个值）、`POST /v1/network`（网段信息）、`POST /v1/codec`（编码结果）、`POST /v1/hash`（请求体首行 `text` / `file`，其余为内容）、`POST /v1/uuid`（数量）、`POST /v1/open`（在应用里打开工具，替代原来的 `/v1/tool`；`GET /v1/tools` 已移除）。响应均为纯文本表格。
+- **数据命令路由**：`GET /v1/timestamp`（当前时间）、`POST /v1/timestamp`（转换一个值）、`GET /v1/network`（本机内网 / 公网 IPv4 / IPv6 地址）、`POST /v1/network`（网段信息）、`POST /v1/codec`（编码结果）、`POST /v1/hash`（请求体首行 `text` / `file`，其余为内容）、`POST /v1/uuid`（类型：`uuid4` / `uuid7` / `ulid`，固定生成 5 个）、`POST /v1/open`（在应用里打开工具，替代原来的 `/v1/tool`；`GET /v1/tools` 已移除）。响应均为纯文本表格。
 - **`POST /v1/edit`**：请求体为文件路径（可为空）。空 → 新建本地草稿并用编辑器打开；非空 → 解析为绝对路径后打开（不存在返回 404、非文件 / 超过 8MB 返回 400）。编辑器窗口**无归属窗口**（不随任何窗口关闭）。
 - **`POST /v1/ssh` 的目标解析**：`用户名@地址` / `地址` / `地址:端口` / `[IPv6]:端口`。**别名精确命中**，或**同一「用户名@地址」且没有提供新密码** → 用现有主机直接连接（自动沿用已存密码 / `~/.ssh/id_ed25519`）；其余写法走**快速连接**（`ssh-quick-connect-service`，与 SSH 工具的连接表单同一套实现）：`用户名@地址` 已存在时复用（给了密码则更新凭据），否则写入 `~/.ssh/config` 的「快速连接」分组并置于最前，然后**新开一扇内置终端**执行 `ssh`。密码可含空格（作为第 2 行原样传入），不需要密码时留空（走密钥）。
 - **输出语言**：CLI 的 usage / 帮助 / 错误 / 表头 / 提示**全部为英文**；工具名固定用英文（不随界面语言变化），主机 / 账号名是数据本身、保持原样。列表按显示宽度（CJK / 全角按 2 列）对齐为固定列宽表格。
+- **输出颜色**：`vessel.sh` 在**标准输出是终端**时给结果加 ANSI 颜色（表头加粗青色、UUID 绿色、`No …` / 错误类提示暗色、`键  值` 行的键为青色）；输出到管道 / 文件或 `vess` 被脚本调用时自动关闭颜色，保持纯文本。错误信息始终以红色写入 stderr。
 - **命令行 `vessel`**（安装位置 `<数据目录>/bin/vessel`，用法与终端内联命令 `\v` 同风格；**列表命令不带 `list` 子命令**，直接执行即列出）：
   - 命令**平铺**（不再有 `vessel tool` 子命令）：`vessel <命令> [参数]`；安装时同时创建 **`vess` 别名**（`<数据目录>/bin/vess` → symbol link 指向 `vessel`），两者等价。
   - `ssh`：不带参数列出已保存主机（`用户名@地址` 归一化显示）；`ssh <user@host> [password]` 连接或快速连接；`ssh <别名>` 按别名连接。
   - `2fa`：列出账号与**当前验证码**（含剩余秒数）；不接受其它参数（不再接受 `twofa`）。
   - `timestamp [value]`：不带参数输出当前时间（本地时间 / UTC / 秒 / 毫秒 / **纳秒**，纳秒用 `process.hrtime` 补出亚毫秒）；带参数时自动识别 `≤11 位秒 / ≤15 位毫秒 / 其余纳秒`，非纯数字按日期字符串解析。
-  - `network <ip|cidr|mask>`（别名 `net` / `subnet` / `ip`）：输出网段信息（地址 / 类型 / CIDR / 前缀 / 网络地址 / 广播或最后地址 / 可用范围或地址总数 / 主机数 / 掩码 / 反掩码 / 地址类型）；支持 IPv4 / IPv6 / 纯数字 / `0x` 十六进制。
+  - `network [ip|cidr|mask]`（别名 `net` / `subnet` / `ip`）：不带参数输出本机 **内网（LAN）与公网（Public）IPv4 / IPv6** 地址；带参数输出网段信息（地址 / 类型 / CIDR / 前缀 / 网络地址 / 广播或最后地址 / 可用范围或地址总数 / 主机数 / 掩码 / 反掩码 / 地址类型）；支持 IPv4 / IPv6 / 纯数字 / `0x` 十六进制。
   - `codec <text>`（别名 `encode` / `text`）：输出文本的 Text / Base64 / Hex / URL 编码 / URL 解码 / ASCII 十进制。
   - `hash <text|file>`：参数是**已存在的文件**时按文件计算，否则按文本计算；输出全部 10 种算法；无参数时从 stdin 读取。
-  - `uuid [count]`（别名 `ulid`）：生成 UUID v4，默认 **5** 个、最多 100。
+  - `uuid [type]`（别名 `ulid` = `uuid ulid`）：按类型生成**固定 5 个**值；`type` ∈ `uuid4`（默认）/ `uuid7` / `ulid`，其它值返回 400。`uuid7` = 48 位毫秒时间戳 + 版本位 7 + 变体位；`ulid` = Crockford base32 的 26 位 ULID。
   - `edit [file]`：用内置编辑器新建本地草稿或打开指定本地文件（见上）。
   - 其余工具（`json` / `regex` / `color` / `ids` / `clipboard` / `nutrient` / `games`）：`vessel <工具 id>` 在应用里打开该工具（`/v1/open`）。
   - `completion` 输出 zsh 补全函数（同时注册给 `vess` 与 `vessel`）；隐藏命令 `__complete ssh` 供补全取主机候选。

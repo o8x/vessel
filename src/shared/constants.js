@@ -161,6 +161,12 @@ const IPC = {
   FILE_EDITOR_OPEN_VSCODE: 'file-editor:open-vscode',
   FILE_EDITOR_DOWNLOAD: 'file-editor:download',
   FILE_EDITOR_CLOSE_ALL: 'file-editor:close-all',
+  FILE_EDITOR_SET_DIRTY: 'file-editor:set-dirty',
+  FILE_EDITOR_BACKUP: 'file-editor:backup',
+  FILE_EDITOR_BACKUPS: 'file-editor:backups',
+  FILE_EDITOR_BACKUP_READ: 'file-editor:backup-read',
+  FILE_EDITOR_BACKUP_CLEAR: 'file-editor:backup-clear',
+  FILE_EDITOR_COPY_IMAGE: 'file-editor:copy-image',
 
   // 文件传输窗口（穿梭框）：独立窗口 + 传输任务（远端 → 远端）。
   TRANSFER_WINDOW_OPEN: 'transfer-window:open',

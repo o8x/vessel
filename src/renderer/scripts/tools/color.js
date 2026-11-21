@@ -22,6 +22,7 @@
         copied: '已复制',
         copyFailed: '复制失败',
         preview: '预览',
+        pickColor: '点击选择颜色',
         formats: '格式换算',
         contrast: '对比度检查',
         foreground: '前景色',
@@ -61,6 +62,7 @@
         copied: 'Copied',
         copyFailed: 'Copy failed',
         preview: 'Preview',
+        pickColor: 'Click to pick a color',
         formats: 'Formats',
         contrast: 'Contrast check',
         foreground: 'Foreground',
@@ -606,32 +608,37 @@
     const inputActions = el('div', { class: 'flex flex-wrap gap-1.5' });
     inputActions.append(randomBtn, copyHexBtn);
 
-    const inputSection = section(i18n.t('color.input'));
-    inputSection.append(
-      el('div', { class: 'text-[11px] text-fg-muted' }, i18n.t('color.hint')),
-      colorField,
-      inputActions
-    );
-
-    /* ---------- 预览区 ---------- */
+    /* ---------- 预览色块 + 输入框（合并为一行） ---------- */
 
     const swatch = el('div', {
-      class: 'h-[72px] w-[72px] shrink-0 rounded-control border border-border',
+      class: 'color-swatch h-[72px] w-[72px] shrink-0 rounded-control border border-border',
       style: CHECKERBOARD_STYLE,
+      'data-tip': i18n.t('color.pickColor'),
     });
     const swatchFill = el('div', { class: 'h-full w-full rounded-[inherit]' });
-    swatch.appendChild(swatchFill);
+    // 原生取色器覆盖在色块上：点击色块即打开系统颜色面板。
+    const swatchPicker = el('input', {
+      class: 'color-swatch-input',
+      type: 'color',
+      value: '#3498db',
+      'aria-label': i18n.t('color.pickColor'),
+    });
+    swatch.append(swatchFill, swatchPicker);
 
     const previewValue = el('div', { class: 'result-value' }, '—');
     const previewMeta = el('div', { class: 'text-[11px] text-fg-muted' }, '');
     const previewText = el('div', { class: 'min-w-0 flex-1' });
-    previewText.append(previewValue, previewMeta);
+    previewText.append(colorField, previewValue, previewMeta);
 
     const previewRow = el('div', { class: 'flex items-center gap-3' });
     previewRow.append(swatch, previewText);
 
-    const previewSection = section(i18n.t('color.preview'));
-    previewSection.appendChild(previewRow);
+    const inputSection = section(i18n.t('color.input'));
+    inputSection.append(
+      el('div', { class: 'text-[11px] text-fg-muted' }, i18n.t('color.hint')),
+      previewRow,
+      inputActions
+    );
 
     /* ---------- 格式换算区 ---------- */
 
@@ -672,8 +679,14 @@
     });
     const fgHint = el('div', { class: 'mt-1 text-[10px]' }, '');
     const bgHint = el('div', { class: 'mt-1 text-[10px]' }, '');
-    const fgField = inputField(i18n.t('color.foreground'), fgInput);
-    const bgField = inputField(i18n.t('color.background'), bgInput);
+    const fgSwatch = colorSwatchFor(fgInput, '#000000');
+    const bgSwatch = colorSwatchFor(bgInput, '#ffffff');
+    const fgRow = el('div', { class: 'flex items-center gap-2' });
+    const bgRow = el('div', { class: 'flex items-center gap-2' });
+    fgRow.append(fgSwatch.root, fgInput);
+    bgRow.append(bgSwatch.root, bgInput);
+    const fgField = inputField(i18n.t('color.foreground'), fgRow);
+    const bgField = inputField(i18n.t('color.background'), bgRow);
     fgField.appendChild(fgHint);
     bgField.appendChild(bgHint);
 
@@ -729,6 +742,42 @@
       previewMeta.textContent = '';
     }
 
+    /* 对比度区的小色块：点击色块打开系统取色器，选择后自动写入输入框。 */
+    function colorSwatchFor(input, initial) {
+      const root = el('div', {
+        class: 'color-swatch color-swatch-sm shrink-0 rounded-control border border-border',
+        style: CHECKERBOARD_STYLE,
+        'data-tip': i18n.t('color.pickColor'),
+      });
+      const fill = el('div', { class: 'h-full w-full rounded-[inherit]' });
+      const picker = el('input', {
+        class: 'color-swatch-input',
+        type: 'color',
+        value: initial,
+        'aria-label': i18n.t('color.pickColor'),
+      });
+      const sync = () => {
+        const rgb = parseColor(input.value);
+        if (!rgb) {
+          fill.style.backgroundColor = 'transparent';
+          return;
+        }
+        fill.style.backgroundColor = `rgba(${Math.round(clamp(rgb.r, 0, 255))}, ${Math.round(
+          clamp(rgb.g, 0, 255)
+        )}, ${Math.round(clamp(rgb.b, 0, 255))}, ${clamp01(rgb.a)})`;
+        picker.value = formatHex(rgb);
+      };
+      picker.addEventListener('input', () => {
+        input.value = picker.value;
+        sync();
+        renderContrast();
+      });
+      input.addEventListener('input', sync);
+      input.addEventListener('blur', sync);
+      root.append(fill, picker);
+      return { root, sync };
+    }
+
     function renderFormats(rgb) {
       const hsl = rgbToHsl(rgb);
       const hsv = rgbToHsv(rgb);
@@ -750,6 +799,7 @@
       swatchFill.style.backgroundColor = `rgba(${Math.round(clamp(rgb.r, 0, 255))}, ${Math.round(
         clamp(rgb.g, 0, 255)
       )}, ${Math.round(clamp(rgb.b, 0, 255))}, ${clamp01(rgb.a)})`;
+      swatchPicker.value = formatHex(rgb);
       previewValue.textContent = formatHex(rgb);
       previewMeta.textContent = formatRgba(rgb);
     }
@@ -766,6 +816,8 @@
     function renderContrast() {
       const fg = parseColor(fgInput.value);
       const bg = parseColor(bgInput.value);
+      fgSwatch.sync();
+      bgSwatch.sync();
       setFieldError(fgInput, fgHint, !fgInput.value.trim() ? false : !fg);
       setFieldError(bgInput, bgHint, !bgInput.value.trim() ? false : !bg);
       badgeBox.innerHTML = '';
@@ -815,6 +867,11 @@
 
     colorInput.addEventListener('input', updateColor);
     colorInput.addEventListener('blur', updateColor);
+    // 点击色块取色：选择结果实时写入输入框并刷新预览 / 换算。
+    swatchPicker.addEventListener('input', () => {
+      colorInput.value = swatchPicker.value;
+      updateColor();
+    });
     fgInput.addEventListener('input', renderContrast);
     bgInput.addEventListener('input', renderContrast);
 
@@ -855,7 +912,7 @@
     updateColor();
     renderContrast();
 
-    container.append(inputSection, previewSection, formatsSection, contrastSection);
+    container.append(inputSection, formatsSection, contrastSection);
   }
 
   window.ShipsToolRegistry.register({ id: 'color', icon: 'color', mount });

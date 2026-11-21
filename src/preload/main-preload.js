@@ -139,6 +139,12 @@ const api = {
     download: (payload) => ipcRenderer.invoke(IPC.FILE_EDITOR_DOWNLOAD, payload),
     closeAll: () => ipcRenderer.invoke(IPC.FILE_EDITOR_CLOSE_ALL),
     openLocal: () => ipcRenderer.invoke(IPC.FILE_EDITOR_OPEN_LOCAL),
+    setDirty: (dirty) => ipcRenderer.invoke(IPC.FILE_EDITOR_SET_DIRTY, { dirty }),
+    backup: (content) => ipcRenderer.invoke(IPC.FILE_EDITOR_BACKUP, { content }),
+    backups: () => ipcRenderer.invoke(IPC.FILE_EDITOR_BACKUPS),
+    readBackup: (id) => ipcRenderer.invoke(IPC.FILE_EDITOR_BACKUP_READ, { id }),
+    clearBackups: () => ipcRenderer.invoke(IPC.FILE_EDITOR_BACKUP_CLEAR),
+    copyImage: (html) => ipcRenderer.invoke(IPC.FILE_EDITOR_COPY_IMAGE, { html }),
   },
   transferWindow: {
     open: (payload) => ipcRenderer.invoke(IPC.TRANSFER_WINDOW_OPEN, payload || {}),

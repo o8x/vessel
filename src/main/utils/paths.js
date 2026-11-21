@@ -27,6 +27,8 @@ const FILE_LAYOUT_FILE = path.join(DATA_DIR, 'file-layout.json');
 const FILE_WINDOW_LAYOUT_FILE = path.join(DATA_DIR, 'file-window-layout.json');
 // 文件面板按 ssh 目标（用户名@主机）记录最近 cd 到的目录（见 cd-history-service）。
 const CD_HISTORY_FILE = path.join(DATA_DIR, 'cd-history.json');
+// 内置编辑器的本地恢复副本：每个文件一个 JSON（最多 5 份，见 file-editor-ipc）。
+const EDITOR_BACKUP_DIR = path.join(DATA_DIR, 'editor-backups');
 // 营养成分 / TDEE 工具保存的商品记录与 TDEE 输入（非机密 JSON）。
 const NUTRIENT_FILE = path.join(DATA_DIR, 'nutrient-records.json');
 // 日志按天写入 LOG_DIR 下的 vessel-YYYY-MM-DD.log（见 logger.js）。
@@ -67,6 +69,7 @@ const DATA_FILES = [
   FILE_WINDOW_LAYOUT_FILE,
   CD_HISTORY_FILE,
   NUTRIENT_FILE,
+  EDITOR_BACKUP_DIR,
   LOG_DIR,
 ];
 
@@ -91,6 +94,7 @@ module.exports = {
   FILE_WINDOW_LAYOUT_FILE,
   CD_HISTORY_FILE,
   NUTRIENT_FILE,
+  EDITOR_BACKUP_DIR,
   LOG_DIR,
   todayLogFile,
   logFileForDate,

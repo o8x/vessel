@@ -3686,3 +3686,94 @@ body.editor-window {
 .transfer-sync {
   flex: 0 0 auto;
 }
+
+/* ---------------- 颜色工具：可点击取色的色块 ---------------- */
+.color-swatch {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.color-swatch-sm {
+  width: 28px;
+  height: 28px;
+}
+/* 原生取色器铺满色块：点击任意位置都会打开系统颜色面板。 */
+.color-swatch-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ---------------- 内置编辑器：恢复副本弹窗 ---------------- */
+.editor-recovery-card {
+  width: min(520px, calc(100vw - 48px));
+}
+.editor-recovery-hint {
+  margin-bottom: 10px;
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.editor-recovery-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  margin-bottom: 12px;
+  overflow-y: auto;
+}
+.editor-recovery-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control-sm);
+  background: var(--color-control);
+  color: var(--color-fg);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.editor-recovery-item:hover {
+  border-color: var(--color-accent-line);
+}
+.editor-recovery-item.is-active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+.editor-recovery-size {
+  flex: 0 0 auto;
+  color: var(--color-fg-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ---------------- Markdown 预览：图片 / 复制为图片的离屏导出 ---------------- */
+.editor-preview img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-control-sm);
+}
+.editor-export-page {
+  margin: 0;
+  background: #ffffff;
+}
+/* 导出画布：四周留出统一边距（复制出的图片自带留白）。 */
+.editor-export {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  padding: 32px 36px;
+  border: 0;
+  background: #ffffff;
+  color: var(--color-fg);
+  font-size: 13px;
+}

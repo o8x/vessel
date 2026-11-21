@@ -11,10 +11,10 @@ if (( $+functions[compdef] )); then
       'ssh:List saved SSH hosts, or connect to a host'
       '2fa:List 2FA accounts with their current codes'
       'timestamp:Show the current time and epoch timestamps'
-      'network:Show network / subnet details for an address'
+      'network:Show local LAN / public IPs, or subnet details for an address'
       'codec:Show a text as Base64 / hex / URL / ASCII'
       'hash:Show every hash of a text or file'
-      'uuid:Generate UUID v4 values'
+      'uuid:Generate 5 UUID v4 / v7 or ULID values'
       'edit:Open a scratch file or a local file in the editor'
       'json:Open the JSON tool in the app'
       'regex:Open the regex tester in the app'
@@ -47,7 +47,14 @@ if (( $+functions[compdef] )); then
         (( CURRENT == 3 )) && _files
         return
         ;;
-      uuid|timestamp|network|codec|json|regex|color|ids|clipboard|nutrient|games|2fa|completion|help)
+      uuid)
+        if (( CURRENT == 3 )); then
+          items=(uuid4 uuid7 ulid)
+          _describe -t types 'uuid type' items
+        fi
+        return
+        ;;
+      timestamp|network|codec|json|regex|color|ids|clipboard|nutrient|games|2fa|completion|help)
         # 这些命令要么不需要补全，要么参数是自由文本。
         return
         ;;

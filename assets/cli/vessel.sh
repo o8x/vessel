@@ -8,6 +8,25 @@
 
 set -u
 
+# ANSI colors: only when writing to a terminal, so pipes / files stay clean.
+if [ -t 1 ]; then
+  C_RESET=$(printf '\033[0m')
+  C_BOLD=$(printf '\033[1m')
+  C_DIM=$(printf '\033[2m')
+  C_CYAN=$(printf '\033[36m')
+  C_GREEN=$(printf '\033[32m')
+  C_RED=$(printf '\033[31m')
+  C_YELLOW=$(printf '\033[33m')
+else
+  C_RESET=''
+  C_BOLD=''
+  C_DIM=''
+  C_CYAN=''
+  C_GREEN=''
+  C_RED=''
+  C_YELLOW=''
+fi
+
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 DATA_DIR=$(dirname -- "$SELF_DIR")
 SOCKET="$DATA_DIR/vessel-cli.sock"
@@ -24,10 +43,11 @@ Commands:
   2fa                          List 2FA accounts with their current codes
   timestamp [value]            Current date plus epoch seconds / millis / nanos;
                                a value is auto-detected (epoch or date string)
-  network <ip|cidr|mask>       Network and subnet details for an address
+  network [ip|cidr|mask]     With no argument: local LAN and public IP addresses;
+                               with a value: network and subnet details for it
   codec <text>                 Show the text as Base64 / hex / URL / ASCII
   hash <text|file>             Show every hash of a text or an existing file
-  uuid [count]                 Generate UUID v4 values (default 5, max 100)
+  uuid [type]                  Generate 5 values: uuid4 (default) / uuid7 / ulid
   edit [file]                  Open a scratch file (or <file>) in the Vessel editor
   json | regex | color | ids   Open that tool in the Vessel app
   clipboard | nutrient | games Open that tool in the Vessel app
@@ -42,18 +62,37 @@ Examples:
   vess 2fa
   vess timestamp
   vess timestamp 1700000000
+  vess network
   vess network 192.168.1.10/24
   vess network 2001:db8::/32
   vess codec "hello world"
   vess hash ./package.json
-  vess uuid 10
+  vess uuid
+  vess uuid uuid7
   vess ssh root@192.168.1.10 "my-password"
   vess edit ./README.md
 EOF
 }
 
 err() {
-  printf 'vess: %s\n' "$*" >&2
+  printf '%s%s%s\n' "$C_RED" "vess: $*" "$C_RESET" >&2
+}
+
+# Colorize plain-text API output (header row / UUID / labels).
+colorize() {
+  if [ -z "$C_RESET" ]; then
+    cat
+    return 0
+  fi
+  awk -v reset="$C_RESET" -v bold="$C_BOLD" -v cyan="$C_CYAN" -v green="$C_GREEN" -v dim="$C_DIM" '
+    function is_header(s) { return s ~ /^[A-Z0-9][A-Z0-9 \/-]*$/ }
+    {
+      if (NR == 1 && is_header($0)) { print bold cyan $0 reset; next }
+      if ($0 ~ /^[0-9a-f][0-9a-f-]*$/ && length($0) >= 20) { print green $0 reset; next }
+      if ($0 ~ /^(No |Cannot |Invalid |Type )/) { print dim $0 reset; next }
+      if (match($0, /  +/)) { print cyan substr($0, 1, RSTART - 1) reset substr($0, RSTART); next }
+      print $0
+    }'
 }
 
 # Call the local API: api <METHOD> <PATH> [BODY]; prints the response body on success,
@@ -77,7 +116,7 @@ api() {
   _body=$(printf '%s' "$_resp" | sed '$d')
   case "$_code" in
     2*)
-      [ -n "$_body" ] && printf '%s\n' "$_body"
+      [ -n "$_body" ] && printf '%s\n' "$_body" | colorize
       return 0
       ;;
     *)
@@ -153,12 +192,12 @@ cmd_timestamp() {
 }
 
 cmd_network() {
-  if [ -z "${1:-}" ]; then
-    err "network requires an IP address or network (e.g. 192.168.1.10/24)"
-    exit 1
-  fi
   with_app
-  api POST /v1/network "$1"
+  if [ -n "${1:-}" ]; then
+    api POST /v1/network "$1"
+  else
+    api GET /v1/network
+  fi
 }
 
 cmd_codec() {
@@ -245,9 +284,13 @@ case "${1:-}" in
     shift
     cmd_hash "${1:-}"
     ;;
-  uuid|ulid)
+  uuid)
     shift
     cmd_uuid "${1:-}"
+    ;;
+  ulid)
+    shift
+    cmd_uuid "${1:-ulid}"
     ;;
   edit)
     shift

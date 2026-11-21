@@ -57,6 +57,8 @@ window.ShipsConstants = {
   FILE_VSCODE_MAX_BYTES: 128 * 1024 * 1024,
   // 「编辑文件」上限：任何类型只要不超过 8M 都可用内置编辑器打开（二进制按只读处理）。
   FILE_EDITOR_MAX_BYTES: 8 * 1024 * 1024,
+  // 内置编辑器：有未保存修改时，每隔该时长在本地保存一份恢复副本（仅保留最近 5 份）。
+  EDITOR_BACKUP_INTERVAL_MS: 30000,
   NON_TEXT_EXTENSIONS: [
     // 图片 / 设计稿
     'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'icns', 'cur', 'tif', 'tiff',

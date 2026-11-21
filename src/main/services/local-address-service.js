@@ -1,6 +1,7 @@
 'use strict';
 
 const os = require('os');
+const net = require('net');
 const http = require('http');
 const https = require('https');
 const proxyService = require('./proxy-service');
@@ -85,7 +86,8 @@ async function publicAddress(kind) {
     try {
       const text = await requestText(url, family);
       const first = text.split(/\s+/)[0];
-      if (first) return first;
+      // 按地址族校验：回退服务（ifconfig.me）可能返回 IPv4，不能当作 IPv6。
+      if (first && (family === 6 ? net.isIPv6(first) : net.isIPv4(first))) return first;
     } catch (err) {
       logger.file(`[local-address] public address lookup failed (${url}): ${err.message}`);
     }
