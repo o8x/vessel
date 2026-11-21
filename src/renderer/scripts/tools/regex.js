@@ -559,11 +559,7 @@
     flagsField.appendChild(flagsError);
     patternRow.append(patternField, flagsField, clearBtn);
 
-    const patternSection = section(i18n.t('regex.sectionPattern'));
-    patternSection.append(
-      el('div', { class: 'text-[11px] text-fg-muted' }, i18n.t('regex.hint')),
-      patternRow
-    );
+    const patternSection = section();
 
     /* ---------- 标志开关 ---------- */
 
@@ -579,8 +575,6 @@
       flagButtons[key] = button;
       flagRow.appendChild(button);
     }
-    const flagsSection = section(i18n.t('regex.sectionFlags'));
-    flagsSection.append(flagRow, flagsHelp);
 
     /* ---------- 测试文本 ---------- */
 
@@ -589,15 +583,14 @@
       spellcheck: 'false',
       placeholder: i18n.t('regex.testPlaceholder'),
     });
-    const testSection = section(i18n.t('regex.sectionTest'));
+    const testSection = section();
     testSection.appendChild(testInput);
 
-    /* ---------- 匹配结果 ---------- */
+    /* ---------- 匹配结果（紧跟在测试文本下方，不单独占标题） ---------- */
 
     const countLabel = el('div', { class: 'text-[11px] text-fg-muted' }, '');
     const matchList = el('div', { class: 'flex max-h-[240px] flex-col gap-1.5 overflow-y-auto pr-1' });
-    const matchesSection = section(i18n.t('regex.sectionMatches'));
-    matchesSection.append(countLabel, matchList);
+    testSection.append(countLabel, matchList);
 
     /* ---------- 替换 ---------- */
 
@@ -619,7 +612,7 @@
     const replaceField = inputField(i18n.t('regex.sectionReplace'), replaceInput);
     replaceField.classList.add('min-w-[220px]', 'flex-1');
     replaceRow.append(replaceField, copyBtn);
-    const replaceSection = section(i18n.t('regex.sectionReplace'));
+    const replaceSection = section();
     replaceSection.append(
       replaceRow,
       el('div', { class: 'text-[10px] text-fg-muted' }, i18n.t('regex.replaceHint')),
@@ -642,13 +635,12 @@
       });
       snippetRow.appendChild(button);
     }
-    const snippetSection = section(i18n.t('regex.sectionSnippets'));
-    snippetSection.appendChild(snippetRow);
+    patternSection.append(patternRow, flagRow, flagsHelp, snippetRow);
 
     /* ---------- 模式解释 ---------- */
 
     const explainList = el('div', { class: 'flex flex-col gap-1' });
-    const explainSection = section(i18n.t('regex.sectionExplain'));
+    const explainSection = section();
     explainSection.append(
       el('div', { class: 'text-[10px] text-fg-muted' }, i18n.t('regex.explainHint')),
       explainList
@@ -804,11 +796,8 @@
 
     container.append(
       patternSection,
-      flagsSection,
       testSection,
-      matchesSection,
       replaceSection,
-      snippetSection,
       explainSection
     );
 
