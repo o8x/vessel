@@ -27,7 +27,7 @@
 - JSON 语法色：`--color-json-key/str/num/bool/null`（深浅各一套）。
 - **控件底色**：浅色模式输入框 / 按钮 / 分段控件 / 下拉触发器 / 开关 / 芯片等使用 `--color-control`（`#ffffff`），与卡片同为白色、靠边框区分，不再使用灰色 `--color-surface-2`；深色模式为 `#1d222b`。Liquid Glass 下 `--color-control` 取 `--glass-surface-2`，保持半透明。
 - **强调色派生令牌**（`constants.css` 的 `:root`，随 `--color-accent` 实时变化）：`--color-accent-soft`（12% 透明底）、`--color-accent-soft-2`（20%）、`--color-accent-line`（48% 描边）、`--focus-ring`（2px / 14% 焦点环）。均只使用 `color-mix(…, transparent)`，保证 Liquid Glass 下仍能透出原生材质。
-- **强调色使用范围**：`--color-accent` 用于 TAB 选中（含底色 / 描边）、分区标题的左侧色条、输入框 / 下拉 / 卡片悬浮描边与焦点环、分段控件选中、开关、色板、图标按钮悬浮、普通按钮悬浮描边与文字、文件管理选中行（底色 + 左侧色条）、分隔线悬浮、进度条、JSON 编辑器聚焦描边等；设置左侧导航选中仅使用强调色文字 + 淡强调色底（无左侧边框线）；卡片 / 输入框的**常态**底色仍保持中性色，避免整体过度着色。
+- **强调色使用范围**：`--color-accent` 用于 TAB 选中（含底色 / 描边）、输入框 / 下拉 / 卡片悬浮描边与焦点环、分段控件选中、开关、色板、图标按钮悬浮、普通按钮悬浮描边与文字、文件管理选中行（底色 + 左侧色条）、分隔线悬浮、进度条、JSON 编辑器聚焦描边等；设置左侧导航选中仅使用强调色文字 + 淡强调色底（无左侧边框线）；卡片 / 输入框的**常态**底色仍保持中性色，避免整体过度着色。
 - **标题层级**：工具页由 `app.js` 渲染 `.tool-head`（标题 + 说明）；设置窗口的页面标题由 `settings.html` 顶部 `#settings-title` 承担，分区内容**不再重复同名标题**（如「日志」「导入 / 导出」），避免双层标题。
 - **清晰度**：`theme.js` 按 `window.devicePixelRatio` 在 `<html>` 上设置 `data-dpr`（≥2 为 `2`，否则 `1`，并在 `resize` / 分辨率变化时更新）。仅当 `data-dpr="2"` 时，卡片 / 输入框 / 分段 / 下拉 / 右键菜单等使用 **0.5px 发丝线**、浅色卡片带轻微投影；非 HiDPI 下**不使用**这些效果。图标 / 图片：内联 SVG 统一 `shape-rendering: geometricPrecision`（平滑缩放不糊），位图（如品牌图标 `<img>`）用 `image-rendering: -webkit-optimize-contrast` 提升重采样锐度。**TAB 图标渲染时会把 `fill` / `stroke` 非 `none` 的颜色统一为 `currentColor`**，因此用户替换进来、写死 `#000` 等颜色的 SVG 也会跟随选中 / 悬停 / 主题变色。
 - 强调色由设置写入 `:root` 的 `--color-accent`；TAB 选中、开关、按钮等统一引用。
@@ -68,6 +68,7 @@
 
 **组件**
 
+- **工具内分区标题**：工具名由顶部固定标题展示，内容里的 `.section > .tool-title` 统一降级为 **10px / 600、弱化色、无左侧强调色条、右侧带 1px 分隔线** 的紧凑小标签，避免出现「工具标题 + 多层分区标题」的堆叠；分区内部间距保持 12px。
 - 输入 `field`、按钮 `btn` / `btn-accent`、图标按钮 `icon-btn`、结果行 `row-card`、TAB `tab` / `tab-active`、开关 `switch`、分段控件 `segment`、色块 `swatch`。
 - **可点击取色的色块**：`.color-swatch`（棋盘格底、相对定位、`cursor:pointer`）+ `.color-swatch-input`（原生 `<input type="color">` 铺满色块、`opacity:0`）；颜色工具的预览色块与对比度前景 / 背景色块共用该组合，尺寸变体 `.color-swatch-sm` 为 28×28。选色实时写回输入框并刷新预览 / 换算。
 - **分组手风琴** `accordion` / `accordion-item` / `accordion-header`（含 `.accordion-chevron` / `.accordion-name` / `.accordion-count`）/ `accordion-body`：用于 SSH 管理（设置页与主界面工具）按分组折叠展示，**默认全部展开**，点击标题切换、`.accordion-item.collapsed` 时旋转箭头（-90°）并隐藏 `.accordion-body`。

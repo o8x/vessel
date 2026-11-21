@@ -617,11 +617,8 @@
       }, 1200);
     });
 
-    /* ---- 2FA 验证码（原独立工具并入本工具） ---- */
-    const twofaSection = section(i18n.t('ids.twofaSection'));
-    twofaSection.appendChild(
-      el('div', { class: 'mb-2 text-[11px] text-fg-muted' }, i18n.t('ids.twofaHint'))
-    );
+    /* ---- 2FA 验证码（原独立工具并入本工具，直接展示在生成器之前） ---- */
+    const twofaSection = section();
     let disposeTwofa = null;
     if (window.ShipsTwofaTool && typeof window.ShipsTwofaTool.mount === 'function') {
       disposeTwofa = window.ShipsTwofaTool.mount(twofaSection);

@@ -3813,3 +3813,27 @@ body.editor-window {
   font-family: var(--font-mono);
   color: var(--color-fg);
 }
+
+/* ---------------- 工具内分区标题：降级为紧凑小标签 ----------------
+   工具名由顶部固定标题展示，内容里的分区不再使用与工具名同级的大标题；
+   统一改为「小号弱化标签 + 右侧分隔线」，减少多层标题的压迫感。 */
+.section > .tool-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 0;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-fg-muted);
+}
+.section > .tool-title::before {
+  display: none;
+}
+.section > .tool-title::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--color-border);
+}
