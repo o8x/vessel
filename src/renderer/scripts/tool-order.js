@@ -11,6 +11,7 @@ window.ShipsToolOrder = [
     "radix", // 进制转换 + 单位转换（字节 / 位 / KiB–TiB / Kbps–Gbps）
     "json", // JSON 格式化
     "hash", // 哈希计算（MD5 / SHA1 / SHA256）
+    "text", // 文本处理（大小写转换 / 行处理 / 转义 / 统计）
     "nutrient", // 营养成分
     "clipboard", // 剪贴板
     "games", // 游戏（EmulatorJS）
