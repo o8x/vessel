@@ -41,6 +41,9 @@
     return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   }
 
+  /* 算法清单缓存（主进程下发，避免每次切换 TAB 都取一次）。 */
+  let algorithmCache = null;
+
   function mount(container) {
     const modeSegment = segmented(
       [
@@ -95,18 +98,42 @@
     );
     filePanel.appendChild(chooseBtn);
 
-    const rows = {
-      md5: resultRow('MD5'),
-      sha1: resultRow('SHA1'),
-      sha256: resultRow('SHA256'),
-    };
+    // 结果行：按主进程下发的算法清单生成（MD5 / SHA1 / SHA256 / SHA384 / SHA512 /
+    // CRC32 / FNV-1a 32 / FNV-1a 64 / XXH64 / CityHash64）。
+    // 清单走 IPC 获取并缓存，避免渲染层再写一份算法列表。
+    const rows = new Map();
     const outSection = section();
-    for (const key of Object.keys(rows)) outSection.appendChild(rows[key].root);
+    let lastHashes = null;
+
+    function renderRows(list) {
+      outSection.innerHTML = '';
+      rows.clear();
+      for (const algorithm of list) {
+        const row = resultRow(algorithm.label || algorithm.id);
+        rows.set(algorithm.id, row);
+        outSection.appendChild(row.root);
+      }
+      setHashes(lastHashes);
+    }
 
     function setHashes(hashes) {
-      rows.md5.set(hashes ? hashes.md5 : null);
-      rows.sha1.set(hashes ? hashes.sha1 : null);
-      rows.sha256.set(hashes ? hashes.sha256 : null);
+      lastHashes = hashes || null;
+      for (const [id, row] of rows) row.set(hashes ? hashes[id] : null);
+    }
+
+    if (algorithmCache) {
+      renderRows(algorithmCache);
+    } else {
+      outSection.appendChild(el('div', { class: 'text-[12px] text-fg-muted' }, i18n.t('hash.loading')));
+      Promise.resolve(window.ships.hashAlgorithms())
+        .then((list) => {
+          algorithmCache = Array.isArray(list) ? list : [];
+          renderRows(algorithmCache);
+        })
+        .catch(() => {
+          outSection.innerHTML = '';
+          outSection.appendChild(el('div', { class: 'text-[12px] text-danger' }, i18n.t('hash.failed')));
+        });
     }
 
     const computeText = debounce(async () => {

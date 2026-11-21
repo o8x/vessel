@@ -72,6 +72,7 @@ const IPC = {
 
   HASH_TEXT: 'hash:text',
   HASH_FILE: 'hash:file',
+  HASH_ALGORITHMS: 'hash:algorithms',
 
   NUTRIENT_GET: 'nutrient:get',
   NUTRIENT_SAVE_PRODUCT: 'nutrient:save-product',

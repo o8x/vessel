@@ -8,6 +8,9 @@ const hashService = require('../services/hash-service');
 function registerHashIpc(ipcMain) {
   ipcMain.handle(IPC.HASH_TEXT, (_event, text) => hashService.hashText(text));
 
+  // 可用算法清单（渲染层据此生成结果行，避免两侧各写一份）。
+  ipcMain.handle(IPC.HASH_ALGORITHMS, () => hashService.ALGORITHMS);
+
   ipcMain.handle(IPC.HASH_FILE, async (_event, file) => {
     if (typeof file !== 'string' || !file) return { ok: false, error: 'invalid file' };
     try {

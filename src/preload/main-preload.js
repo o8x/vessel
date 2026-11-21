@@ -40,6 +40,7 @@ const api = {
     onChanged: (cb) => on(IPC.CLIPBOARD_CHANGED, cb),
   },
   hashText: (text) => ipcRenderer.invoke(IPC.HASH_TEXT, text),
+  hashAlgorithms: () => ipcRenderer.invoke(IPC.HASH_ALGORITHMS),
   nutrient: {
     get: () => ipcRenderer.invoke(IPC.NUTRIENT_GET),
     saveProduct: (product) => ipcRenderer.invoke(IPC.NUTRIENT_SAVE_PRODUCT, product),

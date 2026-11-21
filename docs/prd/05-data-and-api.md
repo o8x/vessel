@@ -154,8 +154,9 @@
 | `clipboard:list` | — | `item[]`（最多 5 条） | 内存历史，含文本 / 图片缩略图 |
 | `clipboard:copy` | `id` | `{ ok, error? }` | 文本用 `writeText`，图片用 `ClipboardItem` 写回 |
 | `clipboard:clear` | — | `{ ok }` | 清空历史（不清空系统剪贴板） |
-| `hash:text` | `text` | `{ md5, sha1, sha256 }` | 计算文本哈希 |
-| `hash:file` | `file`（绝对路径） | `{ ok, hashes?, info?, error? }` | 流式计算文件哈希 |
+| `hash:text` | `text` | `{ md5, sha1, sha256, sha384, sha512, crc32, fnv1a32, fnv1a64, xxhash64, cityhash64 }` | 计算文本哈希（全部 10 种算法） |
+| `hash:file` | `file`（绝对路径） | `{ ok, hashes?, info?, error? }` | 流式计算文件哈希（全部 10 种算法；`cityhash64` 因算法依赖尾部字节，走「两次读取」） |
+| `hash:algorithms` | — | `[{ id, label }]` | 返回可用哈希算法清单（渲染层据此生成结果行，避免两侧各写一份） |
 | `nutrient:get` | — | `{ ok, products, tdee }` | 读取营养成分商品记录与 TDEE 最后状态 |
 | `nutrient:save-product` | `{ name, energy, protein, fat, carbohydrate, sodium, total }` | `{ ok, products, tdee }` 或 `{ ok: false, error }` | 按商品名保存（忽略大小写去重、同名覆盖）；`name` 为空返回 `name-required` |
 | `nutrient:delete-product` | `{ name }` | `{ ok, products, tdee }` 或 `{ ok: false, error }` | 按商品名删除记录（忽略大小写匹配）；不存在返回 `not-found` |
