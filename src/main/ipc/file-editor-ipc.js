@@ -6,18 +6,15 @@
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const { BrowserWindow, dialog, clipboard, ClipboardItem } = require('electron');
 const { IPC, FILE_EDITOR_MAX_BYTES } = require('../../shared/constants');
-const { EDITOR_BACKUP_DIR } = require('../utils/paths');
 const wm = require('../window-manager');
 const sftp = require('../services/sftp-service');
 const vscode = require('../services/vscode-service');
+const editorBackup = require('../services/editor-backup-service');
 const logger = require('../utils/logger');
 
 const RENDERER_DIR = path.join(__dirname, '..', '..', 'renderer');
-// 每个文件最多保留的恢复副本数量。
-const BACKUP_LIMIT = 5;
 // 复制为图片：导出画布宽度（内容区，不含四周留白）。
 const IMAGE_EXPORT_WIDTH = 900;
 const IMAGE_EXPORT_MAX_HEIGHT = 12000;
@@ -59,57 +56,6 @@ function writeLocalText(filePath, content) {
     logger.error(`[file-editor] local write failed (${filePath}): ${err.message}`);
     return { ok: false, error: err.message };
   }
-}
-
-/* ------------------------------ 恢复副本 ------------------------------
-   键 = 本地绝对路径，或「远端目标 + 路径」；每个键一个 JSON 文件，最多 5 份。 */
-function backupKey(info) {
-  const base = info && info.local
-    ? `local:${info.path}`
-    : `remote:${(info && info.target) || ''}:${(info && info.path) || ''}`;
-  return crypto.createHash('sha256').update(base).digest('hex').slice(0, 24);
-}
-
-function backupFileFor(info) {
-  return path.join(EDITOR_BACKUP_DIR, `${backupKey(info)}.json`);
-}
-
-function readBackupStore(info) {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(backupFileFor(info), 'utf8'));
-    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item.content === 'string') : [];
-  } catch (err) {
-    return [];
-  }
-}
-
-function writeBackupStore(info, items) {
-  try {
-    fs.mkdirSync(EDITOR_BACKUP_DIR, { recursive: true });
-    fs.writeFileSync(backupFileFor(info), JSON.stringify(items), { mode: 0o600 });
-    return true;
-  } catch (err) {
-    logger.error(`[file-editor] backup write failed: ${err.message}`);
-    return false;
-  }
-}
-
-function addBackup(info, content) {
-  if (!info || typeof content !== 'string') return { ok: false, error: 'bad-content' };
-  const data = Buffer.from(content, 'utf8');
-  if (data.length > FILE_EDITOR_MAX_BYTES) return { ok: false, error: 'too-large' };
-  const items = readBackupStore(info);
-  if (items.length && items[0].content === content) return { ok: true, skipped: true };
-  const time = Date.now();
-  items.unshift({
-    id: `${time}-${crypto.randomBytes(3).toString('hex')}`,
-    time,
-    size: data.length,
-    name: (info && info.name) || '',
-    content,
-  });
-  writeBackupStore(info, items.slice(0, BACKUP_LIMIT));
-  return { ok: true, count: Math.min(items.length, BACKUP_LIMIT) };
 }
 
 /* 离屏渲染 Markdown 预览 HTML 并复制为 PNG（四周留白由导出页 CSS 提供）。 */
@@ -356,23 +302,19 @@ function registerFileEditorIpc(ipcMain) {
   ipcMain.handle(IPC.FILE_EDITOR_BACKUP, (event, payload) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
-    return addBackup(info, payload && payload.content);
+    return editorBackup.addBackup(info, payload && payload.content);
   });
 
   ipcMain.handle(IPC.FILE_EDITOR_BACKUPS, (event) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
-    const items = readBackupStore(info)
-      .sort((a, b) => b.time - a.time)
-      .map((item) => ({ id: item.id, time: item.time, size: item.size, name: item.name }));
-    return { ok: true, items };
+    return { ok: true, items: editorBackup.listBackups(info) };
   });
 
   ipcMain.handle(IPC.FILE_EDITOR_BACKUP_READ, (event, payload) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
-    const id = String((payload && payload.id) || '');
-    const item = readBackupStore(info).find((entry) => entry.id === id);
+    const item = editorBackup.readBackup(info, payload && payload.id);
     if (!item) return { ok: false, error: 'not-found' };
     return { ok: true, content: item.content, time: item.time, size: item.size };
   });
@@ -380,12 +322,7 @@ function registerFileEditorIpc(ipcMain) {
   ipcMain.handle(IPC.FILE_EDITOR_BACKUP_CLEAR, (event) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
-    try {
-      fs.rmSync(backupFileFor(info), { force: true });
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-    return { ok: true };
+    return editorBackup.clearBackups(info);
   });
 
   // Markdown 预览「复制为图片」：离屏渲染后写入剪贴板。

@@ -30,6 +30,7 @@ const { clampNumber, displaySignature, displayBySignature, clampBounds } = requi
 const logger = require('./utils/logger');
 const spaceService = require('./services/space-service');
 const gameService = require('./services/game-service');
+const editorBackup = require('./services/editor-backup-service');
 const { GAME_CLOSE_TIMEOUT_MS, GAME_HEADER_HEIGHT } = require('../shared/game-constants');
 
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
@@ -1888,6 +1889,9 @@ function openFileEditorWindow(ownerSender, payload) {
   });
   win.on('closed', () => {
     logger.file(`[file-editor] window destroyed (${windowId})`);
+    if (win.__editorDiscardBackups && win.__editorInfo) {
+      editorBackup.clearBackups(win.__editorInfo);
+    }
     fileEditorWindows.delete(win);
   });
   // 有未保存修改时关闭窗口先弹二次确认（恢复副本已定时保存在本地）。
@@ -1904,11 +1908,14 @@ function openFileEditorWindow(ownerSender, payload) {
         cancelId: 0,
         message: 'This file has unsaved changes.',
         detail:
-          'The editor keeps local recovery copies, so you can restore them the next time you open this file.',
+          'Quit without saving discards the changes and deletes the local recovery copies for this file.',
       })
       .then((result) => {
         win.__editorClosePrompt = false;
         if (result.response === 1 && !win.isDestroyed()) {
+          // 用户主动选择不保存退出：丢弃恢复副本，下次打开不再提示恢复。
+          win.__editorDiscardBackups = true;
+          editorBackup.clearBackups(win.__editorInfo);
           win.__editorAllowClose = true;
           win.close();
         }

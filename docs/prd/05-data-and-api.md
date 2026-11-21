@@ -112,7 +112,7 @@
 | `file-editor:open-vscode` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「从 VS Code 打开」：远端文件把当前内容写成本地文件（下载目录，重名自动加 ` (n)`）后用 VS Code 打开；本地临时文件先落盘当前内容再直接打开该文件；不修改远端文件；只接受来自编辑器窗口的请求 |
 | `file-editor:download` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「下载到本地」：把编辑器当前内容写成本地文件到设置的下载目录（同名自动加 ` (n)`）；只接受来自编辑器窗口的请求 |
 | `file-editor:close-all` | — | `{ ok, closed }` | 关闭发起窗口打开的所有编辑器窗口（文件管理器销毁 / 断开 / 切换目标时调用）；只接受终端窗口 / 独立文件窗口的请求 |
-| `file-editor:set-dirty` | `{ dirty }` | `{ ok }` | 编辑器把「是否有未保存修改」同步给主进程；有未保存修改时关闭窗口先弹二次确认（取消 / 不保存退出），只接受来自编辑器窗口的请求 |
+| `file-editor:set-dirty` | `{ dirty }` | `{ ok }` | 编辑器把「是否有未保存修改」同步给主进程；有未保存修改时关闭窗口先弹二次确认（取消 / 不保存退出）；**选择「不保存退出」会一并删除该文件的恢复副本**，只接受来自编辑器窗口的请求 |
 | `file-editor:backup` | `{ content }` | `{ ok, count?, skipped?, error? }` | 写入当前文件的本地恢复副本（`<数据目录>/editor-backups/<key>.json`，最多 5 份；内容与最新一份相同则 `skipped:true`）；只接受来自编辑器窗口的请求 |
 | `file-editor:backups` | — | `{ ok, items: [{ id, time, size, name }] }` | 列出当前文件的恢复副本元数据（按时间倒序），打开文件后据此提示是否恢复；只接受来自编辑器窗口的请求 |
 | `file-editor:backup-read` | `{ id }` | `{ ok, content, time, size }` | 读取指定恢复副本的内容（恢复到编辑器）；只接受来自编辑器窗口的请求 |
