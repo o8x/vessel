@@ -627,7 +627,7 @@
       disposeTwofa = window.ShipsTwofaTool.mount(twofaSection);
     }
 
-    container.append(typeSection, optionSection, resultSection, twofaSection);
+    container.append(twofaSection, typeSection, optionSection, resultSection);
 
     syncOptions();
     generate();
