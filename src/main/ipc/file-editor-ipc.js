@@ -6,7 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { BrowserWindow, dialog, clipboard, ClipboardItem } = require('electron');
+const { BrowserWindow, dialog } = require('electron');
 const { IPC, FILE_EDITOR_MAX_BYTES } = require('../../shared/constants');
 const wm = require('../window-manager');
 const sftp = require('../services/sftp-service');
@@ -15,9 +15,6 @@ const editorBackup = require('../services/editor-backup-service');
 const logger = require('../utils/logger');
 
 const RENDERER_DIR = path.join(__dirname, '..', '..', 'renderer');
-// 复制为图片：导出画布宽度（内容区，不含四周留白）。
-const IMAGE_EXPORT_WIDTH = 900;
-const IMAGE_EXPORT_MAX_HEIGHT = 12000;
 
 /* 只有终端窗口的内嵌面板 / 独立文件窗口可以打开编辑器。 */
 function isFileManagerSender(event) {
@@ -59,12 +56,47 @@ function writeLocalText(filePath, content) {
 }
 
 /* 离屏渲染 Markdown 预览 HTML 并复制为 PNG（四周留白由导出页 CSS 提供）。 */
-async function copyMarkdownImage(html) {
-  const width = IMAGE_EXPORT_WIDTH;
-  const win = new BrowserWindow({
+/* 离屏渲染 Markdown 预览 HTML 并按参数导出 PNG：
+   - width：CSS 布局宽度（默认 600）；
+   - dpi：输出分辨率，最终像素宽 = width × dpi / 96（默认 150）；
+   - padding：四周留白（默认 32px）。
+   长文档按固定高度切片逐屏截图，再在隐藏窗口的 canvas 中拼接；CSS 高度上限 30000px。 */
+const IMAGE_WIDTH_DEFAULT = 600;
+const IMAGE_DPI_DEFAULT = 150;
+const IMAGE_PADDING_DEFAULT = 32;
+const IMAGE_WIDTH_MIN = 200;
+const IMAGE_WIDTH_MAX = 2400;
+const IMAGE_DPI_MIN = 72;
+const IMAGE_DPI_MAX = 600;
+const IMAGE_PADDING_MAX = 200;
+const IMAGE_EXPORT_MAX_HEIGHT = 30000;
+// 单次截图的视口高度（切片）。
+const IMAGE_SLICE_HEIGHT = 1600;
+// 拼接画布上限：避免超大 DPI × 超长文档导致 canvas 失败 / 内存爆掉。
+const IMAGE_MAX_PIXELS = 60_000_000;
+const IMAGE_MAX_PIXEL_HEIGHT = 60000;
+
+function clampInt(value, min, max, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(num)));
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/* 复用一个隐藏窗口做导出：反复新建 / 销毁隐藏窗口在 macOS 上会触发
+   GPU 进程异常（第二次 loadFile 失败），因此改为串行复用同一窗口。 */
+let exportWin = null;
+let renderQueue = Promise.resolve();
+
+async function ensureExportWindow(width, height) {
+  if (exportWin && !exportWin.isDestroyed()) return exportWin;
+  exportWin = new BrowserWindow({
     show: false,
     width,
-    height: 600,
+    height,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -73,11 +105,34 @@ async function copyMarkdownImage(html) {
       paintWhenInitiallyHidden: true,
     },
   });
+  exportWin.on('closed', () => {
+    exportWin = null;
+  });
+  await exportWin.loadFile(path.join(RENDERER_DIR, 'markdown-export.html'));
+  return exportWin;
+}
+
+function renderMarkdownImage(html, options) {
+  const run = renderQueue.then(() => doRenderMarkdownImage(html, options));
+  renderQueue = run.catch(() => {});
+  return run;
+}
+
+async function doRenderMarkdownImage(html, options) {
+  const opts = options || {};
+  const cssWidth = clampInt(opts.width, IMAGE_WIDTH_MIN, IMAGE_WIDTH_MAX, IMAGE_WIDTH_DEFAULT);
+  const dpi = clampInt(opts.dpi, IMAGE_DPI_MIN, IMAGE_DPI_MAX, IMAGE_DPI_DEFAULT);
+  const padding = clampInt(opts.padding, 0, IMAGE_PADDING_MAX, IMAGE_PADDING_DEFAULT);
+  const win = await ensureExportWindow(cssWidth, Math.min(IMAGE_SLICE_HEIGHT, 800));
   try {
-    await win.loadFile(path.join(RENDERER_DIR, 'markdown-export.html'));
+    win.setContentSize(cssWidth, Math.min(IMAGE_SLICE_HEIGHT, 800));
     const size = await win.webContents.executeJavaScript(`(async () => {
+      document.body.innerHTML = '<div id="export-root" class="editor-preview editor-export"></div>';
       const root = document.getElementById('export-root');
       root.innerHTML = ${JSON.stringify(String(html || ''))};
+      root.style.padding = '${padding}px';
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
       const images = Array.from(root.querySelectorAll('img'));
       await Promise.all(images.map((img) => {
         if (img.complete) return Promise.resolve();
@@ -90,23 +145,104 @@ async function copyMarkdownImage(html) {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       return { height: Math.ceil(root.scrollHeight) };
     })()`);
-    const height = Math.min(Math.max((size && size.height) || 400, 240), IMAGE_EXPORT_MAX_HEIGHT);
-    win.setContentSize(width, height);
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    const image = await win.webContents.capturePage({ x: 0, y: 0, width, height });
-    if (!image || image.isEmpty()) return { ok: false, error: 'empty-image' };
-    // Electron 44 已移除 clipboard.writeImage，改用 ClipboardItem + Blob（与 app:copy-image 一致）。
-    const png = image.toPNG();
-    if (!png || !png.length) return { ok: false, error: 'empty-image' };
-    await clipboard.write([
-      new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) }),
-    ]);
-    return { ok: true, width, height };
+    const totalHeight = Math.min(Math.max((size && size.height) || 400, 240), IMAGE_EXPORT_MAX_HEIGHT);
+    const viewportHeight = Math.min(IMAGE_SLICE_HEIGHT, totalHeight);
+    win.setContentSize(cssWidth, viewportHeight);
+    await sleep(180);
+
+    const slices = [];
+    let offset = 0;
+    while (offset < totalHeight) {
+      const sliceHeight = Math.min(viewportHeight, totalHeight - offset);
+      await win.webContents.executeJavaScript(`new Promise((resolve) => {
+        document.getElementById('export-root').style.transform = 'translateY(-${offset}px)';
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      })`);
+      await sleep(60);
+      const image = await win.webContents.capturePage({
+        x: 0,
+        y: 0,
+        width: cssWidth,
+        height: sliceHeight,
+      });
+      if (!image || image.isEmpty()) return { ok: false, error: 'empty-image' };
+      slices.push({ dataUrl: image.toDataURL(), height: image.getSize().height });
+      offset += sliceHeight;
+    }
+    const first = await win.webContents.executeJavaScript(`(async () => {
+      const img = new Image();
+      img.src = ${JSON.stringify(slices[0].dataUrl)};
+      await img.decode();
+      return { width: img.width };
+    })()`);
+    const capturedWidth = (first && first.width) || cssWidth;
+    const capturedHeight = slices.reduce((sum, item) => sum + item.height, 0);
+    // width 按 DPI 换算为输出像素宽（96 DPI 为 1:1）。
+    let outWidth = Math.max(1, Math.round((cssWidth * dpi) / 96));
+    let scale = outWidth / capturedWidth;
+    let outHeight = Math.max(1, Math.round(capturedHeight * scale));
+    // 画布上限：等比缩小，避免 canvas 尺寸 / 内存超限。
+    let shrink = 1;
+    if (outHeight > IMAGE_MAX_PIXEL_HEIGHT) shrink = Math.min(shrink, IMAGE_MAX_PIXEL_HEIGHT / outHeight);
+    const area = outWidth * outHeight * shrink * shrink;
+    if (area > IMAGE_MAX_PIXELS) shrink = Math.min(shrink, Math.sqrt(IMAGE_MAX_PIXELS / area));
+    if (shrink < 1) {
+      outWidth = Math.max(1, Math.floor(outWidth * shrink));
+      outHeight = Math.max(1, Math.floor(outHeight * shrink));
+      scale *= shrink;
+    }
+    const dataUrl = await win.webContents.executeJavaScript(`(async () => {
+      document.body.innerHTML = '';
+      document.body.style.margin = '0';
+      document.body.style.background = '#ffffff';
+      const canvas = document.createElement('canvas');
+      canvas.width = ${outWidth};
+      canvas.height = ${outHeight};
+      document.body.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const urls = ${JSON.stringify(slices.map((item) => item.dataUrl))};
+      let y = 0;
+      for (const url of urls) {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const h = Math.round(img.height * ${scale});
+        ctx.drawImage(img, 0, y, ${outWidth}, h);
+        y += h;
+      }
+      return canvas.toDataURL('image/png');
+    })()`);
+    if (!dataUrl || dataUrl === 'data:,') return { ok: false, error: 'render-failed' };
+    return { ok: true, dataUrl, width: outWidth, height: outHeight, cssWidth, cssHeight: totalHeight };
   } catch (err) {
-    logger.error(`[file-editor] copy image failed: ${err.message}`);
+    logger.error(`[file-editor] render image failed: ${err.message}`);
     return { ok: false, error: err.message };
-  } finally {
-    if (!win.isDestroyed()) win.destroy();
+  }
+}
+
+/* 把 PNG data URL 保存到设置里的文件下载目录（重名自动加序号）。 */
+function saveMarkdownImage(dataUrl, name) {
+  const value = String(dataUrl || '');
+  if (!/^data:image\/png;base64,/.test(value)) return { ok: false, error: 'invalid' };
+  let buffer;
+  try {
+    buffer = Buffer.from(value.split(',')[1] || '', 'base64');
+  } catch (err) {
+    return { ok: false, error: 'invalid' };
+  }
+  if (!buffer || !buffer.length) return { ok: false, error: 'empty' };
+  try {
+    const dir = sftp.downloadDir();
+    const stem = path.basename(String(name || 'markdown'), path.extname(String(name || ''))) || 'markdown';
+    const target = sftp.uniqueLocalPath(dir, `${stem}.png`);
+    fs.writeFileSync(target, buffer);
+    logger.file(`[file-editor] markdown image saved: ${target}`);
+    return { ok: true, path: target };
+  } catch (err) {
+    logger.error(`[file-editor] save image failed: ${err.message}`);
+    return { ok: false, error: err.message };
   }
 }
 
@@ -325,13 +461,20 @@ function registerFileEditorIpc(ipcMain) {
     return editorBackup.clearBackups(info);
   });
 
-  // Markdown 预览「复制为图片」：离屏渲染后写入剪贴板。
-  ipcMain.handle(IPC.FILE_EDITOR_COPY_IMAGE, async (event, payload) => {
+  // Markdown 图片导出：离屏渲染并按参数返回 PNG data URL（供预览 / 复制）。
+  ipcMain.handle(IPC.FILE_EDITOR_RENDER_IMAGE, async (event, payload) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
     const html = payload && payload.html;
     if (typeof html !== 'string' || !html.trim()) return { ok: false, error: 'empty' };
-    return copyMarkdownImage(html);
+    return renderMarkdownImage(html, payload && payload.options);
+  });
+
+  // 把导出的 PNG 保存到设置里的下载目录。
+  ipcMain.handle(IPC.FILE_EDITOR_SAVE_IMAGE, (event, payload) => {
+    const info = wm.getFileEditorInfoForWebContents(event.sender.id);
+    if (!info) return { ok: false, error: 'forbidden' };
+    return saveMarkdownImage(payload && payload.dataUrl, payload && payload.name);
   });
 
   // 文件管理器销毁时（分离 / 断开 / 关闭）关闭它打开的所有编辑器。
@@ -342,4 +485,4 @@ function registerFileEditorIpc(ipcMain) {
   });
 }
 
-module.exports = { registerFileEditorIpc };
+module.exports = { registerFileEditorIpc, renderMarkdownImage };

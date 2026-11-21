@@ -144,7 +144,8 @@ const api = {
     backups: () => ipcRenderer.invoke(IPC.FILE_EDITOR_BACKUPS),
     readBackup: (id) => ipcRenderer.invoke(IPC.FILE_EDITOR_BACKUP_READ, { id }),
     clearBackups: () => ipcRenderer.invoke(IPC.FILE_EDITOR_BACKUP_CLEAR),
-    copyImage: (html) => ipcRenderer.invoke(IPC.FILE_EDITOR_COPY_IMAGE, { html }),
+    renderImage: (html, options) => ipcRenderer.invoke(IPC.FILE_EDITOR_RENDER_IMAGE, { html, options }),
+    saveImage: (dataUrl, name) => ipcRenderer.invoke(IPC.FILE_EDITOR_SAVE_IMAGE, { dataUrl, name }),
   },
   transferWindow: {
     open: (payload) => ipcRenderer.invoke(IPC.TRANSFER_WINDOW_OPEN, payload || {}),

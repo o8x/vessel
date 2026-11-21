@@ -117,7 +117,8 @@
 | `file-editor:backups` | — | `{ ok, items: [{ id, time, size, name }] }` | 列出当前文件的恢复副本元数据（按时间倒序），打开文件后据此提示是否恢复；只接受来自编辑器窗口的请求 |
 | `file-editor:backup-read` | `{ id }` | `{ ok, content, time, size }` | 读取指定恢复副本的内容（恢复到编辑器）；只接受来自编辑器窗口的请求 |
 | `file-editor:backup-clear` | — | `{ ok }` | 删除当前文件的全部恢复副本（正常保存 / 用户选择忽略后调用）；只接受来自编辑器窗口的请求 |
-| `file-editor:copy-image` | `{ html }` | `{ ok, width?, height?, error? }` | Markdown 预览「复制为图片」：主进程用离屏窗口按 900px 宽渲染预览 HTML，四周留 32×36px 边距，截图为 PNG 后写入系统剪贴板（高度上限 12000px）；只接受来自编辑器窗口的请求 |
+| `file-editor:render-image` | `{ html, options: { width, dpi, padding } }` | `{ ok, dataUrl, width, height, cssWidth, cssHeight, error? }` | Markdown 图片导出预览：复用隐藏导出窗口，按 `width`（默认 600）/ `dpi`（默认 150，输出像素宽 = width×dpi/96）/ `padding`（默认 32px）离屏渲染；长文档按 1600px 切片截图再拼接，CSS 高度上限 **30000px**（输出画布另有 60000px / 6000 万像素上限，超出等比缩小）；只接受来自编辑器窗口的请求 |
+| `file-editor:save-image` | `{ dataUrl, name }` | `{ ok, path?, error? }` | 把导出的 PNG 保存到设置里配置的「文件下载目录」（重名自动加序号，扩展名 `.png`）；只接受来自编辑器窗口的请求 |
 | `games:scan` | — | `{ ok, workDir, resolvedWorkDir, isDefault, engines }` | 扫描游戏工作目录；`engines[].games[]` 含 `{ id, name, engine, label, core, romRelativePath, size, mtime, played, coverUrl, romUrl }`（`played` 表示该游戏是否启动过）；支持 `roms/<engine>/<文件夹>/xxx.rom`（单 ROM 子目录以文件夹名为游戏名；多 ROM 子目录生成 `<引擎> - <文件夹>` 独立分类），扩展名匹配不区分大小写；已启动过的游戏会以 `id: recent` 的「最近启动」分类置顶（按 `lastPlayedAt` 倒序最多 8 个）；只接受主窗口 / 设置窗口请求 |
 | `games:open` | `{ gameId }` | `{ ok, error? }` | 打开 / 复用游戏窗口并加载游戏，同时更新 `meta.json` 的 `lastPlayedAt`；只接受主窗口请求 |
 | `games:window-info` | — | `{ ok, game, emulatorVersion, settings }` | 游戏窗口启动时读取当前游戏与按键 / 音量 / `hasFdsBios` 设置；只接受游戏窗口请求 |

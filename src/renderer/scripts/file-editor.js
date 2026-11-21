@@ -82,10 +82,26 @@
         fontBigger: '放大字号',
         fontSmaller: '缩小字号',
         fontReset: '重置字号',
-        copyImage: '复制为图片',
+        copyImage: '导出图片',
         copiedImage: '已复制为图片',
         copyImageFailed: '复制图片失败：{error}',
         copyImageEmpty: '没有可复制的内容',
+        imageExport: '导出 Markdown 图片',
+        imageWidth: '宽度',
+        imageDpi: 'DPI',
+        imagePadding: '留白',
+        imageHint: '宽度为 CSS 布局宽度；DPI 150 时最终像素宽 = 宽度 × 150 / 96。',
+        imageRendering: '渲染中…',
+        imageRenderFailed: '渲染失败：{error}',
+        imageReady: '{width} × {height} px',
+        imageDownload: '下载',
+        imageDownloading: '下载中…',
+        imageDownloaded: '已保存到 {path}',
+        imageDownloadFailed: '保存失败：{error}',
+        imageCopy: '复制',
+        imageCopied: '已复制到剪贴板',
+        imageCopyFailed: '复制失败：{error}',
+        imageClose: '关闭',
         recoveryTitle: '发现未保存的恢复副本',
         recoveryHint: '上次退出时该文件有未保存的修改。可按时间选择一个版本恢复到编辑器中（本地最多保留最近 5 份）。',
         recoveryRestore: '恢复所选版本',
@@ -169,10 +185,26 @@
         fontBigger: 'Increase font size',
         fontSmaller: 'Decrease font size',
         fontReset: 'Reset font size',
-        copyImage: 'Copy as image',
+        copyImage: 'Export image',
         copiedImage: 'Copied as image',
         copyImageFailed: 'Copy image failed: {error}',
         copyImageEmpty: 'Nothing to copy',
+        imageExport: 'Export Markdown image',
+        imageWidth: 'Width',
+        imageDpi: 'DPI',
+        imagePadding: 'Padding',
+        imageHint: 'Width is the CSS layout width; at 150 DPI the output pixel width = width × 150 / 96.',
+        imageRendering: 'Rendering…',
+        imageRenderFailed: 'Render failed: {error}',
+        imageReady: '{width} × {height} px',
+        imageDownload: 'Download',
+        imageDownloading: 'Downloading…',
+        imageDownloaded: 'Saved to {path}',
+        imageDownloadFailed: 'Save failed: {error}',
+        imageCopy: 'Copy',
+        imageCopied: 'Copied to clipboard',
+        imageCopyFailed: 'Copy failed: {error}',
+        imageClose: 'Close',
         recoveryTitle: 'Unsaved recovery found',
         recoveryHint: 'This file had unsaved changes when the editor last closed. Pick a version by time to restore it (the last 5 local copies are kept).',
         recoveryRestore: 'Restore selected',
@@ -283,6 +315,20 @@
     recoveryList: document.getElementById('ed-recovery-list'),
     recoveryDiscard: document.getElementById('ed-recovery-discard'),
     recoveryRestore: document.getElementById('ed-recovery-restore'),
+    imageModal: document.getElementById('ed-image-modal'),
+    imageTitle: document.getElementById('ed-image-title'),
+    imagePreview: document.getElementById('ed-image-preview'),
+    imageNote: document.getElementById('ed-image-note'),
+    imageWidthLabel: document.getElementById('ed-image-width-label'),
+    imageWidth: document.getElementById('ed-image-width'),
+    imageDpiLabel: document.getElementById('ed-image-dpi-label'),
+    imageDpi: document.getElementById('ed-image-dpi'),
+    imagePaddingLabel: document.getElementById('ed-image-padding-label'),
+    imagePadding: document.getElementById('ed-image-padding'),
+    imageHint: document.getElementById('ed-image-hint'),
+    imageClose: document.getElementById('ed-image-close'),
+    imageDownload: document.getElementById('ed-image-download'),
+    imageCopy: document.getElementById('ed-image-copy'),
     menu: document.getElementById('ed-menu'),
     split: document.getElementById('editor-split'),
     previewPane: document.getElementById('ed-preview-pane'),
@@ -345,6 +391,8 @@
     lastBackupContent: '',
     dirtySent: false,
     recovery: { items: [], selected: -1 },
+    // Markdown 图片导出：预览参数与最近一次渲染结果。
+    imageExport: { width: 600, dpi: 150, padding: 32, dataUrl: '', widthPx: 0, heightPx: 0, timer: null, rendering: false },
     // 查找 / 替换（Command + F）
     find: {
       visible: false,
@@ -540,26 +588,147 @@
     });
   }
 
-  /* 把当前 Markdown 预览渲染成带四周留白的 PNG 并复制到剪贴板。
-     由主进程创建离屏窗口渲染（可完整截取长文档，不受当前可视区域限制）。 */
-  async function copyPreviewImage() {
-    if (!state.previewOn || !dom.previewPane || !state.cm) {
-      setStatus(i18n.t('editor.copyImageEmpty'));
-      return;
+  /* ------------------------------ Markdown 图片导出 ------------------------------
+     点击工具栏按钮先打开预览弹窗，可调宽度 / DPI / 留白；预览由主进程离屏渲染，
+     复制写入剪贴板，下载保存到设置里的文件下载目录。 */
+  function closeImageExport() {
+    if (!dom.imageModal) return;
+    if (state.imageExport.timer) {
+      clearTimeout(state.imageExport.timer);
+      state.imageExport.timer = null;
     }
-    if (!state.cm.getValue('\n').trim()) {
-      setStatus(i18n.t('editor.copyImageEmpty'));
-      return;
-    }
-    const html = dom.previewPane.innerHTML;
+    dom.imageModal.hidden = true;
+  }
+
+  function imageModalNote(text, isError) {
+    if (!dom.imageNote) return;
+    dom.imageNote.textContent = text || '';
+    dom.imageNote.classList.toggle('is-error', Boolean(isError));
+  }
+
+  function readImageOptions() {
+    const clamp = (value, min, max, fallback) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return fallback;
+      return Math.min(max, Math.max(min, Math.round(num)));
+    };
+    const opts = {
+      width: clamp(dom.imageWidth.value, 200, 2400, 600),
+      dpi: clamp(dom.imageDpi.value, 72, 600, 150),
+      padding: clamp(dom.imagePadding.value, 0, 200, 32),
+    };
+    dom.imageWidth.value = String(opts.width);
+    dom.imageDpi.value = String(opts.dpi);
+    dom.imagePadding.value = String(opts.padding);
+    Object.assign(state.imageExport, opts);
+    return opts;
+  }
+
+  let imageRenderSeq = 0;
+
+  async function renderImageNow() {
+    if (!state.cm || !dom.previewPane) return { ok: false, error: 'empty' };
+    const seq = ++imageRenderSeq;
+    const opts = readImageOptions();
+    state.imageExport.rendering = true;
+    if (dom.imageDownload) dom.imageDownload.disabled = true;
+    if (dom.imageCopy) dom.imageCopy.disabled = true;
+    imageModalNote(i18n.t('editor.imageRendering'));
     let result = null;
     try {
-      result = await window.ships.fileEditor.copyImage(html);
+      result = await window.ships.fileEditor.renderImage(dom.previewPane.innerHTML, opts);
     } catch (err) {
       result = { ok: false, error: err.message };
     }
-    if (result && result.ok) setStatus(i18n.t('editor.copiedImage'), 'is-success');
-    else setStatus(i18n.t('editor.copyImageFailed', { error: (result && result.error) || 'error' }), 'is-error');
+    if (seq !== imageRenderSeq) return result; // 有更新的渲染请求，丢弃旧结果
+    state.imageExport.rendering = false;
+    if (dom.imageDownload) dom.imageDownload.disabled = false;
+    if (dom.imageCopy) dom.imageCopy.disabled = false;
+    if (result && result.ok) {
+      state.imageExport.dataUrl = result.dataUrl;
+      state.imageExport.widthPx = result.width;
+      state.imageExport.heightPx = result.height;
+      if (dom.imagePreview) {
+        dom.imagePreview.src = result.dataUrl;
+        dom.imagePreview.hidden = false;
+      }
+      imageModalNote(i18n.t('editor.imageReady', { width: result.width, height: result.height }));
+    } else {
+      state.imageExport.dataUrl = '';
+      if (dom.imagePreview) {
+        dom.imagePreview.hidden = true;
+        dom.imagePreview.removeAttribute('src');
+      }
+      imageModalNote(
+        i18n.t('editor.imageRenderFailed', { error: (result && result.error) || 'error' }),
+        true
+      );
+    }
+    return result;
+  }
+
+  function scheduleImageRender() {
+    if (state.imageExport.timer) clearTimeout(state.imageExport.timer);
+    state.imageExport.timer = setTimeout(() => {
+      state.imageExport.timer = null;
+      renderImageNow();
+    }, 300);
+  }
+
+  async function openImageExport() {
+    if (!state.previewOn || !dom.previewPane || !dom.imageModal) {
+      setStatus(i18n.t('editor.copyImageEmpty'));
+      return;
+    }
+    if (!state.cm || !state.cm.getValue('\n').trim()) {
+      setStatus(i18n.t('editor.copyImageEmpty'));
+      return;
+    }
+    dom.imageWidth.value = String(state.imageExport.width);
+    dom.imageDpi.value = String(state.imageExport.dpi);
+    dom.imagePadding.value = String(state.imageExport.padding);
+    dom.imagePreview.hidden = true;
+    dom.imagePreview.removeAttribute('src');
+    dom.imageModal.hidden = false;
+    renderImageNow();
+  }
+
+  async function downloadImage() {
+    const result = await renderImageNow();
+    if (!result || !result.ok) return;
+    let saved = null;
+    try {
+      saved = await window.ships.fileEditor.saveImage(result.dataUrl, state.name);
+    } catch (err) {
+      saved = { ok: false, error: err.message };
+    }
+    if (saved && saved.ok) {
+      imageModalNote(i18n.t('editor.imageDownloaded', { path: saved.path }));
+      setStatus(i18n.t('editor.imageDownloaded', { path: saved.path }), 'is-success');
+    } else {
+      const text = i18n.t('editor.imageDownloadFailed', { error: (saved && saved.error) || 'error' });
+      imageModalNote(text, true);
+      setStatus(text, 'is-error');
+    }
+  }
+
+  async function copyImageToClipboard() {
+    const result = await renderImageNow();
+    if (!result || !result.ok) return;
+    let copied = null;
+    try {
+      copied = await window.ships.copyImage(result.dataUrl);
+    } catch (err) {
+      copied = { ok: false, error: err.message };
+    }
+    if (copied && copied.ok) {
+      imageModalNote(i18n.t('editor.imageCopied'));
+      setStatus(i18n.t('editor.copiedImage'), 'is-success');
+    } else {
+      const text = i18n.t('editor.imageCopyFailed', { error: (copied && copied.error) || 'error' });
+      imageModalNote(text, true);
+      setStatus(text, 'is-error');
+    }
   }
 
   /* ------------------------------ 编辑器命令 ------------------------------ */
@@ -1513,6 +1682,14 @@
     }
     if (dom.replaceOne) dom.replaceOne.textContent = i18n.t('editor.replaceOne');
     if (dom.replaceAll) dom.replaceAll.textContent = i18n.t('editor.replaceAll');
+    if (dom.imageTitle) dom.imageTitle.textContent = i18n.t('editor.imageExport');
+    if (dom.imageWidthLabel) dom.imageWidthLabel.textContent = i18n.t('editor.imageWidth');
+    if (dom.imageDpiLabel) dom.imageDpiLabel.textContent = i18n.t('editor.imageDpi');
+    if (dom.imagePaddingLabel) dom.imagePaddingLabel.textContent = i18n.t('editor.imagePadding');
+    if (dom.imageHint) dom.imageHint.textContent = i18n.t('editor.imageHint');
+    if (dom.imageClose) dom.imageClose.textContent = i18n.t('editor.imageClose');
+    if (dom.imageDownload) dom.imageDownload.textContent = i18n.t('editor.imageDownload');
+    if (dom.imageCopy) dom.imageCopy.textContent = i18n.t('editor.imageCopy');
     state.modeLabel = labelForMode(state.mode, state.name);
     renderStatus();
     updateFindCount();
@@ -1529,7 +1706,7 @@
   if (dom.more) dom.more.addEventListener('click', () => (dom.menu && dom.menu.hidden ? openMenu() : closeMenu()));
   if (dom.fontSmaller) dom.fontSmaller.addEventListener('click', () => zoomFont(-1));
   if (dom.fontBigger) dom.fontBigger.addEventListener('click', () => zoomFont(1));
-  if (dom.copyImage) dom.copyImage.addEventListener('click', () => copyPreviewImage());
+  if (dom.copyImage) dom.copyImage.addEventListener('click', () => openImageExport());
   if (dom.preview) {
     dom.preview.addEventListener('click', () => setPreview(!state.previewOn));
   }
@@ -1623,6 +1800,17 @@
   });
   if (dom.recoveryRestore) dom.recoveryRestore.addEventListener('click', () => restoreSelectedBackup());
   if (dom.recoveryDiscard) dom.recoveryDiscard.addEventListener('click', () => discardRecovery());
+  if (dom.imageClose) dom.imageClose.addEventListener('click', () => closeImageExport());
+  if (dom.imageDownload) dom.imageDownload.addEventListener('click', () => downloadImage());
+  if (dom.imageCopy) dom.imageCopy.addEventListener('click', () => copyImageToClipboard());
+  for (const input of [dom.imageWidth, dom.imageDpi, dom.imagePadding]) {
+    if (input) input.addEventListener('input', scheduleImageRender);
+  }
+  if (dom.imageModal) {
+    dom.imageModal.addEventListener('mousedown', (event) => {
+      if (event.target === dom.imageModal) closeImageExport();
+    });
+  }
 
   window.addEventListener('keydown', (event) => {
     const mod = event.metaKey || event.ctrlKey;
@@ -1636,6 +1824,11 @@
     if (mod && key === 'g') {
       event.preventDefault();
       findStep(event.shiftKey ? -1 : 1);
+      return;
+    }
+    if (event.key === 'Escape' && dom.imageModal && !dom.imageModal.hidden) {
+      event.preventDefault();
+      closeImageExport();
       return;
     }
     if (event.key === 'Escape' && state.find.visible && dom.modal.hidden) {

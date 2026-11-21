@@ -97,6 +97,37 @@
       </div>
     </div>
 
+    <!-- Markdown 图片导出：预览 + 可调宽度 / DPI / 留白，支持复制与下载 -->
+    <div id="ed-image-modal" class="editor-modal" hidden>
+      <div class="editor-modal-card editor-image-card">
+        <div id="ed-image-title" class="editor-modal-title"></div>
+        <div class="editor-image-preview">
+          <img id="ed-image-preview" alt="" />
+          <div id="ed-image-note" class="editor-image-note"></div>
+        </div>
+        <div class="editor-image-params">
+          <label class="editor-image-field">
+            <span id="ed-image-width-label"></span>
+            <input id="ed-image-width" class="editor-modal-input" type="number" min="200" max="2400" step="10" />
+          </label>
+          <label class="editor-image-field">
+            <span id="ed-image-dpi-label"></span>
+            <input id="ed-image-dpi" class="editor-modal-input" type="number" min="72" max="600" step="1" />
+          </label>
+          <label class="editor-image-field">
+            <span id="ed-image-padding-label"></span>
+            <input id="ed-image-padding" class="editor-modal-input" type="number" min="0" max="200" step="1" />
+          </label>
+        </div>
+        <div id="ed-image-hint" class="editor-image-hint"></div>
+        <div class="editor-modal-actions">
+          <button id="ed-image-close" class="editor-btn" type="button"></button>
+          <button id="ed-image-download" class="editor-btn" type="button"></button>
+          <button id="ed-image-copy" class="editor-btn primary" type="button"></button>
+        </div>
+      </div>
+    </div>
+
     <script src="./scripts/theme.js"></script>
     <script src="./scripts/constants.js"></script>
     <script src="./scripts/i18n.js"></script>
