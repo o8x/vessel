@@ -23,6 +23,8 @@ Commands:
   ssh                           List saved SSH hosts (user@host, group, alias)
   ssh <user@host> [password]    Connect, or quick-connect a new host
   ssh <alias>                   Connect to a saved host by its alias
+  edit                          Open a new scratch file in the Vessel editor
+  edit <file>                   Open a local file in the Vessel editor
   2fa                           List 2FA accounts with their current codes
   completion                    Print the zsh completion function
   help                          Show this help
@@ -33,6 +35,8 @@ Examples:
   vessel ssh
   vessel ssh root@192.168.1.10
   vessel ssh root@192.168.1.10 "my-password"
+  vessel edit
+  vessel edit ./README.md
   vessel 2fa
 EOF
 }
@@ -122,6 +126,11 @@ cmd_ssh() {
 ${2:-}"
 }
 
+cmd_edit() {
+  with_app
+  api POST /v1/edit "${1:-}"
+}
+
 cmd_twofa() {
   if [ -n "${1:-}" ]; then
     err "2fa takes no arguments"
@@ -153,6 +162,10 @@ case "${1:-}" in
   ssh)
     shift
     cmd_ssh "${1:-}" "${2:-}"
+    ;;
+  edit)
+    shift
+    cmd_edit "${1:-}"
     ;;
   2fa|twofa)
     shift

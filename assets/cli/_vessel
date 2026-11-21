@@ -9,7 +9,7 @@ if (( $+functions[compdef] )); then
     local line
 
     if (( CURRENT == 2 )); then
-      compadd tool ssh 2fa completion help
+      compadd tool ssh edit 2fa completion help
       return
     fi
 
@@ -25,6 +25,11 @@ if (( $+functions[compdef] )); then
         for line in ${(f)"$(vessel __complete ssh 2>/dev/null)"}; do
           [[ -n $line ]] && items+=("$line")
         done
+        ;;
+      edit)
+        # `vessel edit <file>`：补全本地文件路径（不联网、不询问应用）。
+        _files
+        return
         ;;
       2fa)
         # `vessel 2fa` 只列出，不接受参数。

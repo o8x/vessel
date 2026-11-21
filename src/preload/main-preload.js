@@ -138,6 +138,7 @@ const api = {
     openVSCode: (payload) => ipcRenderer.invoke(IPC.FILE_EDITOR_OPEN_VSCODE, payload),
     download: (payload) => ipcRenderer.invoke(IPC.FILE_EDITOR_DOWNLOAD, payload),
     closeAll: () => ipcRenderer.invoke(IPC.FILE_EDITOR_CLOSE_ALL),
+    openLocal: () => ipcRenderer.invoke(IPC.FILE_EDITOR_OPEN_LOCAL),
   },
   transferWindow: {
     open: (payload) => ipcRenderer.invoke(IPC.TRANSFER_WINDOW_OPEN, payload || {}),

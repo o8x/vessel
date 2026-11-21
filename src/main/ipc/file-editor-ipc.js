@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { BrowserWindow, dialog } = require('electron');
-const { IPC } = require('../../shared/constants');
+const { IPC, FILE_EDITOR_MAX_BYTES } = require('../../shared/constants');
 const wm = require('../window-manager');
 const sftp = require('../services/sftp-service');
 const vscode = require('../services/vscode-service');
@@ -111,6 +111,38 @@ function registerFileEditorIpc(ipcMain) {
       name: info.name,
       reference: ref && ref.ok ? ref.references[0] : info.path,
     };
+  });
+
+  // 编辑器窗口内「打开文件」：拉起系统打开面板，把当前窗口切换到选中的本地文件。
+  ipcMain.handle(IPC.FILE_EDITOR_OPEN_LOCAL, async (event) => {
+    const info = wm.getFileEditorInfoForWebContents(event.sender.id);
+    if (!info) return { ok: false, error: 'forbidden' };
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const options = { properties: ['openFile', 'showHiddenFiles'] };
+    if (info.local && info.path) options.defaultPath = path.dirname(info.path);
+    let picked;
+    try {
+      picked = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+    if (!picked || picked.canceled || !picked.filePaths.length) return { ok: false, canceled: true };
+    const filePath = picked.filePaths[0];
+    try {
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile()) return { ok: false, error: 'not-a-file' };
+      if (stat.size > FILE_EDITOR_MAX_BYTES) return { ok: false, error: 'too-large', size: stat.size };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+    wm.updateFileEditorTarget(event.sender.id, {
+      local: true,
+      sessionId: '',
+      path: filePath,
+      name: path.basename(filePath),
+    });
+    logger.file(`[file-editor] opened local file: ${filePath}`);
+    return { ok: true, path: filePath, name: path.basename(filePath) };
   });
 
   ipcMain.handle(IPC.FILE_EDITOR_READ, (event) => {

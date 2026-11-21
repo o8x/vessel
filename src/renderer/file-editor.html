@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:"
     />
     <title>Vessel Editor</title>
     <link rel="stylesheet" href="../../node_modules/codemirror/lib/codemirror.css" />
@@ -18,16 +18,22 @@
         <span id="editor-window-title" class="modal-titlebar-title"></span>
       </header>
       <header class="editor-toolbar">
+        <button id="ed-open" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-save" class="icon-btn editor-toolbar-btn primary" type="button"></button>
         <button id="ed-save-as" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-open-vscode" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-download" class="icon-btn editor-toolbar-btn" type="button"></button>
         <span class="editor-toolbar-spacer"></span>
+        <button id="ed-preview" class="icon-btn editor-toolbar-btn" type="button"></button>
+        <button id="ed-lines" class="icon-btn editor-toolbar-btn" type="button"></button>
+        <button id="ed-wrap" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-undo" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-redo" class="icon-btn editor-toolbar-btn" type="button"></button>
-        <button id="ed-wrap" class="icon-btn editor-toolbar-btn" type="button"></button>
         <button id="ed-reload" class="icon-btn editor-toolbar-btn" type="button"></button>
+        <button id="ed-more" class="icon-btn editor-toolbar-btn" type="button"></button>
       </header>
+      <!-- 更多命令（跳转行 / 行操作 / 缩进 / 字号）：点工具栏最右侧「…」弹出 -->
+      <div id="ed-menu" class="editor-menu" hidden></div>
       <!-- 查找 / 替换（Command + F）：停靠在工具栏下方，两行布局（查找 / 替换），风格接近 Word -->
       <div id="editor-find" class="editor-find" hidden>
         <div class="editor-find-row">
@@ -47,7 +53,11 @@
           <button id="ed-replace-all" class="editor-btn" type="button"></button>
         </div>
       </div>
-      <div id="editor-host" class="editor-host"></div>
+      <!-- 编辑区 + Markdown 预览（预览开启时左右分栏；窗口较窄时自动上下分栏） -->
+      <div id="editor-split" class="editor-split">
+        <div id="editor-host" class="editor-host"></div>
+        <div id="ed-preview-pane" class="editor-preview" hidden></div>
+      </div>
       <footer class="editor-status">
         <span id="ed-ref" class="editor-status-ref"></span>
         <span class="editor-status-mid">
@@ -79,6 +89,8 @@
     <script src="../../node_modules/codemirror/addon/edit/matchbrackets.js"></script>
     <script src="../../node_modules/codemirror/addon/edit/closebrackets.js"></script>
     <script src="../../node_modules/codemirror/addon/selection/active-line.js"></script>
+    <script src="../../node_modules/codemirror/addon/comment/comment.js"></script>
+    <script src="../../node_modules/marked/lib/marked.umd.js"></script>
     <script src="./scripts/file-editor.js"></script>
   </body>
 </html>

@@ -14,6 +14,7 @@ const path = require('path');
 const { app } = require('electron');
 
 const { DATA_DIR } = require('../utils/paths');
+const { FILE_EDITOR_MAX_BYTES } = require('../../shared/constants');
 const logger = require('../utils/logger');
 
 const BIN_DIR = path.join(DATA_DIR, 'bin');
@@ -311,6 +312,54 @@ async function connectSsh(body) {
   };
 }
 
+/* `vessel edit [file]`：
+   - 不带参数 → 在编辑器里新建一个本地草稿（与终端内联命令 `\v edit` 一致）；
+   - 带路径 → 打开该本地文件（支持 ~ 展开）。 */
+function openEditor(body) {
+  const wm = require('../window-manager');
+  const sftp = require('./sftp-service');
+  const raw = String(body || '').trim();
+  if (!raw) {
+    let filePath = '';
+    try {
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      filePath = sftp.uniqueLocalPath(sftp.downloadDir(), `scratch-${stamp}.txt`);
+      fs.writeFileSync(filePath, '', 'utf8');
+    } catch (err) {
+      return { code: 500, message: `Cannot create file: ${err.message}` };
+    }
+    const win = wm.openStandaloneFileEditor({
+      local: true,
+      path: filePath,
+      name: path.basename(filePath),
+      target: '',
+    });
+    if (!win) return { code: 500, message: 'Cannot open the editor' };
+    logger.file(`[cli] edit new local file ${filePath}`);
+    return { code: 200, message: `Opened a new file in Vessel Editor: ${filePath}` };
+  }
+
+  const expanded = raw.startsWith('~') ? path.join(os.homedir(), raw.slice(1)) : raw;
+  const filePath = path.resolve(expanded);
+  let stat = null;
+  try {
+    stat = fs.statSync(filePath);
+  } catch (err) {
+    return { code: 404, message: `File not found: ${raw}` };
+  }
+  if (!stat.isFile()) return { code: 400, message: `Not a file: ${raw}` };
+  if (stat.size > FILE_EDITOR_MAX_BYTES) return { code: 400, message: 'File is larger than 8 MB' };
+  const win = wm.openStandaloneFileEditor({
+    local: true,
+    path: filePath,
+    name: path.basename(filePath),
+    target: '',
+  });
+  if (!win) return { code: 500, message: 'Cannot open the editor' };
+  logger.file(`[cli] edit local file ${filePath}`);
+  return { code: 200, message: `Opened in Vessel Editor: ${filePath}` };
+}
+
 /* ------------------------------- HTTP ------------------------------- */
 
 function send(res, code, body) {
@@ -363,6 +412,12 @@ function handle(req, res) {
     if (req.method === 'POST' && route === '/v1/tool') {
       return readBody(req, res, (body) => {
         const result = openTool(body);
+        send(res, result.code, `${result.message}\n`);
+      });
+    }
+    if (req.method === 'POST' && route === '/v1/edit') {
+      return readBody(req, res, (body) => {
+        const result = openEditor(body);
         send(res, result.code, `${result.message}\n`);
       });
     }
@@ -491,4 +546,4 @@ function installCli() {
   }
 }
 
-module.exports = { start, stop, status: cliStatus, install: installCli, SCRIPT_FILE, BIN_DIR };
+module.exports = { start, stop, status: cliStatus, install: installCli, openEditor, SCRIPT_FILE, BIN_DIR };

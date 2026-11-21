@@ -1819,7 +1819,8 @@ function fileEditorTitle(info) {
 }
 
 function openFileEditorWindow(ownerSender, payload) {
-  if (!ownerSender || ownerSender.isDestroyed()) return null;
+  // ownerSender 可为 null（CLI / 主进程直接打开，无归属窗口时不随任何窗口关闭）。
+  const hasOwner = Boolean(ownerSender && !ownerSender.isDestroyed());
   // local = 本地临时文件（无 SFTP 会话），其余走远端文件。
   const isLocal = Boolean(payload && payload.local);
   const sessionId = isLocal ? '' : String((payload && payload.sessionId) || '');
@@ -1853,7 +1854,7 @@ function openFileEditorWindow(ownerSender, payload) {
     },
   });
   win.__editorInfo = {
-    ownerId: ownerSender.id,
+    ownerId: hasOwner ? ownerSender.id : -1,
     sessionId,
     path: filePath,
     name,
@@ -1887,8 +1888,8 @@ function openFileEditorWindow(ownerSender, payload) {
     fileEditorWindows.delete(win);
   });
   // 文件管理器窗口被销毁时（关闭 / 分离 / 断开连接），自动关闭其打开的编辑器。
-  const ownerId = ownerSender.id;
-  if (!fileEditorOwnerCleanup.has(ownerId)) {
+  const ownerId = hasOwner ? ownerSender.id : -1;
+  if (hasOwner && !fileEditorOwnerCleanup.has(ownerId)) {
     const cleanup = () => {
       fileEditorOwnerCleanup.delete(ownerId);
       closeFileEditorsForOwner(ownerId);
@@ -1897,6 +1898,11 @@ function openFileEditorWindow(ownerSender, payload) {
     fileEditorOwnerCleanup.set(ownerId, cleanup);
   }
   return win;
+}
+
+/* 无归属窗口的编辑器（CLI `vessel edit` 等）：不随任何窗口关闭。 */
+function openStandaloneFileEditor(payload) {
+  return openFileEditorWindow(null, payload);
 }
 
 function getFileEditorInfoForWebContents(id) {
@@ -1911,6 +1917,21 @@ function updateFileEditorPath(id, nextPath) {
   if (!info) return null;
   info.path = String(nextPath || '');
   info.name = info.local ? path.basename(info.path) : path.posix.basename(info.path);
+  for (const win of fileEditorWindows) {
+    if (!win.isDestroyed() && win.webContents.id === id) win.setTitle(fileEditorTitle(info));
+  }
+  return info;
+}
+
+/* 切换编辑器窗口当前打开的文件（编辑器内「打开文件」/ 拖拽本地文件进来时用）。 */
+function updateFileEditorTarget(id, next) {
+  const info = getFileEditorInfoForWebContents(id);
+  if (!info) return null;
+  const payload = next || {};
+  info.local = payload.local !== false;
+  info.sessionId = info.local ? '' : String(payload.sessionId || '');
+  info.path = String(payload.path || '');
+  info.name = String(payload.name || '') || (info.local ? path.basename(info.path) : path.posix.basename(info.path));
   for (const win of fileEditorWindows) {
     if (!win.isDestroyed() && win.webContents.id === id) win.setTitle(fileEditorTitle(info));
   }
@@ -2493,8 +2514,10 @@ module.exports = {
   snapFileWindowContentSize,
   closeFileWindow,
   openFileEditorWindow,
+  openStandaloneFileEditor,
   getFileEditorInfoForWebContents,
   updateFileEditorPath,
+  updateFileEditorTarget,
   closeFileEditorsForOwner,
   forgetFileWindowGeometry,
   applyFileWindowAlwaysOnTop,

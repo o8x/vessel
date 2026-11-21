@@ -3368,6 +3368,190 @@ body.editor-window {
 .editor-status-right.is-success {
   color: var(--color-success);
 }
+
+/* ---------------- 编辑器：编辑区 + Markdown 预览 / 更多命令菜单 ---------------- */
+/* 编辑区与预览左右分栏；窗口窄于 640px 时自动改为上下分栏。 */
+.editor-split {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  min-width: 0;
+  min-height: 0;
+}
+.editor-split.preview-on .editor-host,
+.editor-split.preview-on .editor-preview {
+  flex: 1 1 0;
+}
+.editor-preview {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-size: 13px;
+  line-height: 1.65;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.editor-preview[hidden] {
+  display: none;
+}
+@media (max-width: 639px) {
+  .editor-split.preview-on {
+    flex-direction: column;
+  }
+  .editor-split.preview-on .editor-preview {
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+}
+.editor-preview-empty {
+  color: var(--color-fg-muted);
+  font-size: 12px;
+}
+/* Markdown 渲染样式（覆盖 marked 输出的常见标签） */
+.editor-preview > :first-child {
+  margin-top: 0;
+}
+.editor-preview h1,
+.editor-preview h2,
+.editor-preview h3,
+.editor-preview h4,
+.editor-preview h5,
+.editor-preview h6 {
+  margin: 1.1em 0 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.editor-preview h1 {
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 1.6em;
+}
+.editor-preview h2 {
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 1.35em;
+}
+.editor-preview h3 {
+  font-size: 1.15em;
+}
+.editor-preview p,
+.editor-preview ul,
+.editor-preview ol,
+.editor-preview blockquote,
+.editor-preview pre,
+.editor-preview table {
+  margin: 0.6em 0;
+}
+.editor-preview ul,
+.editor-preview ol {
+  padding-left: 1.4em;
+  list-style: disc;
+}
+.editor-preview ol {
+  list-style: decimal;
+}
+.editor-preview li {
+  margin: 0.2em 0;
+}
+.editor-preview a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+.editor-preview code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+.editor-preview pre {
+  padding: 8px 10px;
+  border-radius: var(--radius-control-sm);
+  background: var(--color-surface-2);
+  overflow-x: auto;
+}
+.editor-preview pre code {
+  padding: 0;
+  background: none;
+}
+.editor-preview blockquote {
+  padding-left: 10px;
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-fg-muted);
+}
+.editor-preview table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.editor-preview th,
+.editor-preview td {
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+.editor-preview img {
+  max-width: 100%;
+  height: auto;
+}
+.editor-preview hr {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+.editor-preview input[type='checkbox'] {
+  margin-right: 0.4em;
+}
+
+/* 「更多命令」下拉菜单（相对 .editor-shell 定位） */
+.editor-shell {
+  position: relative;
+}
+.editor-menu {
+  position: absolute;
+  z-index: 30;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
+}
+.editor-menu[hidden] {
+  display: none;
+}
+.editor-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--color-fg);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.editor-menu-item:hover {
+  background: var(--color-surface-2);
+}
+.editor-menu-hint {
+  color: var(--color-fg-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.editor-menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--color-border);
+}
 .editor-modal {
   position: fixed;
   inset: 0;

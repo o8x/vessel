@@ -6,7 +6,7 @@
 
 (function bootstrapFileEditor() {
   const i18n = window.ShipsI18n;
-  const { Icons } = window.ShipsUI;
+  const { Icons, el, escapeHtml } = window.ShipsUI;
 
   i18n.extend({
     zh: {
@@ -54,6 +54,35 @@
         regexInvalid: '正则无效',
         findNone: '无结果',
         replacedAll: '已替换 {count} 处',
+        openLocal: '打开本地文件',
+        openLocalFailed: '打开失败：{error}',
+        openLocalTooLarge: '文件超过 8 MB，请在 VS Code 中打开',
+        openLocalConfirm: '当前文件有未保存修改，确定放弃并打开其他文件？',
+        preview: 'Markdown 预览',
+        previewOn: '关闭预览',
+        previewOff: '显示 Markdown 预览',
+        previewOnlyMarkdown: '仅 Markdown 文件支持预览（保存为 .md 后可用）',
+        previewEmpty: '（没有内容）',
+        linesOff: '隐藏行号',
+        linesOn: '显示行号',
+        more: '更多命令',
+        goToLine: '转到行…',
+        goToLineTitle: '转到行',
+        goToLinePlaceholder: '行号（1 – {max}）',
+        goToLineBad: '行号无效',
+        duplicateLine: '复制当前行',
+        deleteLine: '删除当前行',
+        moveLineUp: '上移当前行',
+        moveLineDown: '下移当前行',
+        toggleComment: '切换注释',
+        trimTrailing: '去除行尾空白',
+        trimTrailingDone: '已去除行尾空白',
+        indent2: '缩进 2 个空格',
+        indent4: '缩进 4 个空格',
+        fontBigger: '放大字号',
+        fontSmaller: '缩小字号',
+        fontReset: '重置字号',
+        menuSeparator: '—',
       },
     },
     en: {
@@ -101,6 +130,35 @@
         regexInvalid: 'Invalid regex',
         findNone: 'No results',
         replacedAll: 'Replaced {count} occurrence(s)',
+        openLocal: 'Open local file',
+        openLocalFailed: 'Open failed: {error}',
+        openLocalTooLarge: 'File is larger than 8 MB; open it in VS Code',
+        openLocalConfirm: 'This file has unsaved changes. Discard them and open another file?',
+        preview: 'Markdown preview',
+        previewOn: 'Hide preview',
+        previewOff: 'Show Markdown preview',
+        previewOnlyMarkdown: 'Preview is available for Markdown files only (save as .md to enable)',
+        previewEmpty: '(empty)',
+        linesOff: 'Hide line numbers',
+        linesOn: 'Show line numbers',
+        more: 'More commands',
+        goToLine: 'Go to line…',
+        goToLineTitle: 'Go to line',
+        goToLinePlaceholder: 'Line number (1 – {max})',
+        goToLineBad: 'Invalid line number',
+        duplicateLine: 'Duplicate line',
+        deleteLine: 'Delete line',
+        moveLineUp: 'Move line up',
+        moveLineDown: 'Move line down',
+        toggleComment: 'Toggle comment',
+        trimTrailing: 'Trim trailing whitespace',
+        trimTrailingDone: 'Trailing whitespace trimmed',
+        indent2: 'Indent: 2 spaces',
+        indent4: 'Indent: 4 spaces',
+        fontBigger: 'Increase font size',
+        fontSmaller: 'Decrease font size',
+        fontReset: 'Reset font size',
+        menuSeparator: '—',
       },
     },
   });
@@ -182,6 +240,7 @@
   const dom = {
     title: document.getElementById('editor-window-title'),
     host: document.getElementById('editor-host'),
+    open: document.getElementById('ed-open'),
     save: document.getElementById('ed-save'),
     saveAs: document.getElementById('ed-save-as'),
     openVSCode: document.getElementById('ed-open-vscode'),
@@ -190,6 +249,12 @@
     undo: document.getElementById('ed-undo'),
     redo: document.getElementById('ed-redo'),
     wrap: document.getElementById('ed-wrap'),
+    preview: document.getElementById('ed-preview'),
+    lines: document.getElementById('ed-lines'),
+    more: document.getElementById('ed-more'),
+    menu: document.getElementById('ed-menu'),
+    split: document.getElementById('editor-split'),
+    previewPane: document.getElementById('ed-preview-pane'),
     ref: document.getElementById('ed-ref'),
     mode: document.getElementById('ed-mode'),
     eol: document.getElementById('ed-eol'),
@@ -233,6 +298,12 @@
     // 本地文件（终端内联命令 \v edit 创建）：读写走本地 fs，另存为拉起系统保存面板。
     local: false,
     wrap: false,
+    // 显示行号（默认开）与 Markdown 预览（打开 / 另存为 .md 时自动开启）。
+    lineNumbers: true,
+    previewOn: false,
+    previewTimer: null,
+    // 编辑器字号（Cmd +/- 调整，仅当前窗口生效）。
+    fontSize: 13,
     statusText: '',
     statusKind: '',
     cm: null,
@@ -310,6 +381,267 @@
     return `${(value / 1024 / 1024).toFixed(2)} MB`;
   }
 
+  /* ------------------------------ Markdown 预览 ------------------------------
+     只渲染受支持的语法：文件里的原始 HTML 一律转义（不执行标签，避免从远端打开的
+     md 注入脚本）；链接 / 图片只保留 http(s)、mailto 与相对路径，其余丢弃。 */
+  const SAFE_HREF = /^(https?:|mailto:)/i;
+
+  function safeHref(href) {
+    const value = String(href == null ? '' : href).trim();
+    if (!value) return '';
+    if (SAFE_HREF.test(value)) return value;
+    if (/^[#/.]/.test(value)) return value;
+    return '';
+  }
+
+  function safeImageSrc(src) {
+    const value = String(src == null ? '' : src).trim();
+    if (/^https?:/i.test(value)) return value;
+    if (/^data:image\//i.test(value)) return value;
+    if (/^[./]/.test(value)) return value;
+    return '';
+  }
+
+  let markdownReady = false;
+  function setupMarkdown() {
+    const marked = window.marked;
+    if (!marked || typeof marked.use !== 'function') return;
+    marked.use({
+      gfm: true,
+      breaks: false,
+      renderer: {
+        // 原始 HTML（块级 / 行内）一律按文本显示
+        html(token) {
+          return escapeHtml(token && token.text != null ? token.text : '');
+        },
+        link(token) {
+          const href = safeHref(token.href);
+          const text = token.text != null ? token.text : escapeHtml(token.href || '');
+          if (!href) return text;
+          return `<a href="${escapeHtml(href)}" rel="noreferrer">${text}</a>`;
+        },
+        image(token) {
+          const src = safeImageSrc(token.href);
+          const alt = escapeHtml(token.text || '');
+          if (!src) return alt;
+          return `<img src="${escapeHtml(src)}" alt="${alt}" />`;
+        },
+      },
+    });
+    markdownReady = true;
+  }
+
+  function isMarkdownFile() {
+    return state.mode === 'markdown';
+  }
+
+  function markdownHtml(source) {
+    if (!markdownReady) setupMarkdown();
+    const marked = window.marked;
+    if (!marked || typeof marked.parse !== 'function') {
+      return `<pre>${escapeHtml(source)}</pre>`;
+    }
+    try {
+      return marked.parse(String(source || ''));
+    } catch (err) {
+      return `<pre>${escapeHtml(source)}</pre>`;
+    }
+  }
+
+  function renderPreview() {
+    if (!state.previewOn || !state.cm || !dom.previewPane) return;
+    const source = state.cm.getValue('\n');
+    const pane = dom.previewPane;
+    if (!source.trim()) {
+      pane.innerHTML = `<div class="editor-preview-empty">${escapeHtml(i18n.t('editor.previewEmpty'))}</div>`;
+      return;
+    }
+    pane.innerHTML = markdownHtml(source);
+  }
+
+  function schedulePreview() {
+    if (!state.previewOn) return;
+    if (state.previewTimer) clearTimeout(state.previewTimer);
+    state.previewTimer = setTimeout(() => {
+      state.previewTimer = null;
+      renderPreview();
+    }, 300);
+  }
+
+  function setPreview(on) {
+    const next = Boolean(on) && isMarkdownFile();
+    state.previewOn = next;
+    if (dom.previewPane) dom.previewPane.hidden = !next;
+    if (dom.split) dom.split.classList.toggle('preview-on', next);
+    if (next) renderPreview();
+    updateToggleTips();
+    requestAnimationFrame(() => {
+      if (state.cm) state.cm.refresh();
+    });
+  }
+
+  /* ------------------------------ 编辑器命令 ------------------------------ */
+
+  const FONT_MIN = 10;
+  const FONT_MAX = 28;
+
+  function setLineNumbers(on) {
+    state.lineNumbers = Boolean(on);
+    if (state.cm) state.cm.setOption('lineNumbers', state.lineNumbers);
+    updateToggleTips();
+  }
+
+  function setTabSize(size) {
+    if (!state.cm) return;
+    const value = Number(size) === 4 ? 4 : 2;
+    state.cm.setOption('tabSize', value);
+    state.cm.setOption('indentUnit', value);
+  }
+
+  function zoomFont(delta) {
+    const next = Math.max(FONT_MIN, Math.min(FONT_MAX, state.fontSize + delta));
+    if (next === state.fontSize) return;
+    state.fontSize = next;
+    applyFontSize();
+  }
+
+  function resetFontSize() {
+    state.fontSize = 13;
+    applyFontSize();
+  }
+
+  function applyFontSize() {
+    if (!state.cm) return;
+    state.cm.getWrapperElement().style.fontSize = `${state.fontSize}px`;
+    state.cm.refresh();
+  }
+
+  function duplicateLine() {
+    const cm = state.cm;
+    if (!cm) return;
+    const cursor = cm.getCursor();
+    const line = cm.getLine(cursor.line);
+    cm.replaceRange(`\n${line}`, { line: cursor.line, ch: line.length });
+    cm.setCursor({ line: cursor.line + 1, ch: cursor.ch });
+  }
+
+  function deleteLine() {
+    const cm = state.cm;
+    if (!cm) return;
+    const cursor = cm.getCursor();
+    const count = cm.lineCount();
+    if (count <= 1) {
+      cm.setValue('');
+      return;
+    }
+    if (cursor.line === count - 1) {
+      const prevLength = cm.getLine(cursor.line - 1).length;
+      cm.replaceRange(
+        '',
+        { line: cursor.line - 1, ch: prevLength },
+        { line: cursor.line, ch: cm.getLine(cursor.line).length }
+      );
+    } else {
+      cm.replaceRange('', { line: cursor.line, ch: 0 }, { line: cursor.line + 1, ch: 0 });
+    }
+  }
+
+  function moveLine(direction) {
+    const cm = state.cm;
+    if (!cm) return;
+    const cursor = cm.getCursor();
+    const target = cursor.line + direction;
+    if (target < 0 || target >= cm.lineCount()) return;
+    const current = cm.getLine(cursor.line);
+    const other = cm.getLine(target);
+    cm.operation(() => {
+      cm.replaceRange(other, { line: cursor.line, ch: 0 }, { line: cursor.line, ch: current.length });
+      cm.replaceRange(current, { line: target, ch: 0 }, { line: target, ch: other.length });
+    });
+    cm.setCursor({ line: target, ch: cursor.ch });
+  }
+
+  function toggleComment() {
+    const cm = state.cm;
+    if (!cm || typeof cm.toggleComment !== 'function') return;
+    try {
+      cm.toggleComment();
+    } catch (err) {
+      /* 该语言没有注释配置时忽略 */
+    }
+  }
+
+  function trimTrailingWhitespace() {
+    const cm = state.cm;
+    if (!cm) return;
+    const total = cm.lineCount();
+    let changed = 0;
+    cm.operation(() => {
+      for (let index = 0; index < total; index += 1) {
+        const line = cm.getLine(index);
+        const trimmed = line.replace(/[ \t]+$/, '');
+        if (trimmed === line) continue;
+        // 只删除行尾空白：把 [trimmed.length, line.length) 区间替换成空串。
+        cm.replaceRange('', { line: index, ch: trimmed.length }, { line: index, ch: line.length });
+        changed += 1;
+      }
+    });
+    if (changed) setStatus(i18n.t('editor.trimTrailingDone'), 'is-success');
+  }
+
+  function goToLine() {
+    if (!state.cm) return;
+    openModal({
+      title: i18n.t('editor.goToLineTitle'),
+      placeholder: i18n.t('editor.goToLinePlaceholder', { max: state.cm.lineCount() }),
+      value: String(state.cm.getCursor().line + 1),
+      onConfirm: (value) => {
+        const line = parseInt(String(value).trim(), 10);
+        if (!Number.isFinite(line) || line < 1 || line > state.cm.lineCount()) {
+          setStatus(i18n.t('editor.goToLineBad'), 'is-error');
+          return;
+        }
+        state.cm.setCursor({ line: line - 1, ch: 0 });
+        state.cm.focus();
+      },
+    });
+  }
+
+  /* 打开本地文件：拉起系统打开面板，把当前窗口切换到该文件。 */
+  async function openLocalFile() {
+    if (!window.ships.fileEditor || typeof window.ships.fileEditor.openLocal !== 'function') return;
+    if (state.dirty && !window.confirm(i18n.t('editor.openLocalConfirm'))) return;
+    let result = null;
+    try {
+      result = await window.ships.fileEditor.openLocal();
+    } catch (err) {
+      result = { ok: false, error: err.message };
+    }
+    if (!result || result.canceled) return;
+    if (!result.ok) {
+      setStatus(
+        result.error === 'too-large'
+          ? i18n.t('editor.openLocalTooLarge')
+          : i18n.t('editor.openLocalFailed', { error: result.error || 'error' }),
+        'is-error'
+      );
+      return;
+    }
+    // 换文件：先清空当前编辑器实例，再按新路径重新加载
+    state.dirty = false;
+    state.previewOn = false;
+    if (state.previewTimer) {
+      clearTimeout(state.previewTimer);
+      state.previewTimer = null;
+    }
+    if (state.cm) state.cm = null;
+    if (dom.host) dom.host.innerHTML = '';
+    if (dom.previewPane) dom.previewPane.hidden = true;
+    if (dom.split) dom.split.classList.remove('preview-on');
+    await loadFile();
+    applyLocale();
+  }
+
   function docByteLength() {
     if (!state.cm) return 0;
     try {
@@ -372,7 +704,7 @@
     state.cm = window.CodeMirror(dom.host, {
       value,
       mode: mode || null,
-      lineNumbers: true,
+      lineNumbers: state.lineNumbers,
       lineWrapping: wrap,
       readOnly: state.readOnly,
       tabSize: 2,
@@ -386,13 +718,19 @@
         'Ctrl-S': save,
         'Cmd-Shift-S': saveAs,
         'Ctrl-Shift-S': saveAs,
+        'Cmd-/': toggleComment,
+        'Ctrl-/': toggleComment,
+        'Alt-Up': () => moveLine(-1),
+        'Alt-Down': () => moveLine(1),
       },
     });
     state.cm.on('change', () => {
       syncDirty();
       scheduleFindRefresh();
+      schedulePreview();
     });
     state.cm.on('cursorActivity', renderStatus);
+    applyFontSize();
     renderStatus();
   }
 
@@ -644,6 +982,8 @@
     state.dirty = false;
     createEditor(state.mode, state.original);
     applyReadOnlyState();
+    // Markdown 文件默认打开预览（要求：打开 md 即可预览）；其他文件关闭预览。
+    setPreview(isMarkdownFile());
     setStatus(state.binary ? i18n.t('editor.binaryReadOnly') : '');
   }
 
@@ -675,8 +1015,25 @@
     return false;
   }
 
+  /* 模态输入框：通用（另存为远端路径 / 转到行共用），确认时调用当前 action。 */
+  let modalAction = null;
+
+  function openModal(config) {
+    const options = config || {};
+    dom.modalTitle.textContent = options.title || '';
+    dom.modalInput.placeholder = options.placeholder || '';
+    dom.modalInput.value = options.value || '';
+    dom.modalCancel.textContent = i18n.t('editor.cancel');
+    dom.modalConfirm.textContent = i18n.t('editor.confirm');
+    modalAction = typeof options.onConfirm === 'function' ? options.onConfirm : null;
+    dom.modal.hidden = false;
+    dom.modalInput.focus();
+    dom.modalInput.select();
+  }
+
   function closeModal() {
     dom.modal.hidden = true;
+    modalAction = null;
   }
 
   function saveAs() {
@@ -690,14 +1047,12 @@
       void saveAsTo('');
       return;
     }
-    dom.modalTitle.textContent = i18n.t('editor.saveAsTitle');
-    dom.modalInput.placeholder = i18n.t('editor.saveAsPlaceholder');
-    dom.modalInput.value = state.path;
-    dom.modalCancel.textContent = i18n.t('editor.cancel');
-    dom.modalConfirm.textContent = i18n.t('editor.confirm');
-    dom.modal.hidden = false;
-    dom.modalInput.focus();
-    dom.modalInput.select();
+    openModal({
+      title: i18n.t('editor.saveAsTitle'),
+      placeholder: i18n.t('editor.saveAsPlaceholder'),
+      value: state.path,
+      onConfirm: (value) => saveAsTo(value),
+    });
   }
 
   async function saveAsTo(nextPath) {
@@ -743,6 +1098,9 @@
       state.dirty = false;
       const info = await window.ships.fileEditor.info();
       if (info && info.ok) state.reference = info.reference || state.path;
+      // 另存为 .md（或其他 Markdown 扩展名）后自动打开预览。
+      setPreview(isMarkdownFile());
+      applyLocale();
       setStatus('');
     } else {
       setStatus(i18n.t('editor.saveFailed', { error: (result && result.error) || 'error' }), 'is-error');
@@ -816,7 +1174,97 @@
     button.setAttribute('aria-label', i18n.t(tipKey));
   }
 
+  /* 状态型按钮（自动换行 / 预览 / 行号）的提示与高亮。 */
+  function updateToggleTips() {
+    if (dom.wrap) {
+      const key = state.wrap ? 'editor.wrapOff' : 'editor.wrapOn';
+      dom.wrap.setAttribute('data-tip', i18n.t(key));
+      dom.wrap.setAttribute('aria-label', i18n.t(key));
+      dom.wrap.style.color = state.wrap ? 'var(--color-accent)' : '';
+    }
+    if (dom.lines) {
+      const key = state.lineNumbers ? 'editor.linesOff' : 'editor.linesOn';
+      dom.lines.setAttribute('data-tip', i18n.t(key));
+      dom.lines.setAttribute('aria-label', i18n.t(key));
+      dom.lines.style.color = state.lineNumbers ? 'var(--color-accent)' : '';
+    }
+    if (dom.preview) {
+      const key = state.previewOn ? 'editor.previewOn' : 'editor.previewOff';
+      dom.preview.setAttribute('data-tip', i18n.t(key));
+      dom.preview.setAttribute('aria-label', i18n.t(key));
+      dom.preview.style.color = state.previewOn ? 'var(--color-accent)' : '';
+      dom.preview.disabled = !isMarkdownFile();
+    }
+  }
+
+  /* ------------------------------ 更多命令菜单 ------------------------------ */
+
+  function closeMenu() {
+    if (!dom.menu || dom.menu.hidden) return;
+    dom.menu.hidden = true;
+    dom.menu.innerHTML = '';
+    document.removeEventListener('mousedown', onMenuDown, true);
+    window.removeEventListener('blur', closeMenu);
+    window.removeEventListener('resize', closeMenu);
+  }
+
+  function onMenuDown(event) {
+    if (!dom.menu) return;
+    if (dom.menu.contains(event.target) || (dom.more && dom.more.contains(event.target))) return;
+    closeMenu();
+  }
+
+  function menuItems() {
+    return [
+      { label: i18n.t('editor.goToLine'), hint: '⌘L', run: goToLine },
+      { separator: true },
+      { label: i18n.t('editor.duplicateLine'), hint: '⌘D', run: duplicateLine },
+      { label: i18n.t('editor.deleteLine'), hint: '⌘⇧K', run: deleteLine },
+      { label: i18n.t('editor.moveLineUp'), hint: '⌥↑', run: () => moveLine(-1) },
+      { label: i18n.t('editor.moveLineDown'), hint: '⌥↓', run: () => moveLine(1) },
+      { label: i18n.t('editor.toggleComment'), hint: '⌘/', run: toggleComment },
+      { label: i18n.t('editor.trimTrailing'), run: trimTrailingWhitespace },
+      { separator: true },
+      { label: i18n.t('editor.indent2'), run: () => setTabSize(2) },
+      { label: i18n.t('editor.indent4'), run: () => setTabSize(4) },
+      { label: i18n.t('editor.linesOff'), run: () => setLineNumbers(!state.lineNumbers) },
+      { separator: true },
+      { label: i18n.t('editor.fontBigger'), hint: '⌘+', run: () => zoomFont(1) },
+      { label: i18n.t('editor.fontSmaller'), hint: '⌘−', run: () => zoomFont(-1) },
+      { label: i18n.t('editor.fontReset'), hint: '⌘0', run: resetFontSize },
+    ];
+  }
+
+  function openMenu() {
+    if (!dom.menu || !dom.more) return;
+    dom.menu.innerHTML = '';
+    for (const item of menuItems()) {
+      if (item.separator) {
+        dom.menu.appendChild(el('div', { class: 'editor-menu-sep' }));
+        continue;
+      }
+      const button = el('button', { class: 'editor-menu-item', type: 'button' });
+      button.appendChild(el('span', {}, item.label));
+      if (item.hint) button.appendChild(el('span', { class: 'editor-menu-hint' }, item.hint));
+      button.addEventListener('click', () => {
+        closeMenu();
+        item.run();
+      });
+      dom.menu.appendChild(button);
+    }
+    dom.menu.hidden = false;
+    const rect = dom.more.getBoundingClientRect();
+    const width = dom.menu.offsetWidth;
+    const left = Math.max(6, Math.min(rect.right - width, window.innerWidth - width - 6));
+    dom.menu.style.left = `${left}px`;
+    dom.menu.style.top = `${rect.bottom + 4}px`;
+    document.addEventListener('mousedown', onMenuDown, true);
+    window.addEventListener('blur', closeMenu);
+    window.addEventListener('resize', closeMenu);
+  }
+
   function applyLocale() {
+    setIconButton(dom.open, Icons.folder, 'editor.openLocal');
     setIconButton(dom.save, Icons.save, 'editor.save');
     setIconButton(dom.saveAs, Icons.saveAs, 'editor.saveAs');
     setIconButton(dom.openVSCode, Icons.code, 'editor.openVSCode');
@@ -824,7 +1272,10 @@
     setIconButton(dom.reload, Icons.refresh, 'editor.reload');
     setIconButton(dom.undo, Icons.undo, 'editor.undo');
     setIconButton(dom.redo, Icons.redo, 'editor.redo');
-    setIconButton(dom.wrap, Icons.wrap, state.wrap ? 'editor.wrapOff' : 'editor.wrapOn');
+    setIconButton(dom.preview, Icons.eye, 'editor.preview');
+    setIconButton(dom.lines, Icons.hash, 'editor.linesOff');
+    setIconButton(dom.more, Icons.chevronDown, 'editor.more');
+    updateToggleTips();
     if (dom.findLabel) dom.findLabel.textContent = i18n.t('editor.findLabel');
     if (dom.findInput) dom.findInput.placeholder = i18n.t('editor.findLabel');
     if (dom.replaceLabel) dom.replaceLabel.textContent = i18n.t('editor.replaceLabel');
@@ -844,6 +1295,7 @@
     updateFindCount();
   }
 
+  dom.open.addEventListener('click', () => openLocalFile());
   dom.save.addEventListener('click', () => save());
   dom.saveAs.addEventListener('click', () => saveAs());
   dom.openVSCode.addEventListener('click', () => openInVSCode());
@@ -851,12 +1303,27 @@
   dom.reload.addEventListener('click', () => reload());
   dom.undo.addEventListener('click', () => state.cm && state.cm.undo());
   dom.redo.addEventListener('click', () => state.cm && state.cm.redo());
+  if (dom.more) dom.more.addEventListener('click', () => (dom.menu && dom.menu.hidden ? openMenu() : closeMenu()));
+  if (dom.preview) {
+    dom.preview.addEventListener('click', () => setPreview(!state.previewOn));
+  }
+  if (dom.lines) {
+    dom.lines.addEventListener('click', () => setLineNumbers(!state.lineNumbers));
+  }
+  // 预览里的链接交给系统浏览器打开（不在应用内导航）。
+  if (dom.previewPane) {
+    dom.previewPane.addEventListener('click', (event) => {
+      const link = event.target && event.target.closest ? event.target.closest('a') : null;
+      if (!link) return;
+      event.preventDefault();
+      const href = link.getAttribute('href') || '';
+      if (href && window.ships.openExternal) window.ships.openExternal(href);
+    });
+  }
   dom.wrap.addEventListener('click', () => {
     state.wrap = !state.wrap;
     if (state.cm) state.cm.setOption('lineWrapping', state.wrap);
-    const tipKey = state.wrap ? 'editor.wrapOff' : 'editor.wrapOn';
-    dom.wrap.setAttribute('data-tip', i18n.t(tipKey));
-    dom.wrap.setAttribute('aria-label', i18n.t(tipKey));
+    updateToggleTips();
   });
 
   /* 查找 / 替换面板交互 */
@@ -912,8 +1379,9 @@
   dom.modalCancel.addEventListener('click', closeModal);
   dom.modalConfirm.addEventListener('click', () => {
     const value = dom.modalInput.value;
+    const action = modalAction;
     closeModal();
-    saveAsTo(value);
+    if (action) action(value);
   });
   dom.modalInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
@@ -947,11 +1415,52 @@
       closeFind();
       return;
     }
+    if (event.key === 'Escape' && dom.menu && !dom.menu.hidden) {
+      event.preventDefault();
+      closeMenu();
+      return;
+    }
     if (!mod) return;
     if (key === 's') {
       event.preventDefault();
       if (event.shiftKey) saveAs();
       else save();
+      return;
+    }
+    // 编辑器命令：转到行 / 复制行 / 删除行 / 切换注释 / 字号缩放
+    if (key === 'l' && !event.shiftKey) {
+      event.preventDefault();
+      goToLine();
+      return;
+    }
+    if (key === 'd' && !event.shiftKey) {
+      event.preventDefault();
+      duplicateLine();
+      return;
+    }
+    if (key === 'k' && event.shiftKey) {
+      event.preventDefault();
+      deleteLine();
+      return;
+    }
+    if (key === '/') {
+      event.preventDefault();
+      toggleComment();
+      return;
+    }
+    if (key === '=' || key === '+') {
+      event.preventDefault();
+      zoomFont(1);
+      return;
+    }
+    if (key === '-') {
+      event.preventDefault();
+      zoomFont(-1);
+      return;
+    }
+    if (key === '0') {
+      event.preventDefault();
+      resetFontSize();
     }
   });
 

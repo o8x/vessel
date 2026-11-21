@@ -102,6 +102,7 @@
 | `file-window:set-top` | `{ value: boolean }` | `{ ok, alwaysOnTop }` | 独立文件窗口的置顶开关：写 `settings.fileWindowAlwaysOnTop`；**默认关**（普通窗口），持久 |
 | `file-window:snap-size` | `{ height }` | `{ ok, height? }` | 保留兼容：独立文件窗口已**不再自动对齐整行高度**，渲染层不再调用；通道仍按工作区 / 最小高度夹取后设置内容高度；只接受来自该窗口的请求 |
 | `file-editor:open` | `{ sessionId, path, name? }` | `{ ok, error? }` | 从文件管理器打开一扇内置编辑器窗口（每文件一扇、可多开）；`sessionId` 必须是**发起窗口自己**的 SFTP 会话；只接受终端窗口 / 独立文件窗口的请求 |
+| `file-editor:open-local` | — | `{ ok, path?, name?, error?, canceled? }` | 编辑器窗口内「打开文件」：拉起系统打开面板，把**当前窗口**切换到选中的本地文件（仅本地文件；超过 8MB 返回 `{ ok:false, error:'too-large' }`；取消返回 `{ ok:false, canceled:true }`） |
 | `file-editor:new-local` | — | `{ ok, path?, error? }` | 新建**本地**文件（落在设置里配置的「文件下载目录」，文件名 `scratch-<时间戳>.txt`，重名自动加序号）并用内置编辑器打开；不依赖 SSH / SFTP；只接受终端窗口 / 独立文件窗口的请求 |
 | `file-editor:info` | — | `{ ok, path, name, reference, local? }` | 编辑器启动后读取当前文件信息与引用（`用户名@地址:路径`）；本地临时文件时 `reference` 为本地路径、`local: true`；只接受来自编辑器窗口的请求 |
 | `file-editor:read` | — | `{ ok, content, size, mtime, binary, error?, code? }` | 读取当前文件文本（远端 ≤ 8MB、拒绝目录；本地临时文件直接读 fs）；含 NUL 的二进制内容不报错，按有损 UTF-8 解码返回并置 `binary: true`，渲染层据此只读；只接受来自编辑器窗口的请求 |
@@ -243,11 +244,13 @@
 | `POST /v1/tool`（请求体 = 工具 id 或名称） | `Opened tool: <id>` / 4xx `Unknown tool: …` | 显示主界面并加载该工具（`window-manager.showMainWindowWithTool`） |
 | `POST /v1/ssh`（请求体两行：`<目标>` + 换行 + `<密码，可空>`） | `Connecting to <别名>` / 4xx `Target required…`、`Invalid target…` / 5xx | 命中已保存主机（别名，或同一「用户名@地址」且未给新密码）→ 直接连接；否则按「快速连接」逻辑连接（见下） |
 
+- **`POST /v1/edit`**：请求体为文件路径（可为空）。空 → 新建本地草稿并用编辑器打开；非空 → 解析为绝对路径后打开（不存在返回 404、非文件 / 超过 8MB 返回 400）。编辑器窗口**无归属窗口**（不随任何窗口关闭）。
 - **`POST /v1/ssh` 的目标解析**：`用户名@地址` / `地址` / `地址:端口` / `[IPv6]:端口`。**别名精确命中**，或**同一「用户名@地址」且没有提供新密码** → 用现有主机直接连接（自动沿用已存密码 / `~/.ssh/id_ed25519`）；其余写法走**快速连接**（`ssh-quick-connect-service`，与 SSH 工具的连接表单同一套实现）：`用户名@地址` 已存在时复用（给了密码则更新凭据），否则写入 `~/.ssh/config` 的「快速连接」分组并置于最前，然后**新开一扇内置终端**执行 `ssh`。密码可含空格（作为第 2 行原样传入），不需要密码时留空（走密钥）。
 - **输出语言**：CLI 的 usage / 帮助 / 错误 / 表头 / 提示**全部为英文**；工具名固定用英文（不随界面语言变化），主机 / 账号名是数据本身、保持原样。列表按显示宽度（CJK / 全角按 2 列）对齐为固定列宽表格。
 - **命令行 `vessel`**（安装位置 `<数据目录>/bin/vessel`，用法与终端内联命令 `\v` 同风格；**列表命令不带 `list` 子命令**，直接执行即列出）：
   - `vessel tool` 列出工具（英文名）；`vessel tool <id|名称>` 打开主界面并加载该工具。
   - `vessel ssh` 列出已保存主机（`用户名@地址` 归一化显示）；`vessel ssh <user@host> [password]` 连接或快速连接；`vessel ssh <别名>` 仍可按别名连接。
+  - `vessel edit` 用内置编辑器新建一个本地草稿（`<文件下载目录>/scratch-<时间戳>.txt`）；`vessel edit <file>` 打开指定本地文件（支持 `~` 与相对路径，超过 8MB 拒绝）。
   - `vessel 2fa` 列出账号与**当前验证码**（含剩余秒数）；不接受其它参数。
   - `vessel completion` 输出 zsh 补全函数；隐藏命令 `vessel __complete <kind>` 供补全取候选（应用未运行时静默返回空）。
   - 应用未运行：先尝试 `open -b cn.com.stdout.vessel` 拉起（菜单栏应用，启动不弹主窗口），最多等 **10 秒**（50 × 200ms）再执行。
