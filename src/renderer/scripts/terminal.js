@@ -2110,10 +2110,11 @@
 
   function onSearchKeyDown(event) {
     if (!searchPanelEl) return;
-    // Esc 不再关闭悬浮窗，吞掉按键避免落到终端上；仅在点击关闭按钮时关闭。
+    // Esc 关闭搜索浮层（并把焦点交回终端输入）；吞掉按键避免落到终端上。
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
+      closeSearchPanel(true);
       return;
     }
     if (event.key === 'Enter' && event.target === searchInput) {
