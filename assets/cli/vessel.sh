@@ -55,6 +55,7 @@ Commands:
   regex | color | ids          Open that tool in the Vessel app
   clipboard | nutrient | games Open that tool in the Vessel app
   completion                   Print the zsh completion function
+  upgrade                      Reinstall the vessel CLI from the running app
   help [command]               Show this help, or detailed help / examples for a command
 
 Run `vess help <command>` (or `vess <command> --help`) for detailed arguments and examples.
@@ -217,6 +218,17 @@ Opens the "${1}" tool in the Vessel app.
 
 Examples:
   vess ${1}
+EOF
+      ;;
+    upgrade)
+      cat <<'EOF'
+Usage: vess upgrade
+
+Reinstalls the `vessel` CLI (script, zsh completion and PATH block) from the
+currently running Vessel app. No arguments.
+
+Examples:
+  vess upgrade
 EOF
       ;;
     completion)
@@ -443,6 +455,16 @@ cmd_edit() {
   api POST /v1/edit "${1:-}"
 }
 
+# 重新安装 CLI（从当前运行的 Vessel 复制最新的脚本 / 补全）。
+cmd_upgrade() {
+  if [ -n "${1:-}" ]; then
+    err "upgrade takes no arguments"
+    exit 1
+  fi
+  with_app
+  api POST /v1/upgrade
+}
+
 # 在应用里打开工具（json / regex / color / …）。
 cmd_open() {
   with_app
@@ -516,6 +538,10 @@ case "${1:-}" in
   edit)
     shift
     cmd_edit "${1:-}"
+    ;;
+  upgrade)
+    shift
+    cmd_upgrade "${1:-}"
     ;;
   completion)
     cat "$SELF_DIR/_vessel" 2>/dev/null || err "completion file not found: $SELF_DIR/_vessel"

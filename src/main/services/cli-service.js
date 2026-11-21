@@ -15,7 +15,7 @@ const crypto = require('crypto');
 const { app } = require('electron');
 
 const { DATA_DIR } = require('../utils/paths');
-const { FILE_EDITOR_MAX_BYTES } = require('../../shared/constants');
+const { FILE_EDITOR_MAX_BYTES, VERSION } = require('../../shared/constants');
 const logger = require('../utils/logger');
 
 const BIN_DIR = path.join(DATA_DIR, 'bin');
@@ -777,6 +777,12 @@ function handle(req, res) {
         const result = idCommand(body);
         send(res, result.code, result.body || `${result.message}\n`);
       });
+    }
+    if (req.method === 'POST' && route === '/v1/upgrade') {
+      const result = installCli();
+      if (!result.ok) return send(res, 500, `Upgrade failed: ${result.error || 'error'}\n`);
+      logger.file(`[cli] upgraded by command (v${VERSION})`);
+      return send(res, 200, `vessel CLI reinstalled (Vessel v${VERSION})\n  script: ${result.path}\n`);
     }
     if (req.method === 'POST' && route === '/v1/open') {
       return readBody(req, res, (body) => {

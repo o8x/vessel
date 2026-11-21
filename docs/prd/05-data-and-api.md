@@ -251,7 +251,7 @@
 | `POST /v1/tool`（请求体 = 工具 id 或名称） | `Opened tool: <id>` / 4xx `Unknown tool: …` | 显示主界面并加载该工具（`window-manager.showMainWindowWithTool`） |
 | `POST /v1/ssh`（请求体两行：`<目标>` + 换行 + `<密码，可空>`） | `Connecting to <别名>` / 4xx `Target required…`、`Invalid target…` / 5xx | 命中已保存主机（别名，或同一「用户名@地址」且未给新密码）→ 直接连接；否则按「快速连接」逻辑连接（见下） |
 
-- **数据命令路由**：`GET /v1/timestamp`（当前时间）、`POST /v1/timestamp`（转换一个值）、`GET /v1/network`（本机内网 / 公网 IPv4 / IPv6 地址）、`POST /v1/network`（网段信息）、`POST /v1/codec`（编码结果）、`POST /v1/json`（请求体首行 `text` / `file`，其余为 JSON 文本或文件路径，返回 4 空格缩进结果）、`POST /v1/hash`（请求体首行 `text` / `file`，其余为内容）、`POST /v1/id`（类型 + 可选长度，固定生成 5 个；旧的 `POST /v1/uuid` 保留为兼容别名）、`POST /v1/open`（在应用里打开工具，替代原来的 `/v1/tool`；`GET /v1/tools` 已移除）。响应均为纯文本表格。
+- **数据命令路由**：`GET /v1/timestamp`（当前时间）、`POST /v1/timestamp`（转换一个值）、`GET /v1/network`（本机内网 / 公网 IPv4 / IPv6 地址）、`POST /v1/network`（网段信息）、`POST /v1/codec`（编码结果）、`POST /v1/json`（请求体首行 `text` / `file`，其余为 JSON 文本或文件路径，返回 4 空格缩进结果）、`POST /v1/hash`（请求体首行 `text` / `file`，其余为内容）、`POST /v1/id`（类型 + 可选长度，固定生成 5 个；旧的 `POST /v1/uuid` 保留为兼容别名）、`POST /v1/upgrade`（从当前运行的 Vessel 重新安装 CLI）、`POST /v1/open`（在应用里打开工具，替代原来的 `/v1/tool`；`GET /v1/tools` 已移除）。响应均为纯文本表格。
 - **`POST /v1/edit`**：请求体为文件路径（可为空）。空 → 新建本地草稿并用编辑器打开；非空 → 解析为绝对路径后打开（不存在返回 404、非文件 / 超过 8MB 返回 400）。编辑器窗口**无归属窗口**（不随任何窗口关闭）。
 - **`POST /v1/ssh` 的目标解析**：`用户名@地址` / `地址` / `地址:端口` / `[IPv6]:端口`。**别名精确命中**，或**同一「用户名@地址」且没有提供新密码** → 用现有主机直接连接（自动沿用已存密码 / `~/.ssh/id_ed25519`）；其余写法走**快速连接**（`ssh-quick-connect-service`，与 SSH 工具的连接表单同一套实现）：`用户名@地址` 已存在时复用（给了密码则更新凭据），否则写入 `~/.ssh/config` 的「快速连接」分组并置于最前，然后**新开一扇内置终端**执行 `ssh`。密码可含空格（作为第 2 行原样传入），不需要密码时留空（走密钥）。
 - **输出语言**：CLI 的 usage / 帮助 / 错误 / 表头 / 提示**全部为英文**；工具名固定用英文（不随界面语言变化），主机 / 账号名是数据本身、保持原样。列表按显示宽度（CJK / 全角按 2 列）对齐为固定列宽表格。
@@ -269,6 +269,7 @@
   - `id [type] [length]`（兼容别名：`uuid` = `id uuid4`，`ulid` = `id ulid`）：按类型生成**固定 5 个**值；`type` ∈ `uuid4`（默认）/ `uuid7` / `ulid` / `random` / `password`，其它值返回 400。`uuid7` = 48 位毫秒时间戳 + 版本位 7 + 变体位；`ulid` = Crockford base32 的 26 位 ULID；`random` = 默认 16 位的字母 + 数字随机串（长度 4–64）；`password` = 默认 20 位、包含小写 / 大写 / 数字 / 符号且每类至少一个（长度 8–64，Fisher–Yates 洗牌）；随机数一律来自 Node `crypto`（CSPRNG）。
   - `edit [file]`：用内置编辑器新建本地草稿或打开指定本地文件（见上）。
   - 其余工具（`json` / `regex` / `color` / `ids` / `clipboard` / `nutrient` / `games`）：`vessel <工具 id>` 在应用里打开该工具（`/v1/open`）。
+  - `upgrade`：从**当前运行的 Vessel** 重新安装 CLI（复制最新的 `vessel.sh` / `_vessel` 到 `<数据目录>/bin/`、重建 `vess` 别名并原地更新 `~/.zshrc` 的 PATH 块），输出当前应用版本与脚本路径；不接受参数。
   - `completion` 输出 zsh 补全函数（同时注册给 `vess` 与 `vessel`）；隐藏命令 `__complete ssh` 供补全取主机候选；`vess help <TAB>` 补全命令名。
   - `vessel completion` 输出 zsh 补全函数；隐藏命令 `vessel __complete <kind>` 供补全取候选（应用未运行时静默返回空）。
   - 应用未运行：先尝试 `open -b cn.com.stdout.vessel` 拉起（菜单栏应用，启动不弹主窗口），最多等 **10 秒**（50 × 200ms）再执行。

@@ -18,6 +18,7 @@ if (( $+functions[compdef] )); then
       'uuid:Alias of `id` (generate UUID values)'
       'ulid:Alias of `id ulid`'
       'edit:Open a scratch file or a local file in the editor'
+      'upgrade:Reinstall the vessel CLI from the running app'
       'json:Pretty-print JSON from a file, text or stdin (or open the tool)'
       'regex:Open the regex tester in the app'
       'color:Open the color converter in the app'
@@ -61,12 +62,12 @@ if (( $+functions[compdef] )); then
         ;;
       help)
         if (( CURRENT == 3 )); then
-          items=(ssh 2fa timestamp network codec hash id uuid ulid edit json regex color ids clipboard nutrient games completion)
+          items=(ssh 2fa timestamp network codec hash id uuid ulid edit upgrade json regex color ids clipboard nutrient games completion)
           _describe -t commands 'help topic' items
         fi
         return
         ;;
-      timestamp|network|codec|regex|color|ids|clipboard|nutrient|games|2fa|completion)
+      timestamp|network|codec|regex|color|ids|clipboard|nutrient|games|2fa|upgrade|completion)
         # 这些命令要么不需要补全，要么参数是自由文本。
         return
         ;;
