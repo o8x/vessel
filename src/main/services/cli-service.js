@@ -783,6 +783,25 @@ function handle(req, res) {
       logger.file('[cli] open main window');
       return send(res, 200, 'Opened Vessel main window\n');
     }
+    if (req.method === 'POST' && route === '/v1/restart') {
+      send(res, 200, 'Restarting Vessel...\n');
+      // 先让 HTTP 响应写回终端，再执行重启（relaunch + quit）。
+      setTimeout(() => {
+        try {
+          require('../tray').restartApp();
+        } catch (err) {
+          logger.error(`[cli] restart failed: ${err.message}`);
+        }
+      }, 200);
+      return;
+    }
+    if (req.method === 'POST' && route === '/v1/check-update') {
+      const updater = require('./updater-service');
+      updater.checkForUpdatesInteractive().catch((err) => {
+        logger.error(`[cli] check-update failed: ${err.message}`);
+      });
+      return send(res, 200, 'Checking for updates...\n');
+    }
     if (req.method === 'POST' && route === '/v1/upgrade') {
       const result = installCli();
       if (!result.ok) return send(res, 500, `Upgrade failed: ${result.error || 'error'}\n`);

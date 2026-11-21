@@ -53,6 +53,8 @@ Commands:
   ulid                         Alias of `id ulid`
   edit [file]                  Open a scratch file (or <file>) in the Vessel editor
   main                         Open the Vessel main window
+  restart                      Restart Vessel
+  check-update                 Check for available updates
   regex | color | ids          Open that tool in the Vessel app
   clipboard | nutrient | games Open that tool in the Vessel app
   completion                   Print the zsh completion function
@@ -229,6 +231,28 @@ Opens the Vessel main window (starting the app first if needed). No arguments.
 
 Examples:
   vess main
+EOF
+      ;;
+    restart)
+      cat <<'EOF'
+Usage: vess restart
+
+Restarts Vessel (relaunch after quitting). No arguments.
+The installed CLI and its socket reconnect automatically.
+
+Examples:
+  vess restart
+EOF
+      ;;
+    check-update)
+      cat <<'EOF'
+Usage: vess check-update
+
+Triggers an interactive update check in the running Vessel app
+(the same flow as the update button in the app). No arguments.
+
+Examples:
+  vess check-update
 EOF
       ;;
     upgrade)
@@ -476,6 +500,26 @@ cmd_main() {
   api POST /v1/main
 }
 
+# 重启 Vessel（先收到响应，再由主进程 relaunch + quit）。
+cmd_restart() {
+  if [ -n "${1:-}" ]; then
+    err "restart takes no arguments"
+    exit 1
+  fi
+  with_app
+  api POST /v1/restart
+}
+
+# 触发一次交互式检查更新。
+cmd_check_update() {
+  if [ -n "${1:-}" ]; then
+    err "check-update takes no arguments"
+    exit 1
+  fi
+  with_app
+  api POST /v1/check-update
+}
+
 # 重新安装 CLI（从当前运行的 Vessel 复制最新的脚本 / 补全）。
 cmd_upgrade() {
   if [ -n "${1:-}" ]; then
@@ -563,6 +607,14 @@ case "${1:-}" in
   main)
     shift
     cmd_main "${1:-}"
+    ;;
+  restart)
+    shift
+    cmd_restart "${1:-}"
+    ;;
+  check-update)
+    shift
+    cmd_check_update "${1:-}"
     ;;
   upgrade)
     shift

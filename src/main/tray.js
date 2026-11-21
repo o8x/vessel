@@ -230,4 +230,4 @@ function createTray({ onLeftClick }) {
   return tray;
 }
 
-module.exports = { createTray, setTools, getAllTools, openTool, connectHost, buildMenuTemplate };
+module.exports = { createTray, setTools, getAllTools, openTool, connectHost, buildMenuTemplate, restartApp };
