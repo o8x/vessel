@@ -52,6 +52,7 @@ Commands:
   uuid [type]                  Alias of `id` (e.g. uuid uuid7; uuid = id uuid4)
   ulid                         Alias of `id ulid`
   edit [file]                  Open a scratch file (or <file>) in the Vessel editor
+  main                         Open the Vessel main window
   regex | color | ids          Open that tool in the Vessel app
   clipboard | nutrient | games Open that tool in the Vessel app
   completion                   Print the zsh completion function
@@ -218,6 +219,16 @@ Opens the "${1}" tool in the Vessel app.
 
 Examples:
   vess ${1}
+EOF
+      ;;
+    main)
+      cat <<'EOF'
+Usage: vess main
+
+Opens the Vessel main window (starting the app first if needed). No arguments.
+
+Examples:
+  vess main
 EOF
       ;;
     upgrade)
@@ -455,6 +466,16 @@ cmd_edit() {
   api POST /v1/edit "${1:-}"
 }
 
+# 打开主界面（应用未运行时先启动）。
+cmd_main() {
+  if [ -n "${1:-}" ]; then
+    err "main takes no arguments"
+    exit 1
+  fi
+  with_app
+  api POST /v1/main
+}
+
 # 重新安装 CLI（从当前运行的 Vessel 复制最新的脚本 / 补全）。
 cmd_upgrade() {
   if [ -n "${1:-}" ]; then
@@ -538,6 +559,10 @@ case "${1:-}" in
   edit)
     shift
     cmd_edit "${1:-}"
+    ;;
+  main)
+    shift
+    cmd_main "${1:-}"
     ;;
   upgrade)
     shift

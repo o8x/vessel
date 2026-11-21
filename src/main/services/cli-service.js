@@ -778,6 +778,11 @@ function handle(req, res) {
         send(res, result.code, result.body || `${result.message}\n`);
       });
     }
+    if (req.method === 'POST' && route === '/v1/main') {
+      require('../window-manager').showMainWindow();
+      logger.file('[cli] open main window');
+      return send(res, 200, 'Opened Vessel main window\n');
+    }
     if (req.method === 'POST' && route === '/v1/upgrade') {
       const result = installCli();
       if (!result.ok) return send(res, 500, `Upgrade failed: ${result.error || 'error'}\n`);
