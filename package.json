@@ -89,8 +89,8 @@
       "maxHeight": 768
     },
     "fileEditorWindow": {
-      "width": 640,
-      "height": 480,
+      "width": 900,
+      "height": 600,
       "minWidth": 360,
       "minHeight": 240
     },

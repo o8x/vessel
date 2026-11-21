@@ -296,11 +296,11 @@ const FILE_WINDOW = Object.assign(
   appConfig.fileWindow || {}
 );
 
-// 内置文本编辑器窗口：panel 模式（默认 640×480，可拖动 / 缩放，可多开不复用）。
+// 内置文本编辑器窗口：panel 模式（默认 900×600，可拖动 / 缩放，可多开不复用）。
 const FILE_EDITOR_WINDOW = Object.assign(
   {
-    width: 640,
-    height: 480,
+    width: 900,
+    height: 600,
     minWidth: 360,
     minHeight: 240,
   },
