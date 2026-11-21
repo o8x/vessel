@@ -34,6 +34,7 @@ const { registerWindowIpc } = require('./ipc/window-ipc');
 const { registerSettingsIpc } = require('./ipc/settings-ipc');
 const { registerSshIpc } = require('./ipc/ssh-ipc');
 const { registerGeoIpc } = require('./ipc/geo-ipc');
+const { registerDnsIpc } = require('./ipc/dns-ipc');
 const { registerClipboardIpc } = require('./ipc/clipboard-ipc');
 const { registerHashIpc } = require('./ipc/hash-ipc');
 const { registerTotpIpc } = require('./ipc/twofa-ipc');
@@ -132,6 +133,7 @@ function onReady() {
   registerSettingsIpc(ipcMain);
   registerSshIpc(ipcMain);
   registerGeoIpc(ipcMain);
+  registerDnsIpc(ipcMain);
   registerClipboardIpc(ipcMain);
   registerHashIpc(ipcMain);
   registerTotpIpc(ipcMain);

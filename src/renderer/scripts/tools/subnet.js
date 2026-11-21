@@ -61,6 +61,14 @@
         geo: '归属地',
         none: '无',
         geoOpen: '在浏览器中打开 {site}',
+        dnsTitle: 'DNS 查询',
+        dnsPlaceholder: '域名，如 example.com（填 IP 则反向查询）',
+        dnsQuery: '查询',
+        dnsHint: '用系统解析器查询 A / AAAA / MX / TXT / CNAME / NS / SOA 记录；输入 IP 地址时自动做反向（PTR）查询',
+        dnsEmpty: '请输入域名或 IP 地址',
+        dnsLoading: '查询中…',
+        dnsFailed: '查询失败：{error}',
+        dnsResult: '{type} 记录 {count} 条',
       },
     },
     en: {
@@ -119,6 +127,14 @@
         geo: 'Location',
         none: 'None',
         geoOpen: 'Open {site} in the browser',
+        dnsTitle: 'DNS lookup',
+        dnsPlaceholder: 'Domain, e.g. example.com (an IP does a reverse lookup)',
+        dnsQuery: 'Query',
+        dnsHint: 'Resolve A / AAAA / MX / TXT / CNAME / NS / SOA records with the system resolver; an IP address does a reverse (PTR) lookup',
+        dnsEmpty: 'Enter a domain or an IP address',
+        dnsLoading: 'Querying…',
+        dnsFailed: 'Lookup failed: {error}',
+        dnsResult: '{count} {type} record(s)',
       },
     },
   });
@@ -731,7 +747,81 @@
       updateSplit(parsed);
     });
 
-    container.append(inputSection, geoSection, baseSection, v6FormSection, calcSection, calc6Section, splitSection);
+    /* ------------------------------ DNS 查询 ------------------------------
+       用系统解析器查询域名记录；输入 IP 地址时自动做反向（PTR）查询。 */
+    const DNS_TYPES = [
+      { value: 'a', label: 'A' },
+      { value: 'aaaa', label: 'AAAA' },
+      { value: 'mx', label: 'MX' },
+      { value: 'txt', label: 'TXT' },
+      { value: 'cname', label: 'CNAME' },
+      { value: 'ns', label: 'NS' },
+      { value: 'soa', label: 'SOA' },
+      { value: 'ptr', label: 'PTR' },
+    ];
+    const dnsSection = section(i18n.t('subnet.dnsTitle'));
+    const dnsRow = el('div', { class: 'flex items-center gap-2' });
+    const dnsInput = field(null, {
+      placeholder: i18n.t('subnet.dnsPlaceholder'),
+      spellcheck: 'false',
+    }).input;
+    dnsInput.classList.add('min-w-0', 'flex-1');
+    const dnsType = createSelect({
+      options: DNS_TYPES,
+      value: 'a',
+      className: 'shrink-0',
+      align: 'right',
+    });
+    const dnsBtn = el('button', { class: 'btn shrink-0 px-2 py-1.5 text-[12px]', type: 'button' }, i18n.t('subnet.dnsQuery'));
+    dnsRow.append(dnsInput, dnsType.el, dnsBtn);
+    dnsSection.appendChild(dnsRow);
+    const dnsHint = el('div', { class: 'mt-1 text-[11px] text-fg-muted' }, i18n.t('subnet.dnsHint'));
+    dnsSection.appendChild(dnsHint);
+    const dnsList = el('div', { class: 'mt-2 flex flex-col gap-card' });
+    dnsSection.appendChild(dnsList);
+
+    async function runDnsQuery() {
+      const host = dnsInput.value.trim();
+      dnsList.innerHTML = '';
+      if (!host) {
+        dnsHint.textContent = i18n.t('subnet.dnsEmpty');
+        dnsHint.style.color = 'var(--color-danger)';
+        return;
+      }
+      dnsHint.textContent = i18n.t('subnet.dnsLoading');
+      dnsHint.style.color = '';
+      let result = null;
+      try {
+        result = await window.ships.dnsLookup(host, dnsType.getValue());
+      } catch (err) {
+        result = { ok: false, error: err.message };
+      }
+      if (!result || !result.ok) {
+        dnsHint.textContent = i18n.t('subnet.dnsFailed', { error: (result && result.error) || 'error' });
+        dnsHint.style.color = 'var(--color-danger)';
+        return;
+      }
+      const records = Array.isArray(result.records) ? result.records : [];
+      dnsHint.textContent = i18n.t('subnet.dnsResult', {
+        type: (DNS_TYPES.find((item) => item.value === result.type) || {}).label || result.type,
+        count: records.length,
+      });
+      dnsHint.style.color = '';
+      records.forEach((record, index) => {
+        const row = resultRow(`${result.type} ${index + 1}`);
+        row.set(String(record));
+        dnsList.appendChild(row.root);
+      });
+    }
+
+    dnsBtn.addEventListener('click', runDnsQuery);
+    dnsInput.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      runDnsQuery();
+    });
+
+    container.append(inputSection, geoSection, baseSection, v6FormSection, calcSection, calc6Section, splitSection, dnsSection);
     update();
   }
 

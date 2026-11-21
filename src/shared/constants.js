@@ -62,6 +62,7 @@ const IPC = {
   TRAY_SHOW_TOOL: 'tray:show-tool',
 
   GEO_LOOKUP: 'geo:lookup',
+  DNS_LOOKUP: 'dns:lookup',
   LOCAL_ADDRESS: 'app:local-address',
   DEVTOOLS_OPEN: 'devtools:open',
 

@@ -154,6 +154,7 @@
 | `clipboard:list` | — | `item[]`（最多 5 条） | 内存历史，含文本 / 图片缩略图 |
 | `clipboard:copy` | `id` | `{ ok, error? }` | 文本用 `writeText`，图片用 `ClipboardItem` 写回 |
 | `clipboard:clear` | — | `{ ok }` | 清空历史（不清空系统剪贴板） |
+| `dns:lookup` | `{ host, type }`（`type` 可空：`a`/`aaaa`/`mx`/`txt`/`cname`/`ns`/`soa`/`ptr`；留空时**输入是 IP 自动按 `ptr`、否则按 `a`**） | `{ ok, type, host, records?, error? }` | DNS 查询（Node 内置 `dns.promises`）：`records` 为字符串数组（MX 为「优先级 + 交换主机」，TXT 已按段拼接，SOA 已拼成一行）；失败返回 `{ ok: false, error }` |
 | `hash:text` | `text` | `{ md5, sha1, sha256, sha384, sha512, crc32, fnv1a32, fnv1a64, xxhash64, cityhash64 }` | 计算文本哈希（全部 10 种算法） |
 | `hash:file` | `file`（绝对路径） | `{ ok, hashes?, info?, error? }` | 流式计算文件哈希（全部 10 种算法；`cityhash64` 因算法依赖尾部字节，走「两次读取」） |
 | `hash:algorithms` | — | `[{ id, label }]` | 返回可用哈希算法清单（渲染层据此生成结果行，避免两侧各写一份） |
