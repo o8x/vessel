@@ -524,9 +524,7 @@
        作用于最上面的「字符串」框：大小写转换 / 行处理 / 统计（直接改写内容）。 */
     const TEXT = window.ShipsTextTransforms;
     const textToolsSection = section(i18n.t('textTools.section'));
-    textToolsSection.appendChild(
-      el('div', { class: 'mb-2 text-[11px] text-fg-muted' }, i18n.t('textTools.hint'))
-    );
+    textToolsSection.classList.add('text-tools-compact');
 
     // 统计刷新函数（仅在加载到 text-transforms.js 时才有实现）。
     let updateStats = () => {};
@@ -540,17 +538,16 @@
       updateStats();
     }
 
+    /* 紧凑的一行：分组标题与按钮同排，不单独占一行。 */
     function textButtonRow(labelKey, items) {
-      const wrap = el('div', { class: 'mb-2' });
-      wrap.appendChild(el('div', { class: 'mb-1.5 text-[11px] text-fg-muted' }, i18n.t(labelKey)));
-      const row = el('div', { class: 'flex flex-wrap gap-1.5' });
+      const row = el('div', { class: 'text-tools-row' });
+      row.appendChild(el('span', { class: 'text-tools-row-label' }, i18n.t(labelKey)));
       for (const item of items) {
-        const button = el('button', { class: 'btn shrink-0 px-2 py-1 text-[11px]', type: 'button' }, item.label);
+        const button = el('button', { class: 'btn shrink-0 px-1.5 py-0.5 text-[10px]', type: 'button' }, item.label);
         button.addEventListener('click', item.onClick);
         row.appendChild(button);
       }
-      wrap.appendChild(row);
-      return wrap;
+      return row;
     }
 
     if (TEXT) {
@@ -586,18 +583,17 @@
         { key: 'unique', labelKey: 'textTools.statUnique' },
       ];
       const statValues = {};
-      const statGrid = el('div', { class: 'grid grid-cols-5 gap-2' });
+      const statRow = el('div', { class: 'text-tools-row' });
+      statRow.appendChild(el('span', { class: 'text-tools-row-label' }, i18n.t('textTools.stats')));
       for (const def of statDefs) {
-        const card = el('div', { class: 'rounded-card border border-border bg-surface px-2 py-1.5' });
-        const value = el('div', { class: 'font-mono text-[13px] text-fg' }, '0');
-        card.append(el('div', { class: 'text-[10px] text-fg-muted' }, i18n.t(def.labelKey)), value);
+        const chip = el('span', { class: 'text-tools-stat' });
+        chip.appendChild(el('span', { class: 'text-tools-stat-label' }, i18n.t(def.labelKey)));
+        const value = el('span', { class: 'text-tools-stat-value' }, '0');
+        chip.appendChild(value);
         statValues[def.key] = value;
-        statGrid.appendChild(card);
+        statRow.appendChild(chip);
       }
-      textToolsSection.append(
-        el('div', { class: 'mb-1.5 mt-1 text-[11px] text-fg-muted' }, i18n.t('textTools.stats')),
-        statGrid
-      );
+      textToolsSection.appendChild(statRow);
 
       updateStats = () => {
         const result = TEXT.stats(textField.input.value);
