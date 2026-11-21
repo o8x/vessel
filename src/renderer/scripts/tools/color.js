@@ -596,7 +596,7 @@
     });
 
     const colorHint = el('div', { class: 'mt-1 text-[10px]' }, '');
-    const colorField = inputField(i18n.t('color.input'), colorInput);
+    const colorField = inputField('', colorInput);
     colorField.appendChild(colorHint);
 
     const randomBtn = el('button', { class: 'btn shrink-0 px-2 py-1 text-[11px]', type: 'button' });
@@ -625,15 +625,13 @@
     });
     swatch.append(swatchFill, swatchPicker);
 
-    const previewValue = el('div', { class: 'result-value' }, '—');
-    const previewMeta = el('div', { class: 'text-[11px] text-fg-muted' }, '');
     const previewText = el('div', { class: 'min-w-0 flex-1' });
-    previewText.append(colorField, previewValue, previewMeta);
+    previewText.append(colorField);
 
     const previewRow = el('div', { class: 'flex items-center gap-3' });
     previewRow.append(swatch, previewText);
 
-    const inputSection = section(i18n.t('color.input'));
+    const inputSection = section();
     inputSection.append(
       el('div', { class: 'text-[11px] text-fg-muted' }, i18n.t('color.hint')),
       previewRow,
@@ -716,11 +714,14 @@
     const recommendRow = el('div', { class: 'flex items-center gap-2' });
     recommendRow.append(recommendSwatch, recommendText);
 
+    const contrastGrid = el('div', { class: 'grid grid-cols-2 gap-2' });
+    contrastGrid.append(ratioBox, badgeBox);
+
     const contrastSection = section(i18n.t('color.contrast'));
     contrastSection.append(
       el('div', { class: 'text-[11px] text-fg-muted' }, i18n.t('color.contrastHint')),
       colorInputs,
-      el('div', { class: 'grid grid-cols-2 gap-2' }, ratioBox, badgeBox),
+      contrastGrid,
       recommendRow
     );
 
@@ -738,8 +739,6 @@
 
     function clearPreview() {
       swatchFill.style.backgroundColor = 'transparent';
-      previewValue.textContent = '—';
-      previewMeta.textContent = '';
     }
 
     /* 对比度区的小色块：点击色块打开系统取色器，选择后自动写入输入框。 */
@@ -800,8 +799,6 @@
         clamp(rgb.g, 0, 255)
       )}, ${Math.round(clamp(rgb.b, 0, 255))}, ${clamp01(rgb.a)})`;
       swatchPicker.value = formatHex(rgb);
-      previewValue.textContent = formatHex(rgb);
-      previewMeta.textContent = formatRgba(rgb);
     }
 
     function makeBadge(labelText, passed) {
