@@ -22,7 +22,7 @@
     zh: {
       transferWin: {
         title: '文件传输',
-        sshPlaceholder: '选择已保存的主机',
+        sshPlaceholder: '连接到服务器',
         left: '左侧',
         right: '右侧',
         sync: '同步',
@@ -78,7 +78,7 @@
     en: {
       transferWin: {
         title: 'File Transfer',
-        sshPlaceholder: 'Choose a saved host',
+        sshPlaceholder: 'Connect to server',
         left: 'Left',
         right: 'Right',
         sync: 'Sync',

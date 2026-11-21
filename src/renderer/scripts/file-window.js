@@ -12,7 +12,7 @@
   i18n.extend({
     zh: {
       fileWin: {
-        sshPlaceholder: '选择已保存的主机',
+        sshPlaceholder: '连接到服务器',
         userPlaceholder: '用户名',
         hostPlaceholder: '地址 / IP',
         portPlaceholder: '端口',
@@ -31,7 +31,7 @@
     },
     en: {
       fileWin: {
-        sshPlaceholder: 'Choose a saved host',
+        sshPlaceholder: 'Connect to server',
         userPlaceholder: 'User',
         hostPlaceholder: 'Address / IP',
         portPlaceholder: 'Port',
