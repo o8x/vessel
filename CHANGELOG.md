@@ -2,6 +2,40 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.14.0 - 2026-11-21
+
+### 新增
+
+- Vess restart and check-update commands
+- Vess main to open the main window
+- Vess upgrade to reinstall the CLI
+- Vess json with files, text and stdin
+- Per-command CLI help and remove examples from usage
+- Merge 2FA into the IDs and passwords tool
+- Id command with random and password generation
+- Improve CLI, editor recovery, markdown export and tool UX
+- Merge text tools into the encoding tool and overhaul the CLI
+- Enhance the built-in editor and add vessel edit
+- Regex tester, color converter and ID/password generator tools
+- Close the terminal search bar with Esc
+- DNS record lookup to the IP tool
+- Sha384, sha512, crc32, fnv and xxhash/cityhash to the hash tool
+- Text processing tool
+- Unfocused transparency setting for the terminal window
+
+### 修复
+
+- Restore accent bar on compact section labels
+- Flatten the regex tool into a single content flow
+- Flatten nested tool section headings
+- Compact the text tools layout
+- Show 2FA section at the top of the IDs tool
+- Hide color tool hint text
+- Place color actions under the input field
+- Discard recovery copies when quitting without saving
+- Copy markdown image via ClipboardItem on Electron 44
+- Repair color contrast layout and remove duplicate color headings
+
 ## v6.13.0 - 2026-11-19
 
 ### 新增
