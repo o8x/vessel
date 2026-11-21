@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { BrowserWindow, dialog, clipboard } = require('electron');
+const { BrowserWindow, dialog, clipboard, ClipboardItem } = require('electron');
 const { IPC, FILE_EDITOR_MAX_BYTES } = require('../../shared/constants');
 const { EDITOR_BACKUP_DIR } = require('../utils/paths');
 const wm = require('../window-manager');
@@ -149,7 +149,12 @@ async function copyMarkdownImage(html) {
     await new Promise((resolve) => setTimeout(resolve, 250));
     const image = await win.webContents.capturePage({ x: 0, y: 0, width, height });
     if (!image || image.isEmpty()) return { ok: false, error: 'empty-image' };
-    clipboard.writeImage(image);
+    // Electron 44 已移除 clipboard.writeImage，改用 ClipboardItem + Blob（与 app:copy-image 一致）。
+    const png = image.toPNG();
+    if (!png || !png.length) return { ok: false, error: 'empty-image' };
+    await clipboard.write([
+      new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) }),
+    ]);
     return { ok: true, width, height };
   } catch (err) {
     logger.error(`[file-editor] copy image failed: ${err.message}`);
