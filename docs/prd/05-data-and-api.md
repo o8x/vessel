@@ -252,11 +252,11 @@
 | `POST /v1/tool`（请求体 = 工具 id 或名称） | `Opened tool: <id>` / 4xx `Unknown tool: …` | 显示主界面并加载该工具（`window-manager.showMainWindowWithTool`） |
 | `POST /v1/ssh`（请求体两行：`<目标>` + 换行 + `<密码，可空>`） | `Connecting to <别名>` / 4xx `Target required…`、`Invalid target…` / 5xx | 命中已保存主机（别名，或同一「用户名@地址」且未给新密码）→ 直接连接；否则按「快速连接」逻辑连接（见下） |
 
-- **数据命令路由**：`GET /v1/timestamp`（当前时间）、`POST /v1/timestamp`（转换一个值）、`GET /v1/network`（本机内网 / 公网 IPv4 / IPv6 地址）、`POST /v1/network`（网段信息）、`POST /v1/codec`（编码结果）、`POST /v1/json`（请求体首行 `text` / `file`，其余为 JSON 文本或文件路径，返回 4 空格缩进结果）、`POST /v1/hash`（请求体首行 `text` / `file`，其余为内容）、`POST /v1/id`（类型 + 可选长度，固定生成 5 个；旧的 `POST /v1/uuid` 保留为兼容别名）、`POST /v1/main`（显示主界面）、`POST /v1/restart`（先返回响应再重启应用）、`POST /v1/check-update`（触发一次交互式检查更新）、`POST /v1/upgrade`（从当前运行的 Vessel 重新安装 CLI）、`POST /v1/open`（在应用里打开工具，替代原来的 `/v1/tool`；`GET /v1/tools` 已移除）。响应均为纯文本表格。
+- **数据命令路由**：`GET /v1/timestamp`（当前时间）、`POST /v1/timestamp`（转换一个值）、`GET /v1/network`（本机内网 / 公网 IPv4 / IPv6 地址）、`POST /v1/network`（网段信息）、`POST /v1/codec`（编码结果）、`POST /v1/json`（请求体首行 `text` / `file`，其余为 JSON 文本或文件路径，返回 4 空格缩进结果；可选查询参数 `?indent=N` 指定缩进空格数（0–10，**0 = 紧凑单行**，等同 `jq -c`），省略时用默认 4，非法值返回 400）、`POST /v1/hash`（请求体首行 `text` / `file`，其余为内容）、`POST /v1/id`（类型 + 可选长度，固定生成 5 个；旧的 `POST /v1/uuid` 保留为兼容别名）、`POST /v1/main`（显示主界面）、`POST /v1/restart`（先返回响应再重启应用）、`POST /v1/check-update`（触发一次交互式检查更新）、`POST /v1/upgrade`（从当前运行的 Vessel 重新安装 CLI）、`POST /v1/open`（在应用里打开工具，替代原来的 `/v1/tool`；`GET /v1/tools` 已移除）。响应均为纯文本表格。
 - **`POST /v1/edit`**：请求体为文件路径（可为空）。空 → 新建本地草稿并用编辑器打开；非空 → 解析为绝对路径后打开（不存在返回 404、非文件 / 超过 8MB 返回 400）。编辑器窗口**无归属窗口**（不随任何窗口关闭）。
 - **`POST /v1/ssh` 的目标解析**：`用户名@地址` / `地址` / `地址:端口` / `[IPv6]:端口`。**别名精确命中**，或**同一「用户名@地址」且没有提供新密码** → 用现有主机直接连接（自动沿用已存密码 / `~/.ssh/id_ed25519`）；其余写法走**快速连接**（`ssh-quick-connect-service`，与 SSH 工具的连接表单同一套实现）：`用户名@地址` 已存在时复用（给了密码则更新凭据），否则写入 `~/.ssh/config` 的「快速连接」分组并置于最前，然后**新开一扇内置终端**执行 `ssh`。密码可含空格（作为第 2 行原样传入），不需要密码时留空（走密钥）。
 - **输出语言**：CLI 的 usage / 帮助 / 错误 / 表头 / 提示**全部为英文**；工具名固定用英文（不随界面语言变化），主机 / 账号名是数据本身、保持原样。列表按显示宽度（CJK / 全角按 2 列）对齐为固定列宽表格。
-- **输出颜色**：`vessel.sh` 在**标准输出是终端**时给结果加 ANSI 颜色（表头加粗青色、UUID 绿色、`No …` / 错误类提示暗色、`键  值` 行的键为青色）；输出到管道 / 文件或 `vess` 被脚本调用时自动关闭颜色，保持纯文本。错误信息始终以红色写入 stderr。
+- **输出颜色**：`vessel.sh` 在**标准输出是终端**时给结果加 ANSI 颜色（表头加粗青色、UUID 绿色、`No …` / 错误类提示暗色、`键  值` 行的键为青色）；输出到管道 / 文件或 `vess` 被脚本调用时自动关闭颜色，保持纯文本。错误信息始终以红色写入 stderr。`json` 命令另用**按 JSON 语法着色**的输出（与 jq 的配色观感一致）：**键青色、字符串绿色、数字黄色、`true` 绿色 / `false` 红色、`null` 与括号暗色**，缩进本身不着色；着色同样只在终端下默认开启，可用 `--color` / `--no-color` 强制开启或关闭。
 - **命令行 `vessel`**（安装位置 `<数据目录>/bin/vessel`，用法与终端内联命令 `\v` 同风格；**列表命令不带 `list` 子命令**，直接执行即列出）：
   - 命令**平铺**（不再有 `vessel tool` 子命令）：`vessel <命令> [参数]`；安装时同时创建 **`vess` 别名**（`<数据目录>/bin/vess` → symbol link 指向 `vessel`），两者等价。
   - **分层帮助**：主 `vess` / `vess help` 的 usage **只列出命令，不再包含 Examples**；`vess help <命令>`（或 `vess <命令> -h` / `--help`）输出该命令的详细参数说明与示例（如 `vess help network`、`vess help id`），未知命令返回非零并回退到 usage。
@@ -265,7 +265,7 @@
   - `timestamp [value]`：不带参数输出当前时间（本地时间 / UTC / 秒 / 毫秒 / **纳秒**，纳秒用 `process.hrtime` 补出亚毫秒）；带参数时自动识别 `≤11 位秒 / ≤15 位毫秒 / 其余纳秒`，非纯数字按日期字符串解析。
   - `network [ip|cidr|mask]`（别名 `net` / `subnet` / `ip`）：不带参数输出本机 **内网（LAN）与公网（Public）IPv4 / IPv6** 地址；带参数输出网段信息（地址 / 类型 / CIDR / 前缀 / 网络地址 / 广播或最后地址 / 可用范围或地址总数 / 主机数 / 掩码 / 反掩码 / 地址类型）；支持 IPv4 / IPv6 / 纯数字 / `0x` 十六进制。
   - `codec <text>`（别名 `encode` / `text`）：输出文本的 Text / Base64 / Hex / URL 编码 / URL 解码 / ASCII 十进制。
-  - `json [file|text]`：参数是**已存在的文件**时格式化该文件，否则按 JSON 文本解析；`-` 或管道 / 重定向时从 stdin 读取；输出 **4 空格缩进**的格式化 JSON（与 JSON 工具一致），非法 JSON 返回 400 与解析错误；**无参数且非管道时保持原行为**：在应用里打开 JSON 工具。
+  - `json [--indent N] [--color|--no-color] [file|text]`：参数是**已存在的文件**时格式化该文件，否则按 JSON 文本解析；`-` 或管道 / 重定向时从 stdin 读取；输出 **4 空格缩进**的格式化 JSON（与 JSON 工具一致），`--indent N` 改缩进空格数（**0–10**，**0 = 紧凑单行**，等同 `jq -c`；非法值报「--indent must be a number between 0 and 10」）；非法 JSON 返回 400 与解析错误；输出在终端中按 JSON 语法着色（jq 风格，见「输出颜色」），管道 / 重定向时为纯文本，`--color` / `--no-color` 可强制开启或关闭；**无参数且非管道时保持原行为**：在应用里打开 JSON 工具。
   - `hash <text|file>`：参数是**已存在的文件**时按文件计算，否则按文本计算；输出全部 10 种算法；无参数时从 stdin 读取。
   - `id [type] [length]`（兼容别名：`uuid` = `id uuid4`，`ulid` = `id ulid`）：按类型生成**固定 5 个**值；`type` ∈ `uuid4`（默认）/ `uuid7` / `ulid` / `random` / `password`，其它值返回 400。`uuid7` = 48 位毫秒时间戳 + 版本位 7 + 变体位；`ulid` = Crockford base32 的 26 位 ULID；`random` = 默认 16 位的字母 + 数字随机串（长度 4–64）；`password` = 默认 20 位、包含小写 / 大写 / 数字 / 符号且每类至少一个（长度 8–64，Fisher–Yates 洗牌）；随机数一律来自 Node `crypto`（CSPRNG）。
   - `edit [file]`：用内置编辑器新建本地草稿或打开指定本地文件（见上）。

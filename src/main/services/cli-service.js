@@ -31,6 +31,9 @@ const BLOCK_END = '# <<< vessel cli <<<';
 const MAX_BODY = 4096;
 // `vess json "<JSON 文本>"` 的请求体会包含完整 JSON，单独放宽上限。
 const JSON_MAX_BODY = 2 * 1024 * 1024;
+// JSON 格式化缩进：默认 4 空格（与 JSON 工具一致），`?indent=N` 可覆盖（0 = 紧凑单行）。
+const JSON_INDENT_DEFAULT = 4;
+const JSON_INDENT_MAX = 10;
 
 /* 工具清单（英文名）：CLI 统一用英文输出，不随界面语言变化；
    顺序与 renderer 的 tool-order.js 一致（渲染层从未上报时也按这个顺序列出）。 */
@@ -374,8 +377,25 @@ function parseKindBody(body) {
   return { kind: text.slice(0, index).trim(), value: text.slice(index + 1) };
 }
 
-/* `vessel json <file|text>`：把 JSON 文件 / 文本格式化后输出（4 空格缩进，与 JSON 工具一致）。 */
-function jsonCommand(body) {
+/* 解析缩进参数：未给用默认值（4 空格）；给了必须是 0–10 的整数，否则返回 null（报错）。 */
+function resolveJsonIndent(raw) {
+  if (raw === undefined || raw === null) return JSON_INDENT_DEFAULT;
+  const text = String(raw).trim();
+  if (!text) return JSON_INDENT_DEFAULT;
+  if (!/^\d+$/.test(text)) return null;
+  const num = Number(text);
+  if (!Number.isFinite(num) || num > JSON_INDENT_MAX) return null;
+  return num;
+}
+
+/* `vessel json <file|text>`：把 JSON 文件 / 文本格式化后输出（默认 4 空格缩进，与 JSON 工具一致；
+   `options.indent` 可指定缩进空格数（0 = 紧凑单行），非法值返回 400）。 */
+function jsonCommand(body, options) {
+  const opts = options || {};
+  const indent = resolveJsonIndent(opts.indent);
+  if (indent === null) {
+    return { code: 400, message: `Invalid indent: expected 0-${JSON_INDENT_MAX}` };
+  }
   const parsed = parseKindBody(body);
   const isFile = parsed.kind === 'file';
   let text = isFile ? parsed.value.trim() : parsed.value;
@@ -396,7 +416,7 @@ function jsonCommand(body) {
   } catch (err) {
     return { code: 400, message: `Invalid JSON: ${(err && err.message) || 'parse error'}` };
   }
-  return { code: 200, body: `${JSON.stringify(value, null, 4)}\n` };
+  return { code: 200, body: `${JSON.stringify(value, null, indent)}\n` };
 }
 
 /* `vessel hash <text|file>`：输出全部 10 种算法。 */
@@ -748,8 +768,9 @@ function handle(req, res) {
       });
     }
     if (req.method === 'POST' && route === '/v1/json') {
+      const indent = url.searchParams.get('indent');
       return readBody(req, res, (body) => {
-        const result = jsonCommand(body);
+        const result = jsonCommand(body, { indent });
         send(res, result.code, result.body || `${result.message}\n`);
       }, JSON_MAX_BODY);
     }

@@ -9,23 +9,28 @@
 set -u
 
 # ANSI colors: only when writing to a terminal, so pipes / files stay clean.
-if [ -t 1 ]; then
-  C_RESET=$(printf '\033[0m')
-  C_BOLD=$(printf '\033[1m')
-  C_DIM=$(printf '\033[2m')
-  C_CYAN=$(printf '\033[36m')
-  C_GREEN=$(printf '\033[32m')
-  C_RED=$(printf '\033[31m')
-  C_YELLOW=$(printf '\033[33m')
-else
-  C_RESET=''
-  C_BOLD=''
-  C_DIM=''
-  C_CYAN=''
-  C_GREEN=''
-  C_RED=''
-  C_YELLOW=''
-fi
+# COLOR_MODE: auto (follow the terminal) | always (--color) | never (--no-color).
+COLOR_MODE=auto
+init_colors() {
+  if [ "$COLOR_MODE" = "always" ] || { [ "$COLOR_MODE" = "auto" ] && [ -t 1 ]; }; then
+    C_RESET=$(printf '\033[0m')
+    C_BOLD=$(printf '\033[1m')
+    C_DIM=$(printf '\033[2m')
+    C_CYAN=$(printf '\033[36m')
+    C_GREEN=$(printf '\033[32m')
+    C_RED=$(printf '\033[31m')
+    C_YELLOW=$(printf '\033[33m')
+  else
+    C_RESET=''
+    C_BOLD=''
+    C_DIM=''
+    C_CYAN=''
+    C_GREEN=''
+    C_RED=''
+    C_YELLOW=''
+  fi
+}
+init_colors
 
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 DATA_DIR=$(dirname -- "$SELF_DIR")
@@ -45,8 +50,9 @@ Commands:
                                with a value: network and subnet details for it
   codec <text>                 Show the text as Base64 / hex / URL / ASCII
   hash <text|file>             Show every hash of a text or an existing file
-  json [file|text]             Pretty-print JSON from a file, text or stdin;
-                               no argument opens the JSON tool in the app
+  json [--indent N] [file|text]
+                               Pretty-print JSON from a file, text or stdin;
+                               jq-style colors; no argument opens the JSON tool
   id [type] [length]           Generate 5 values: uuid4 (default) / uuid7 / ulid /
                                random / password; length applies to random / password
   uuid [type]                  Alias of `id` (e.g. uuid uuid7; uuid = id uuid4)
@@ -132,7 +138,7 @@ EOF
       ;;
     json)
       cat <<'EOF'
-Usage: vess json <file|text>
+Usage: vess json [--indent N] [--color|--no-color] [file|text]
        vess json -                 # read JSON from stdin
        printf '{"a":1}' | vess json
 
@@ -141,11 +147,20 @@ Arguments:
               argument as JSON text. Use `-` or pipe to read from stdin.
               With no arguments, opens the JSON tool in the Vessel app.
 
-Output: formatted JSON with 4-space indentation (invalid JSON returns an error).
+Options:
+  --indent N  Indentation width in spaces (0-10, default 4). 0 prints compact
+              single-line JSON (like jq -c).
+  --color     Always colorize the output (like jq --color-output).
+  --no-color  Never colorize the output.
+
+Output: formatted JSON with 4-space indentation, syntax-colored like jq when
+the output goes to a terminal (invalid JSON returns an error).
 
 Examples:
   vess json '{"b":2,"a":1}'
   vess json ./package.json
+  vess json --indent 2 ./package.json
+  vess json --no-color ./package.json
   cat data.json | vess json
 EOF
       ;;
@@ -317,12 +332,69 @@ colorize() {
     }'
 }
 
-# Call the local API: api <METHOD> <PATH> [BODY]; prints the response body on success,
+# JSON 语法着色（jq 风格）：键 / 字符串 / 数字 / true / false / null / 括号各一色。
+# 输入是服务端正则化过的 JSON（每行一个 token，字符串内无裸换行），逐行扫描即可。
+colorize_json() {
+  if [ -z "$C_RESET" ]; then
+    cat
+    return 0
+  fi
+  awk -v reset="$C_RESET" -v key="$C_CYAN" -v str="$C_GREEN" -v num="$C_YELLOW" \
+      -v tcol="$C_GREEN" -v fcol="$C_RED" -v nul="$C_DIM" -v punct="$C_DIM" '
+    function is_space(c) { return c == " " || c == "\t" }
+    {
+      line = $0
+      out = ""
+      i = 1
+      n = length(line)
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (c == "\"") {
+          # 取出一个完整字符串（含转义），再判断它后面是不是冒号 → 是则是键。
+          j = i + 1
+          tok = c
+          while (j <= n) {
+            ch = substr(line, j, 1)
+            if (ch == "\\") { tok = tok ch substr(line, j + 1, 1); j += 2; continue }
+            tok = tok ch
+            j++
+            if (ch == "\"") break
+          }
+          k = j
+          while (k <= n && is_space(substr(line, k, 1))) k++
+          if (k <= n && substr(line, k, 1) == ":") out = out key tok reset
+          else out = out str tok reset
+          i = j
+          continue
+        }
+        if (c == "-" || (c >= "0" && c <= "9")) {
+          rest = substr(line, i)
+          if (match(rest, /^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?/)) {
+            out = out num substr(rest, 1, RLENGTH) reset
+            i += RLENGTH
+            continue
+          }
+        }
+        rest = substr(line, i)
+        if (rest ~ /^true/) { out = out tcol "true" reset; i += 4; continue }
+        if (rest ~ /^false/) { out = out fcol "false" reset; i += 5; continue }
+        if (rest ~ /^null/) { out = out nul "null" reset; i += 4; continue }
+        if (index("{}[],:", c) > 0) { out = out punct c reset; i++; continue }
+        out = out c
+        i++
+      }
+      print out
+    }'
+}
+
+# Call the local API: api <METHOD> <PATH> [BODY] [FORMATTER]; prints the response body on success,
 # writes the server's error message to stderr and returns non-zero on failure.
+# FORMATTER defaults to `colorize` (tables); the json command passes `colorize_json`.
 api() {
   _method=$1
   _path=$2
   _data=${3:-}
+  _fmt=${4:-colorize}
   if [ -n "$_data" ]; then
     _resp=$(curl -sS --max-time 30 --unix-socket "$SOCKET" -X "$_method" \
       --data-binary "$_data" "http://localhost$_path" -w '\n%{http_code}' 2>/dev/null)
@@ -338,7 +410,7 @@ api() {
   _body=$(printf '%s' "$_resp" | sed '$d')
   case "$_code" in
     2*)
-      [ -n "$_body" ] && printf '%s\n' "$_body" | colorize
+      [ -n "$_body" ] && printf '%s\n' "$_body" | $_fmt
       return 0
       ;;
     *)
@@ -432,7 +504,84 @@ cmd_codec() {
 }
 
 cmd_json() {
-  _input=${1:-}
+  _indent=''
+  _color=''
+  _input=''
+  _endopts=0
+  while [ $# -gt 0 ]; do
+    if [ "$_endopts" -eq 1 ]; then
+      if [ -n "$_input" ]; then
+        err "json accepts a single file path or JSON text"
+        exit 1
+      fi
+      _input=$1
+      shift
+      continue
+    fi
+    case "$1" in
+      --indent|-i)
+        if [ $# -lt 2 ]; then
+          err "--indent requires a number"
+          exit 1
+        fi
+        _indent=$2
+        shift 2
+        ;;
+      --indent=*)
+        _indent=${1#--indent=}
+        shift
+        ;;
+      --color|-C)
+        _color=always
+        shift
+        ;;
+      --no-color|--monochrome)
+        _color=never
+        shift
+        ;;
+      --)
+        _endopts=1
+        shift
+        ;;
+      -)
+        # `-` 表示从 stdin 读（不是选项）。
+        if [ -n "$_input" ]; then
+          err "json accepts a single file path or JSON text"
+          exit 1
+        fi
+        _input='-'
+        shift
+        ;;
+      -*)
+        err "unknown option: $1"
+        exit 1
+        ;;
+      *)
+        if [ -n "$_input" ]; then
+          err "json accepts a single file path or JSON text"
+          exit 1
+        fi
+        _input=$1
+        shift
+        ;;
+    esac
+  done
+  if [ -n "$_indent" ]; then
+    case "$_indent" in
+      *[!0-9]*)
+        err "--indent must be a number between 0 and 10"
+        exit 1
+        ;;
+    esac
+    if [ "$_indent" -gt 10 ]; then
+      err "--indent must be a number between 0 and 10"
+      exit 1
+    fi
+  fi
+  if [ -n "$_color" ]; then
+    COLOR_MODE=$_color
+    init_colors
+  fi
   if [ -z "$_input" ]; then
     if [ ! -t 0 ]; then
       _input=$(cat)
@@ -449,13 +598,17 @@ cmd_json() {
     exit 1
   fi
   with_app
+  _path="/v1/json"
+  if [ -n "$_indent" ]; then
+    _path="$_path?indent=$_indent"
+  fi
   if [ -f "$_input" ]; then
     _abs=$(CDPATH= cd -- "$(dirname -- "$_input")" && pwd)/$(basename -- "$_input")
-    api POST /v1/json "file
-$_abs"
+    api POST "$_path" "file
+$_abs" colorize_json
   else
-    api POST /v1/json "text
-$_input"
+    api POST "$_path" "text
+$_input" colorize_json
   fi
 }
 
@@ -586,7 +739,7 @@ case "${1:-}" in
     ;;
   json)
     shift
-    cmd_json "${1:-}"
+    cmd_json "$@"
     ;;
   id)
     shift
