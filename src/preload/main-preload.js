@@ -79,6 +79,7 @@ const api = {
     copyText: (text) => ipcRenderer.invoke(IPC.TERMINAL_COPY_TEXT, { text }),
     pasteText: () => ipcRenderer.invoke(IPC.TERMINAL_PASTE_TEXT),
     openIterm: () => ipcRenderer.invoke(IPC.TERMINAL_OPEN_ITERM),
+    duplicate: (payload) => ipcRenderer.invoke(IPC.TERMINAL_DUPLICATE, payload),
     setAlwaysOnTop: (value) => ipcRenderer.invoke(IPC.TERMINAL_SET_TOP, { value }),
     snapSize: (payload) => ipcRenderer.invoke(IPC.TERMINAL_SNAP_SIZE, payload),
     ensureSize: (payload) => ipcRenderer.invoke(IPC.TERMINAL_ENSURE_SIZE, payload),

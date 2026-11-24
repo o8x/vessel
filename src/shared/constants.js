@@ -88,6 +88,7 @@ const IPC = {
   TOTP_CODES: 'totp:codes',
 
   TERMINAL_OPEN: 'terminal:open',
+  TERMINAL_DUPLICATE: 'terminal:duplicate',
   TERMINAL_START: 'terminal:start',
   TERMINAL_INPUT: 'terminal:input',
   TERMINAL_RESIZE: 'terminal:resize',

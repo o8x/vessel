@@ -280,6 +280,39 @@ function registerTerminalIpc(ipcMain) {
     return win ? { ok: true, path: filePath } : { ok: false, path: filePath, error: 'open-failed' };
   });
 
+  /* 复制终端：新开一扇终端窗口，自动连接当前 SSH（同一别名）并进入当前目录。
+     命令构造与「在终端打开」一致（ssh -t 'cd <dir> && exec $SHELL -l'）。 */
+  ipcMain.handle(IPC.TERMINAL_DUPLICATE, async (_event, payload) => {
+    const request = payload || {};
+    const alias = String(request.alias || '').trim();
+    const dir = String(request.path || '').trim();
+    if (!alias) return { ok: false, error: 'alias required' };
+    const configService = require('../services/ssh-config-service');
+    const credentials = require('../services/ssh-credentials-service');
+    const sshService = require('../services/ssh-service');
+    const proxyService = require('../services/proxy-service');
+    const host = configService.list().find((item) => item.alias === alias);
+    if (!host) return { ok: false, error: 'host not found' };
+    const socksProxy = await proxyService.resolveSocks(host.hostName, Number(host.port) || 22);
+    const remote = dir ? `cd ${sshService.shellQuote(dir)} && exec $SHELL -l` : '';
+    const command = sshService.buildCommand(host, {
+      socksProxy,
+      forceTty: Boolean(remote),
+      command: remote ? sshService.shellQuote(remote) : '',
+    });
+    const secret = credentials.has(alias) ? credentials.get(alias) : '';
+    const win = wm.openTerminalWindow({
+      randomBallIcon: true,
+      excludeBallIcon: String(request.excludeBallIcon || ''),
+    });
+    if (!win) return { ok: false, error: 'terminal unavailable', command };
+    const started = injectInto(win, command, secret, alias);
+    logger.file(
+      `[terminal] duplicate alias=${alias} dir=${dir || '-'} auth=${secret ? 'password' : 'key'}: ${command}`
+    );
+    return started ? { ok: true, command } : { ok: false, error: 'terminal unavailable', command };
+  });
+
   /* Hand the session over to iTerm (same command when known) and close the window. */
   ipcMain.handle(IPC.TERMINAL_OPEN_ITERM, async (event) => {
     const win = wm.getTerminalWindowForWebContents(event.sender.id);

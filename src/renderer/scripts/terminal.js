@@ -26,7 +26,9 @@
         menuShowMain: '显示主界面',
         menuSelectAll: '全选',
         menuNewTerminal: '新建终端',
-        menuSplit: '分割窗口',
+        menuWindow: '窗口',
+        menuDuplicateTerminal: '复制终端',
+        duplicateFailed: '复制终端失败：{error}',
         splitHorizontal: '水平分割',
         splitVertical: '垂直分割',
         splitClose: '关闭副终端',
@@ -83,7 +85,9 @@
         menuShowMain: 'Show main window',
         menuSelectAll: 'Select all',
         menuNewTerminal: 'New terminal',
-        menuSplit: 'Split window',
+        menuWindow: 'Window',
+        menuDuplicateTerminal: 'Duplicate terminal',
+        duplicateFailed: 'Duplicate terminal failed: {error}',
         splitHorizontal: 'Split horizontally',
         splitVertical: 'Split vertically',
         splitClose: 'Close split terminal',
@@ -2607,6 +2611,23 @@
     window.ships.openTerminal({ randomBallIcon: true, excludeBallIcon: ballIconName });
   }
 
+  /* 复制终端：新开一扇终端窗口，自动连接当前 SSH（同一别名）并进入当前目录。
+     当前目录取内嵌文件面板跟踪的目录（面板隐藏时也一直在跟随终端里的 cd）。 */
+  async function duplicateTerminal() {
+    const alias = String(sshTarget || '').trim();
+    if (!alias) return;
+    const dir = filesApi && filesApi.getCwd ? filesApi.getCwd() : '';
+    const result = await window.ships.terminal.duplicate({
+      alias,
+      path: dir,
+      randomBallIcon: true,
+      excludeBallIcon: ballIconName,
+    });
+    if (result && !result.ok) {
+      write(`\r\n${ANSI.error}${i18n.t('terminalWin.duplicateFailed', { error: result.error || 'error' })}${ANSI.reset}\r\n`);
+    }
+  }
+
   /* ------------------------------- 分屏 -------------------------------
      同一窗口内最多两块终端：主终端 + 一块副终端（分割后不能再分割）。
      两块之间是可见、可拖动的分隔条：水平分割上下排列（拖动改高度），垂直分割左右排列（拖动改宽度）。 */
@@ -2789,19 +2810,14 @@
     const sshReady = Boolean(sshTarget);
     return [
       {
-        label: i18n.t('terminalWin.menuNewTerminal'),
-        icon: 'plus',
-        run: openTerminalWithNewBall,
-      },
-      {
-        label: i18n.t('terminalWin.menuConnect'),
-        icon: 'server',
-        submenu: sshMenuItems(),
-      },
-      {
-        label: i18n.t('terminalWin.menuSplit'),
-        icon: 'split',
+        label: i18n.t('terminalWin.menuWindow'),
+        icon: 'new-window',
         submenu: [
+          {
+            label: i18n.t('terminalWin.menuNewTerminal'),
+            icon: 'plus',
+            run: openTerminalWithNewBall,
+          },
           {
             label: i18n.t('terminalWin.splitHorizontal'),
             icon: 'splitHorizontal',
@@ -2827,6 +2843,18 @@
             run: closeSecondaryPane,
           },
         ],
+      },
+      {
+        label: i18n.t('terminalWin.menuDuplicateTerminal'),
+        icon: 'copy',
+        // 复制当前终端：自动连接当前 SSH 并进入当前目录，因此必须已连接 SSH。
+        disabled: !sshReady,
+        run: duplicateTerminal,
+      },
+      {
+        label: i18n.t('terminalWin.menuConnect'),
+        icon: 'server',
+        submenu: sshMenuItems(),
       },
       {
         label: i18n.t('terminalWin.menuShowMain'),
