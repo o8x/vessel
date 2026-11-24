@@ -114,14 +114,20 @@ class SettingsService extends EventEmitter {
       this.data.terminalAlwaysOnTop = false;
       changed = true;
     }
-    // 终端窗口聚焦时的底色透明度默认值由 5% 调整为 20%：仍等于旧默认值（= 用户没有
-    // 手动改过）的历史设置迁移为新默认值。只在设置文件里还没有 terminalBlurOpacity
-    // （= 该文件由旧版本写出）时迁移一次，避免用户之后手动设成 5% 又被改回去。
-    if (
-      !Object.prototype.hasOwnProperty.call(stored, 'terminalBlurOpacity') &&
-      Number(this.data.terminalOpacity) === 5
-    ) {
+    // 终端窗口聚焦 / 失焦时的底色透明度默认值由 20% / 75% 调整为 10% / 80%：
+    // 仍等于旧默认值（= 用户没有手动改过）的历史设置迁移为新默认值。
+    // - 更老的设置文件里没有 terminalBlurOpacity：terminalOpacity 为 5 或 20 都算旧默认；
+    // - 两项都还是旧默认值（20 / 75）：一起迁移；
+    // 只要有一项被用户改过，就保持用户的选择不动。
+    const storedOpacity = Number(stored.terminalOpacity);
+    const storedBlur = Number(stored.terminalBlurOpacity);
+    const hasStoredBlur = Object.prototype.hasOwnProperty.call(stored, 'terminalBlurOpacity');
+    if (!hasStoredBlur && (storedOpacity === 5 || storedOpacity === 20)) {
       this.data.terminalOpacity = DEFAULT_SETTINGS.terminalOpacity;
+      changed = true;
+    } else if (storedOpacity === 20 && storedBlur === 75) {
+      this.data.terminalOpacity = DEFAULT_SETTINGS.terminalOpacity;
+      this.data.terminalBlurOpacity = DEFAULT_SETTINGS.terminalBlurOpacity;
       changed = true;
     }
     // 悬浮模式已整体移除：清理旧版本遗留的 floatMode / pinWindow，避免继续写回设置文件。

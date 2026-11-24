@@ -1291,12 +1291,16 @@ body.file-window .select-menu .select-group-title {
    面板高度由 scripts/terminal-files.js 的行内 height 控制；字体跟随 --file-font-size。 */
 /* `:not(.hidden)` 很关键：ID 选择器的 display 会盖过 Tailwind `.hidden { display:none }`，
    不加这一层判定面板会在「默认隐藏」时仍然显示。 */
+/* 终端窗口里的内嵌面板底色跟随**终端窗口的透明度**：
+   --term-bg-alpha 由 scripts/terminal.js 按 settings.terminalOpacity / terminalBlurOpacity
+   写入（100% = 不透明）；面板与终端底色一起变透明，独立文件 / 传输窗口里没有这个变量，
+   兜底 100%（仍是不透明）。 */
 #file-panel:not(.hidden) {
   display: flex;
   flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
-  background: var(--color-bg);
+  background: color-mix(in srgb, var(--color-bg) var(--term-bg-alpha, 100%), transparent);
   color: var(--color-fg);
 }
 /* 终端内嵌的文件传输面板（穿梭框）：与文件管理互斥，共用同一条分隔条与面板高度。
@@ -1335,7 +1339,7 @@ body.file-window .select-menu .select-group-title {
   flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
-  background: var(--color-bg);
+  background: color-mix(in srgb, var(--color-bg) var(--term-bg-alpha, 100%), transparent);
   color: var(--color-fg);
 }
 /* 内嵌传输面板的骨架：穿梭框主体（左右两栏 + 竖直分隔条）+ 底部状态栏。 */
@@ -1407,9 +1411,10 @@ body.file-window .select-menu .select-group-title {
   opacity: 0.4;
   cursor: not-allowed;
 }
-/* 内嵌面板里的穿梭框沿用独立窗口的配色（跟随主题的 --file-window-bg）。 */
+/* 内嵌面板里的穿梭框沿用独立窗口的配色（跟随主题的 --file-window-bg），
+   底色与终端窗口的透明度保持一致（--term-bg-alpha 由 terminal.js 写入）。 */
 .transfer-embedded .transfer-pane {
-  background: var(--color-bg);
+  background: color-mix(in srgb, var(--color-bg) var(--term-bg-alpha, 100%), transparent);
 }
 #term-divider:not(.hidden) {
   display: flex;

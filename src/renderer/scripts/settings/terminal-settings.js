@@ -25,9 +25,9 @@
         scrollback: '缓冲区大小',
         scrollbackHint: '保留的历史行数，默认 10000',
         opacity: '透明度',
-        opacityHint: '0% = 不透明，100% = 完全透明（默认 20%，实时生效；双击滑块恢复默认值）',
+        opacityHint: '0% = 不透明，100% = 完全透明（默认 10%，实时生效；双击滑块恢复默认值）',
         blurOpacity: '失焦透明度',
-        blurOpacityHint: '终端失去焦点时自动切换到的透明度（0% = 不透明，100% = 完全透明，默认 75%；双击滑块恢复默认值）；重新聚焦时回到上面的「透明度」',
+        blurOpacityHint: '终端失去焦点时自动切换到的透明度（0% = 不透明，100% = 完全透明，默认 80%；双击滑块恢复默认值）；重新聚焦时回到上面的「透明度」',
         builtinSsh: 'SSH 使用内置终端连接',
         builtinSshHint: '开 = 在悬浮终端执行，关 = 使用 iTerm',
         closeAction: '关闭按钮行为',
@@ -76,9 +76,9 @@
         scrollback: 'Scrollback',
         scrollbackHint: 'History lines to keep, default 10000',
         opacity: 'Transparency',
-        opacityHint: '0% = opaque, 100% = fully transparent (default 20%, live; double-click the slider to restore the default)',
+        opacityHint: '0% = opaque, 100% = fully transparent (default 10%, live; double-click the slider to restore the default)',
         blurOpacity: 'Unfocused transparency',
-        blurOpacityHint: 'Transparency applied automatically when the terminal loses focus (0% = opaque, 100% = fully transparent, default 75%; double-click the slider to restore the default); returns to the transparency above when focused again',
+        blurOpacityHint: 'Transparency applied automatically when the terminal loses focus (0% = opaque, 100% = fully transparent, default 80%; double-click the slider to restore the default); returns to the transparency above when focused again',
         builtinSsh: 'Connect SSH in the built-in terminal',
         builtinSshHint: 'On = built-in terminal, Off = iTerm',
         closeAction: 'Close button action',
@@ -256,9 +256,9 @@
 
     /* 终端窗口背景透明度（0 = 不透明，100 = 完全透明）；拖动实时写回设置，终端窗口即时生效。
        两项：聚焦时的「透明度」与失焦时自动切换到的「失焦透明度」；双击滑块恢复该项的默认值。 */
-    const OPACITY_DEFAULT = (window.ShipsConstants && window.ShipsConstants.TERMINAL_OPACITY_DEFAULT) || 20;
+    const OPACITY_DEFAULT = (window.ShipsConstants && window.ShipsConstants.TERMINAL_OPACITY_DEFAULT) || 10;
     const BLUR_OPACITY_DEFAULT =
-      (window.ShipsConstants && window.ShipsConstants.TERMINAL_BLUR_OPACITY_DEFAULT) || 75;
+      (window.ShipsConstants && window.ShipsConstants.TERMINAL_BLUR_OPACITY_DEFAULT) || 80;
     const normalizeOpacity = (value, fallback) => {
       const n = Number(value);
       return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fallback;
