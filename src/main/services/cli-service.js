@@ -390,7 +390,8 @@ function resolveJsonIndent(raw) {
 
 /* `vessel json <file|text>`：把 JSON 文件 / 文本格式化后输出（默认 4 空格缩进，与 JSON 工具一致；
    `options.indent` 可指定缩进空格数（0 = 紧凑单行），非法值返回 400；
-   `options.filter` 给定时按 jq 风格过滤器求值（见 jq-service），输出每个结果。 */
+   `options.filter` 给定时按 jq 风格过滤器求值（见 jq-service），输出每个结果；
+   `options.search` 给定时改为模糊搜索：输出「命中节点 + jq 风格路径」的表格。 */
 function jsonCommand(body, options) {
   const opts = options || {};
   const indent = resolveJsonIndent(opts.indent);
@@ -416,6 +417,15 @@ function jsonCommand(body, options) {
     value = JSON.parse(text);
   } catch (err) {
     return { code: 400, message: `Invalid JSON: ${(err && err.message) || 'parse error'}` };
+  }
+  const search = String(opts.search || '').trim();
+  if (search) {
+    const searchService = require('./json-search-service');
+    const found = searchService.search(value, search);
+    if (!found.ok) return { code: 400, message: found.error };
+    if (!found.rows.length) return { code: 200, body: `No matches for "${search}"\n` };
+    const rows = found.rows.map((row) => [row.path, row.type, searchService.formatValue(row.value)]);
+    return { code: 200, body: formatTable(['PATH', 'TYPE', 'VALUE'], rows) };
   }
   const filter = String(opts.filter || '').trim();
   if (filter) {
@@ -781,8 +791,9 @@ function handle(req, res) {
     if (req.method === 'POST' && route === '/v1/json') {
       const indent = url.searchParams.get('indent');
       const filter = url.searchParams.get('filter');
+      const search = url.searchParams.get('search');
       return readBody(req, res, (body) => {
-        const result = jsonCommand(body, { indent, filter });
+        const result = jsonCommand(body, { indent, filter, search });
         // 过滤器没有命中任何结果时正文为空（与 jq 一致），不是错误。
         const text = result.code === 200 ? result.body || '' : `${result.message}\n`;
         send(res, result.code, text);

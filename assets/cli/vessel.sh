@@ -140,6 +140,7 @@ EOF
     json)
       cat <<'EOF'
 Usage: vess json [--indent N] [--color|--no-color] [filter] [file|text]
+       vess json --search <keyword> [file|text]
        vess json -                 # read JSON from stdin
        printf '{"a":1}' | vess json
 
@@ -155,6 +156,10 @@ Arguments:
 Options:
   --indent N  Indentation width in spaces (0-10, default 4). 0 prints compact
               single-line JSON (like jq -c).
+  --search K   Fuzzy-search the JSON for K (key names or values) and print a
+              table of the matching nodes with their jq-style paths
+              (PATH / TYPE / VALUE). The JSON comes from stdin or the file
+              argument; the search keyword is not a filter.
   --color     Always colorize the output (like jq --color-output).
   --no-color  Never colorize the output.
 
@@ -169,6 +174,8 @@ Examples:
   cat data.json | vess json
   cat data.json | vess json .items[0].name
   vess json '.[] | select(.ok)' ./data.json
+  vess json --search id ./data.json
+  cat data.json | vess json --search name
 EOF
       ;;
     codec|encode|text)
@@ -536,6 +543,7 @@ cmd_json() {
   _indent=''
   _color=''
   _filter=''
+  _search=''
   _input=''
   _arg2=''
   _npos=0
@@ -562,6 +570,18 @@ cmd_json() {
         ;;
       --indent=*)
         _indent=${1#--indent=}
+        shift
+        ;;
+      --search|-s)
+        if [ $# -lt 2 ]; then
+          err "--search requires a keyword"
+          exit 1
+        fi
+        _search=$2
+        shift 2
+        ;;
+      --search=*)
+        _search=${1#--search=}
         shift
         ;;
       --color|-C)
@@ -621,8 +641,14 @@ cmd_json() {
     COLOR_MODE=$_color
     init_colors
   fi
-  # 两个位置参数：第一个是 jq 过滤器，第二个是文件（不存在时按 JSON 文本处理）。
-  if [ "$_npos" -ge 2 ]; then
+  # --search 模式：位置参数只是输入（文件或 JSON 文本），不当作过滤器。
+  if [ -n "$_search" ]; then
+    if [ "$_npos" -gt 1 ]; then
+      err "json --search accepts a single file path or JSON text"
+      exit 1
+    fi
+  elif [ "$_npos" -ge 2 ]; then
+    # 两个位置参数：第一个是 jq 过滤器，第二个是文件（不存在时按 JSON 文本处理）。
     _filter=$_input
     _input=$_arg2
   elif [ "$_npos" -eq 1 ]; then
@@ -661,17 +687,28 @@ cmd_json() {
     fi
     _query="${_query}filter=$(urlencode "$_filter")"
   fi
+  if [ -n "$_search" ]; then
+    if [ -n "$_query" ]; then
+      _query="$_query&"
+    fi
+    _query="${_query}search=$(urlencode "$_search")"
+  fi
   _path="/v1/json"
   if [ -n "$_query" ]; then
     _path="$_path?$_query"
   fi
+  # 搜索结果是表格（用通用表格着色器），其余是 JSON（用 JSON 语法着色器）。
+  _fmt=colorize
+  if [ -z "$_search" ]; then
+    _fmt=colorize_json
+  fi
   if [ -f "$_input" ]; then
     _abs=$(CDPATH= cd -- "$(dirname -- "$_input")" && pwd)/$(basename -- "$_input")
     api POST "$_path" "file
-$_abs" colorize_json
+$_abs" "$_fmt"
   else
     api POST "$_path" "text
-$_input" colorize_json
+$_input" "$_fmt"
   fi
 }
 
