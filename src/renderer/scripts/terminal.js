@@ -27,8 +27,8 @@
         menuSelectAll: '全选',
         menuNewTerminal: '新建终端',
         menuWindow: '窗口',
-        menuDuplicateTerminal: '复制终端',
-        duplicateFailed: '复制终端失败：{error}',
+        menuDuplicateSession: '复制会话',
+        duplicateFailed: '复制会话失败：{error}',
         splitHorizontal: '水平分割',
         splitVertical: '垂直分割',
         splitClose: '关闭副终端',
@@ -86,8 +86,8 @@
         menuSelectAll: 'Select all',
         menuNewTerminal: 'New terminal',
         menuWindow: 'Window',
-        menuDuplicateTerminal: 'Duplicate terminal',
-        duplicateFailed: 'Duplicate terminal failed: {error}',
+        menuDuplicateSession: 'Duplicate session',
+        duplicateFailed: 'Duplicate session failed: {error}',
         splitHorizontal: 'Split horizontally',
         splitVertical: 'Split vertically',
         splitClose: 'Close split terminal',
@@ -2811,12 +2811,19 @@
     return [
       {
         label: i18n.t('terminalWin.menuWindow'),
-        icon: 'new-window',
+        icon: 'newWindow',
         submenu: [
           {
             label: i18n.t('terminalWin.menuNewTerminal'),
             icon: 'plus',
             run: openTerminalWithNewBall,
+          },
+          {
+            label: i18n.t('terminalWin.menuDuplicateSession'),
+            icon: 'copy',
+            // 复制当前会话：自动连接当前 SSH 并进入当前目录，因此必须已连接 SSH。
+            disabled: !sshReady,
+            run: duplicateTerminal,
           },
           {
             label: i18n.t('terminalWin.splitHorizontal'),
@@ -2843,13 +2850,6 @@
             run: closeSecondaryPane,
           },
         ],
-      },
-      {
-        label: i18n.t('terminalWin.menuDuplicateTerminal'),
-        icon: 'copy',
-        // 复制当前终端：自动连接当前 SSH 并进入当前目录，因此必须已连接 SSH。
-        disabled: !sshReady,
-        run: duplicateTerminal,
       },
       {
         label: i18n.t('terminalWin.menuConnect'),
