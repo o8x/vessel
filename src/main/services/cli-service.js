@@ -389,7 +389,8 @@ function resolveJsonIndent(raw) {
 }
 
 /* `vessel json <file|text>`：把 JSON 文件 / 文本格式化后输出（默认 4 空格缩进，与 JSON 工具一致；
-   `options.indent` 可指定缩进空格数（0 = 紧凑单行），非法值返回 400）。 */
+   `options.indent` 可指定缩进空格数（0 = 紧凑单行），非法值返回 400；
+   `options.filter` 给定时按 jq 风格过滤器求值（见 jq-service），输出每个结果。 */
 function jsonCommand(body, options) {
   const opts = options || {};
   const indent = resolveJsonIndent(opts.indent);
@@ -415,6 +416,16 @@ function jsonCommand(body, options) {
     value = JSON.parse(text);
   } catch (err) {
     return { code: 400, message: `Invalid JSON: ${(err && err.message) || 'parse error'}` };
+  }
+  const filter = String(opts.filter || '').trim();
+  if (filter) {
+    const jq = require('./jq-service');
+    const result = jq.run(filter, value);
+    if (!result.ok) return { code: 400, message: result.error };
+    // 没有命中任何结果：不输出内容（与 jq 一致）。
+    if (!result.results.length) return { code: 200, body: '' };
+    const body = result.results.map((item) => JSON.stringify(item, null, indent)).join('\n');
+    return { code: 200, body: `${body}\n` };
   }
   return { code: 200, body: `${JSON.stringify(value, null, indent)}\n` };
 }
@@ -769,9 +780,12 @@ function handle(req, res) {
     }
     if (req.method === 'POST' && route === '/v1/json') {
       const indent = url.searchParams.get('indent');
+      const filter = url.searchParams.get('filter');
       return readBody(req, res, (body) => {
-        const result = jsonCommand(body, { indent });
-        send(res, result.code, result.body || `${result.message}\n`);
+        const result = jsonCommand(body, { indent, filter });
+        // 过滤器没有命中任何结果时正文为空（与 jq 一致），不是错误。
+        const text = result.code === 200 ? result.body || '' : `${result.message}\n`;
+        send(res, result.code, text);
       }, JSON_MAX_BODY);
     }
     if (req.method === 'POST' && route === '/v1/codec') {

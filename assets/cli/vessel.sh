@@ -50,9 +50,10 @@ Commands:
                                with a value: network and subnet details for it
   codec <text>                 Show the text as Base64 / hex / URL / ASCII
   hash <text|file>             Show every hash of a text or an existing file
-  json [--indent N] [file|text]
+  json [--indent N] [filter] [file|text]
                                Pretty-print JSON from a file, text or stdin;
-                               jq-style colors; no argument opens the JSON tool
+                               jq-style filter and colors; no argument opens
+                               the JSON tool
   id [type] [length]           Generate 5 values: uuid4 (default) / uuid7 / ulid /
                                random / password; length applies to random / password
   uuid [type]                  Alias of `id` (e.g. uuid uuid7; uuid = id uuid4)
@@ -138,11 +139,15 @@ EOF
       ;;
     json)
       cat <<'EOF'
-Usage: vess json [--indent N] [--color|--no-color] [file|text]
+Usage: vess json [--indent N] [--color|--no-color] [filter] [file|text]
        vess json -                 # read JSON from stdin
        printf '{"a":1}' | vess json
 
 Arguments:
+  filter      jq-style filter applied to the JSON (e.g. `.name`, `.items[0].id`,
+              `.[] | select(.ok)`). An argument starting with `.` or naming a
+              builtin is read as a filter; the JSON then comes from stdin or
+              from the second argument.
   file|text   Existing file path → format that file; otherwise treat the
               argument as JSON text. Use `-` or pipe to read from stdin.
               With no arguments, opens the JSON tool in the Vessel app.
@@ -162,6 +167,8 @@ Examples:
   vess json --indent 2 ./package.json
   vess json --no-color ./package.json
   cat data.json | vess json
+  cat data.json | vess json .items[0].name
+  vess json '.[] | select(.ok)' ./data.json
 EOF
       ;;
     codec|encode|text)
@@ -503,18 +510,44 @@ cmd_codec() {
   api POST /v1/codec "$_text"
 }
 
+# jq 内置函数名（可以单独作为过滤器的那些）：与主进程 jq-service 的函数表对应。
+JQ_BUILTINS="length keys keys_unsorted values type not empty add sort unique reverse flatten min max floor ceil round sqrt abs first last tostring tonumber tojson ascii_downcase ascii_upcase explode implode to_entries from_entries paths leaf_paths any all arrays objects strings numbers booleans nulls"
+
+# 这个参数看起来像 jq 过滤器吗？以 . 开头（但不是路径），或者是一个内置函数名。
+looks_like_filter() {
+  case "$1" in
+    ./*|../*|/*) return 1 ;;
+  esac
+  case "$1" in
+    .*) return 0 ;;
+  esac
+  case " $JQ_BUILTINS " in
+    *" $1 "*) return 0 ;;
+  esac
+  return 1
+}
+
+# URL 编码：每个字节转成 %XX（过滤里的 . | [ ] " 等字符都能安全放进 query）。
+urlencode() {
+  printf '%s' "$1" | od -An -v -tx1 | tr -d ' \n' | sed 's/../%&/g'
+}
+
 cmd_json() {
   _indent=''
   _color=''
+  _filter=''
   _input=''
+  _arg2=''
+  _npos=0
   _endopts=0
   while [ $# -gt 0 ]; do
     if [ "$_endopts" -eq 1 ]; then
-      if [ -n "$_input" ]; then
-        err "json accepts a single file path or JSON text"
-        exit 1
+      _npos=$((_npos + 1))
+      if [ "$_npos" -eq 1 ]; then
+        _input=$1
+      else
+        _arg2=$1
       fi
-      _input=$1
       shift
       continue
     fi
@@ -545,10 +578,11 @@ cmd_json() {
         ;;
       -)
         # `-` 表示从 stdin 读（不是选项）。
-        if [ -n "$_input" ]; then
+        if [ "$_npos" -ge 1 ]; then
           err "json accepts a single file path or JSON text"
           exit 1
         fi
+        _npos=$((_npos + 1))
         _input='-'
         shift
         ;;
@@ -557,15 +591,20 @@ cmd_json() {
         exit 1
         ;;
       *)
-        if [ -n "$_input" ]; then
-          err "json accepts a single file path or JSON text"
-          exit 1
+        _npos=$((_npos + 1))
+        if [ "$_npos" -eq 1 ]; then
+          _input=$1
+        else
+          _arg2=$1
         fi
-        _input=$1
         shift
         ;;
     esac
   done
+  if [ "$_npos" -gt 2 ]; then
+    err "json accepts at most a filter and a file path"
+    exit 1
+  fi
   if [ -n "$_indent" ]; then
     case "$_indent" in
       *[!0-9]*)
@@ -582,9 +621,23 @@ cmd_json() {
     COLOR_MODE=$_color
     init_colors
   fi
+  # 两个位置参数：第一个是 jq 过滤器，第二个是文件（不存在时按 JSON 文本处理）。
+  if [ "$_npos" -ge 2 ]; then
+    _filter=$_input
+    _input=$_arg2
+  elif [ "$_npos" -eq 1 ]; then
+    # 一个位置参数：是已存在的文件 → 当文件；看起来像过滤器 → 当过滤器；否则当 JSON 文本。
+    if [ ! -f "$_input" ] && looks_like_filter "$_input"; then
+      _filter=$_input
+      _input=''
+    fi
+  fi
   if [ -z "$_input" ]; then
     if [ ! -t 0 ]; then
       _input=$(cat)
+    elif [ -n "$_filter" ]; then
+      err "json requires JSON text, a file path or stdin"
+      exit 1
     else
       # 无参数且非管道：保持原有行为，打开应用里的 JSON 工具。
       cmd_open json
@@ -598,9 +651,19 @@ cmd_json() {
     exit 1
   fi
   with_app
-  _path="/v1/json"
+  _query=''
   if [ -n "$_indent" ]; then
-    _path="$_path?indent=$_indent"
+    _query="indent=$_indent"
+  fi
+  if [ -n "$_filter" ]; then
+    if [ -n "$_query" ]; then
+      _query="$_query&"
+    fi
+    _query="${_query}filter=$(urlencode "$_filter")"
+  fi
+  _path="/v1/json"
+  if [ -n "$_query" ]; then
+    _path="$_path?$_query"
   fi
   if [ -f "$_input" ]; then
     _abs=$(CDPATH= cd -- "$(dirname -- "$_input")" && pwd)/$(basename -- "$_input")
