@@ -28,6 +28,7 @@
         saved: '已保存',
         unsaved: '未保存',
         loading: '加载中…',
+        loadingProgress: '加载中 {percent}% · {transferred} / {total}',
         loadFailed: '加载失败：{error}',
         saveFailed: '保存失败：{error}',
         binaryReadOnly: '二进制文件，已按只读文本打开（不会写回原文件）',
@@ -131,6 +132,7 @@
         saved: 'Saved',
         unsaved: 'Unsaved',
         loading: 'Loading…',
+        loadingProgress: 'Loading {percent}% · {transferred} / {total}',
         loadFailed: 'Load failed: {error}',
         saveFailed: 'Save failed: {error}',
         binaryReadOnly: 'Binary file opened read-only (changes are not written back)',
@@ -330,6 +332,9 @@
     imageDownload: document.getElementById('ed-image-download'),
     imageCopy: document.getElementById('ed-image-copy'),
     menu: document.getElementById('ed-menu'),
+    progress: document.getElementById('ed-progress'),
+    progressFill: document.getElementById('ed-progress-fill'),
+    progressText: document.getElementById('ed-progress-text'),
     split: document.getElementById('editor-split'),
     previewPane: document.getElementById('ed-preview-pane'),
     ref: document.getElementById('ed-ref'),
@@ -383,6 +388,8 @@
     fontSize: 13,
     statusText: '',
     statusKind: '',
+    // 远端文件读取进度（打开 / 重新加载时显示进度条）。
+    progress: { active: false, transferred: 0, total: 0, percent: 0 },
     cm: null,
     sizeBytes: 0,
     sizeTimer: null,
@@ -463,6 +470,60 @@
     if (value < 1024) return `${value} B`;
     if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
     return `${(value / 1024 / 1024).toFixed(2)} MB`;
+  }
+
+  /* ------------------------------ 远端文件读取进度 ------------------------------
+     打开 / 重新加载远端文件时，主进程按块回传已读字节数，这里渲染成实时进度条
+     （工具栏下方的细条 + 右侧百分比 / 已读字节）。本地文件读取是同步的，不显示。 */
+  function showProgress() {
+    state.progress.active = true;
+    state.progress.transferred = 0;
+    state.progress.total = 0;
+    state.progress.percent = 0;
+    if (!dom.progress) return;
+    dom.progress.hidden = false;
+    // 还没拿到文件大小：先用不确定进度（滑动的条）表示「正在读」。
+    dom.progress.classList.add('is-indeterminate');
+    // 清掉行内宽度，交回样式表控制（不确定态由 .is-indeterminate 决定条宽）。
+    if (dom.progressFill) dom.progressFill.style.width = '';
+    if (dom.progressText) dom.progressText.textContent = i18n.t('editor.loading');
+  }
+
+  function updateProgress(payload) {
+    if (!state.progress.active) return;
+    const transferred = Math.max(0, Number(payload && payload.transferred) || 0);
+    const total = Math.max(0, Number(payload && payload.total) || 0);
+    state.progress.transferred = transferred;
+    state.progress.total = total;
+    const percent = total > 0 ? Math.min(100, Math.round((transferred / total) * 100)) : 0;
+    state.progress.percent = percent;
+    if (!dom.progress) return;
+    if (total > 0) {
+      dom.progress.classList.remove('is-indeterminate');
+      if (dom.progressFill) dom.progressFill.style.width = `${percent}%`;
+    }
+    if (dom.progressText) {
+      dom.progressText.textContent =
+        total > 0
+          ? i18n.t('editor.loadingProgress', {
+            percent,
+            transferred: formatBytes(transferred),
+            total: formatBytes(total),
+          })
+          : i18n.t('editor.loading');
+    }
+  }
+
+  function hideProgress() {
+    state.progress.active = false;
+    state.progress.transferred = 0;
+    state.progress.total = 0;
+    state.progress.percent = 0;
+    if (!dom.progress) return;
+    dom.progress.hidden = true;
+    dom.progress.classList.remove('is-indeterminate');
+    if (dom.progressFill) dom.progressFill.style.width = '';
+    if (dom.progressText) dom.progressText.textContent = '';
   }
 
   /* ------------------------------ Markdown 预览 ------------------------------
@@ -1318,6 +1379,17 @@
     }
   }
 
+  /* 读取当前文件：远端文件读取期间显示实时进度条（本地文件是同步读取，不显示）。 */
+  async function readCurrentFile() {
+    if (state.local) return window.ships.fileEditor.read();
+    showProgress();
+    try {
+      return await window.ships.fileEditor.read();
+    } finally {
+      hideProgress();
+    }
+  }
+
   async function loadFile() {
     setStatus(i18n.t('editor.loading'));
     const info = await window.ships.fileEditor.info();
@@ -1329,7 +1401,7 @@
     state.name = info.name || state.path.split('/').pop() || 'Untitled';
     state.reference = info.reference || state.path;
     state.local = Boolean(info.local);
-    const read = await window.ships.fileEditor.read();
+    const read = await readCurrentFile();
     if (!read || !read.ok) {
       setStatus(i18n.t('editor.loadFailed', { error: (read && read.error) || 'read' }), 'is-error');
       return;
@@ -1529,7 +1601,7 @@
   async function reload() {
     if (!state.cm) return;
     if (state.dirty && !window.confirm(i18n.t('editor.reloadConfirm'))) return;
-    const read = await window.ships.fileEditor.read();
+    const read = await readCurrentFile();
     if (!read || !read.ok) {
       setStatus(i18n.t('editor.loadFailed', { error: (read && read.error) || 'read' }), 'is-error');
       return;
@@ -1693,6 +1765,10 @@
     state.modeLabel = labelForMode(state.mode, state.name);
     renderStatus();
     updateFindCount();
+    // 读取进行中切换语言：进度文案跟着刷新。
+    if (state.progress.active) {
+      updateProgress({ transferred: state.progress.transferred, total: state.progress.total });
+    }
   }
 
   dom.open.addEventListener('click', () => openLocalFile());
@@ -1701,6 +1777,10 @@
   dom.openVSCode.addEventListener('click', () => openInVSCode());
   dom.download.addEventListener('click', () => downloadToLocal());
   dom.reload.addEventListener('click', () => reload());
+  // 远端文件读取进度：主进程按块回传，实时刷新进度条。
+  if (window.ships.fileEditor && typeof window.ships.fileEditor.onProgress === 'function') {
+    window.ships.fileEditor.onProgress((payload) => updateProgress(payload));
+  }
   dom.undo.addEventListener('click', () => state.cm && state.cm.undo());
   dom.redo.addEventListener('click', () => state.cm && state.cm.redo());
   if (dom.more) dom.more.addEventListener('click', () => (dom.menu && dom.menu.hidden ? openMenu() : closeMenu()));

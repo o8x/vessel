@@ -3417,6 +3417,55 @@ body.editor-window {
   color: var(--color-fg-muted);
   font-size: 12px;
 }
+/* 远端文件读取进度条：停靠在工具栏下方（打开 / 重新加载远端文件时显示）。 */
+.editor-progress {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+.editor-progress[hidden] {
+  display: none;
+}
+.editor-progress-track {
+  flex: 1 1 auto;
+  min-width: 120px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-surface-3);
+  overflow: hidden;
+}
+.editor-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: var(--color-accent);
+  transition: width 0.1s linear;
+}
+/* 总量未知时（尚未拿到文件大小）：不确定进度，用循环滑动的条表示。 */
+.editor-progress.is-indeterminate .editor-progress-fill {
+  width: 35%;
+  transition: none;
+  animation: editor-progress-slide 1.1s ease-in-out infinite;
+}
+@keyframes editor-progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+.editor-progress-text {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
 /* Markdown 渲染样式（覆盖 marked 输出的常见标签） */
 .editor-preview > :first-child {
   margin-top: 0;

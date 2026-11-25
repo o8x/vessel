@@ -37,6 +37,13 @@
       </header>
       <!-- 更多命令（跳转行 / 行操作 / 缩进 / 字号）：点工具栏最右侧「…」弹出 -->
       <div id="ed-menu" class="editor-menu" hidden></div>
+      <!-- 远端文件读取进度：打开 / 重新加载远端文件时显示实时进度条 -->
+      <div id="ed-progress" class="editor-progress" hidden>
+        <div class="editor-progress-track">
+          <div id="ed-progress-fill" class="editor-progress-fill"></div>
+        </div>
+        <span id="ed-progress-text" class="editor-progress-text"></span>
+      </div>
       <!-- 查找 / 替换（Command + F）：停靠在工具栏下方，两行布局（查找 / 替换），风格接近 Word -->
       <div id="editor-find" class="editor-find" hidden>
         <div class="editor-find-row">

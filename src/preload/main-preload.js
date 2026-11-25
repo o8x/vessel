@@ -147,6 +147,8 @@ const api = {
     clearBackups: () => ipcRenderer.invoke(IPC.FILE_EDITOR_BACKUP_CLEAR),
     renderImage: (html, options) => ipcRenderer.invoke(IPC.FILE_EDITOR_RENDER_IMAGE, { html, options }),
     saveImage: (dataUrl, name) => ipcRenderer.invoke(IPC.FILE_EDITOR_SAVE_IMAGE, { dataUrl, name }),
+    // 远端文件读取进度（主进程 → 渲染层事件）：{ transferred, total }
+    onProgress: (cb) => on(IPC.FILE_EDITOR_PROGRESS, cb),
   },
   transferWindow: {
     open: (payload) => ipcRenderer.invoke(IPC.TRANSFER_WINDOW_OPEN, payload || {}),

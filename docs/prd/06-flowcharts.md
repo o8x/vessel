@@ -104,7 +104,9 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A[打开文件 file-editor:info / read] --> B[加载完成 → 查询恢复副本 file-editor:backups]
+  A[打开文件 file-editor:info / read] --> A1[远端文件：流式读取，file-editor:progress 实时刷新进度条]
+  A1 --> A2[读取完成 → 隐藏进度条]
+  A2 --> B[加载完成 → 查询恢复副本 file-editor:backups]
   B -->|有副本| C[弹出恢复弹窗：按时间列出 ≤ 5 个版本]
   C -->|恢复所选| D[file-editor:backup-read → 写入编辑器（仍是未保存状态）]
   C -->|忽略并删除| E[file-editor:backup-clear]

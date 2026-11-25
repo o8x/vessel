@@ -25,6 +25,8 @@ const DEFAULT_DOWNLOAD_DIR = '~/Downloads';
 const DEFAULT_IDENTITY = '~/.ssh/id_ed25519';
 // 内置编辑器读取上限（文件管理器对 ≤ 8M 的任意类型文件提供「编辑文件」，二进制只读）。
 const EDITOR_READ_MAX_BYTES = 8 * 1024 * 1024;
+// 内置编辑器读取的分块大小（进度回调粒度）。
+const EDITOR_READ_CHUNK_SIZE = 64 * 1024;
 
 // id -> { id, client, sftp, target, resolved, home, closed }
 const sessions = new Map();
@@ -584,13 +586,16 @@ function reference(id, remotePaths) {
 }
 
 /* 内置编辑器读取：拒绝目录 / 超过 8M 的文件；二进制内容也允许打开，
-   但以带 `binary` 标记的有损 UTF-8 文本返回，由渲染层按只读处理。 */
-function readText(id, remotePath) {
+   但以带 `binary` 标记的有损 UTF-8 文本返回，由渲染层按只读处理。
+   `onProgress`（可选）：按已读字节数回调 `{ transferred, total }`，
+   供渲染层在打开 / 重新加载远端文件时显示实时进度条。 */
+function readText(id, remotePath, onProgress) {
   const entry = get(id);
   if (!entry) return Promise.resolve({ ok: false, error: 'not-connected', code: 'not-connected' });
   const target = String(remotePath || '');
   if (!target) return Promise.resolve({ ok: false, error: 'no-path' });
   const sftp = entry.sftp;
+  const report = typeof onProgress === 'function' ? onProgress : null;
   return new Promise((resolve) => {
     sftp.stat(target, (statErr, attrs) => {
       if (statErr) {
@@ -606,21 +611,45 @@ function readText(id, remotePath) {
         resolve({ ok: false, error: 'too-large', code: 'tooLarge' });
         return;
       }
-      sftp.readFile(target, (err, buffer) => {
-        if (err) {
-          resolve({ ok: false, error: err.message, code: 'read' });
-          return;
-        }
-        const data = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || '');
+      const mtime = (Number(attrs && attrs.mtime) || 0) * 1000;
+      // 先回报一次 0 / 总量：渲染层据此立刻切到确定进度（不必等第一块数据）。
+      if (report) report({ transferred: 0, total: size });
+      if (!size) {
+        resolve({ ok: true, content: '', size: 0, mtime, binary: false });
+        return;
+      }
+      // 流式读取：按块累计并回报进度（readFile 一次性返回、没有中间进度）。
+      const chunks = [];
+      let transferred = 0;
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+      let stream = null;
+      try {
+        stream = sftp.createReadStream(target, { highWaterMark: EDITOR_READ_CHUNK_SIZE });
+      } catch (err) {
+        finish({ ok: false, error: err.message, code: 'read' });
+        return;
+      }
+      stream.on('data', (chunk) => {
+        // 复制一份：底层复用缓冲区，避免后续读取覆盖已收下的数据。
+        const buf = Buffer.isBuffer(chunk) ? Buffer.from(chunk) : Buffer.from(chunk || '');
+        if (!buf.length) return;
+        chunks.push(buf);
+        transferred += buf.length;
+        if (report) report({ transferred, total: size });
+      });
+      stream.on('error', (err) => {
+        finish({ ok: false, error: err.message, code: 'read' });
+      });
+      stream.on('end', () => {
+        const data = Buffer.concat(chunks, transferred);
         const binary = data.subarray(0, 8192).includes(0);
         logger.file(`[sftp] read ${target} (${data.length} bytes)`);
-        resolve({
-          ok: true,
-          content: data.toString('utf8'),
-          size: data.length,
-          mtime: (Number(attrs && attrs.mtime) || 0) * 1000,
-          binary,
-        });
+        finish({ ok: true, content: data.toString('utf8'), size: data.length, mtime, binary });
       });
     });
   });

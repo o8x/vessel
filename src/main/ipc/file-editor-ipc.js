@@ -345,11 +345,19 @@ function registerFileEditorIpc(ipcMain) {
     return { ok: true, path: filePath, name: path.basename(filePath) };
   });
 
+  // 读取当前文件：远端文件走 SFTP 流式读取，过程中实时回传进度（渲染层显示进度条）。
   ipcMain.handle(IPC.FILE_EDITOR_READ, (event) => {
     const info = wm.getFileEditorInfoForWebContents(event.sender.id);
     if (!info) return { ok: false, error: 'forbidden' };
     if (info.local) return readLocalText(info.path);
-    return sftp.readText(info.sessionId, info.path);
+    const sender = event.sender;
+    return sftp.readText(info.sessionId, info.path, (progress) => {
+      try {
+        sender.send(IPC.FILE_EDITOR_PROGRESS, progress);
+      } catch (err) {
+        /* 窗口已销毁：忽略本次进度 */
+      }
+    });
   });
 
   ipcMain.handle(IPC.FILE_EDITOR_SAVE, (event, payload) => {
