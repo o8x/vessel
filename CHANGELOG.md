@@ -2,6 +2,12 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.15.1 - 2026-11-26
+
+### 修复
+
+- Keep the terminal ball on its original desktop when toggled from another desktop
+
 ## v6.15.0 - 2026-11-26
 
 ### 新增
