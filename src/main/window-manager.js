@@ -16,6 +16,7 @@ const {
   VIBRANCY,
   IPC,
   SPACE_CONFIRM_DELAY_MS,
+  FOCUS_PIN_SKIP_MS,
 } = require('../shared/constants');
 const settings = require('./services/settings-service');
 const {
@@ -524,32 +525,49 @@ function destroyTerminalWindow(target) {
     clearTimeout(win.__boundsTimer);
     win.__boundsTimer = null;
   }
+  if (win.__focusPinTimer) {
+    clearTimeout(win.__focusPinTimer);
+    win.__focusPinTimer = null;
+  }
+  win.__skipFocusPin = false;
   saveTerminalGeometry(win);
   logTerminalSpace(win, 'close');
   win.destroy();
 }
 
-/* 把终端显式「拉回前台」（快捷键 / 窗口管理 · 激活）。此时窗口会被带到当前桌面，
-   因此要等窗口真正落到当前桌面后重新记录 Space；否则旧记录会让后续失焦被误判为
-   「用户切换了桌面」而永不缩成悬浮球。 */
+/* 程序化聚焦（快捷键 / 窗口管理「激活」/ 从悬浮球展开）：**这一次不重设桌面**。
+   这类聚焦可能发生在「窗口所在桌面 ≠ 当前桌面」（例如在 B 桌面按快捷键去开留在 A 桌面的终端）：
+   focus 事件里若再执行 `setVisibleOnAllWorkspaces(true)` → `(false)`，macOS 会把窗口重新分配到
+   当前活动桌面，窗口 / 悬浮球就跟着跑到那个桌面。这里跳过这一次重设，让窗口留在原桌面，
+   由系统决定是否切到该桌面（LSUIElement 应用激活时通常会切过去）。
+   超时兜底清除标记，避免影响之后用户点击窗口时的正常固定。 */
+function focusTerminalKeepingSpace(win) {
+  if (!win || win.isDestroyed()) return;
+  win.__skipFocusPin = true;
+  if (win.__focusPinTimer) clearTimeout(win.__focusPinTimer);
+  win.__focusPinTimer = setTimeout(() => {
+    win.__focusPinTimer = null;
+    win.__skipFocusPin = false;
+  }, FOCUS_PIN_SKIP_MS);
+  win.focus();
+}
+
+/* 把终端显式「拉回前台」（快捷键 / 窗口管理 · 激活）。**窗口永不跨桌面移动**：
+   拉回时窗口仍留在它原本所在的桌面（必要时由系统切到那个桌面），因此不能像旧实现那样
+   把「当前桌面」重新记进 `__spaceId`——那会让后续失焦检测误判，展开回来的球也会跑到该桌面。
+   记录值继续代表「窗口真正所在的桌面」；只有记录缺失时（首次读取失败）才补读一次。 */
 function bringTerminalToFront(win) {
   if (!isTerminalWindow(win) || win.isDestroyed()) return;
   if (typeof win.isMinimized === 'function' && win.isMinimized()) win.restore();
-  // 先清掉旧记录：拉回后立刻失焦时，detectSpaceChange 会等待这次重新读取，
-  // 不会拿旧桌面做比较。
-  win.__spaceId = '';
-  win.__spacePromise = new Promise((resolve) => {
-    setTimeout(() => {
-      if (!isTerminalWindow(win) || win.isDestroyed()) {
-        resolve('');
-        return;
-      }
-      rememberTerminalSpace(win).then((signature) => resolve(signature || ''), () => resolve(''));
-    }, 200);
-  });
   win.show();
-  win.focus();
+  focusTerminalKeepingSpace(win);
   if (typeof win.moveTop === 'function') win.moveTop();
+  if (!win.__spaceId) {
+    // 没有记录（创建时读取失败）时补读一次；此时窗口多半就在当前桌面。
+    setTimeout(() => {
+      if (isTerminalWindow(win) && !win.isDestroyed() && !win.__spaceId) rememberTerminalSpace(win);
+    }, 200);
+  }
 }
 
 /* 全局快捷键（Steam 式开关）：
@@ -804,8 +822,8 @@ function exitBallMode(win, focus) {
     win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true });
     win.webContents.send(IPC.TERMINAL_BALL, { active: false, size, phase: 'settle' });
     saveTerminalGeometry(win);
-    if (focus !== false) win.focus();
-    rememberTerminalSpace(win);
+    // 展开不改所属桌面：快捷键在别的桌面按下时窗口 / 球仍留在原桌面，记录值也不该被覆盖。
+    if (focus !== false) focusTerminalKeepingSpace(win);
     logger.file(`[terminal] exited ball mode (${win.id})`);
     logTerminalSpace(win, 'expand');
   }, BALL_ANIM_MS);
@@ -1382,6 +1400,16 @@ function openTerminalWindow(options) {
     lastTerminalWindow = win;
     clearBallTimer(win); // 延迟内焦点回来 → 取消缩球
     win.webContents.send(IPC.TERMINAL_FOCUS_INPUT);
+    // 程序化聚焦（快捷键 / 窗口管理激活 / 从球展开）可能发生在窗口留在别的桌面时：
+    // 这时再「true→false」会把窗口分配到当前活动桌面（球跟着跑），本次跳过，保持原桌面。
+    if (win.__skipFocusPin) {
+      win.__skipFocusPin = false;
+      if (win.__focusPinTimer) {
+        clearTimeout(win.__focusPinTimer);
+        win.__focusPinTimer = null;
+      }
+      return;
+    }
     // 窗口此刻就在活动桌面上 → 用「先 true 再 false」把它**明确绑定到本桌面**
     // （只置 false 有时仍是 MoveToActiveSpace 行为，切桌面时会被拉到新桌面；先 true 再 false
     // 会重置为默认的「固定在本桌面」）。之后变球时不再动它，避免球跟着切换桌面。
@@ -1389,7 +1417,7 @@ function openTerminalWindow(options) {
     win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true, skipTransformProcessType: true });
     // 注意：**不要**在这里无脑重新记录 Space。切桌面时窗口可能被系统短暂带到新桌面并重新获得焦点，
     // 若在 focus 时覆盖记录，检测就会把「已切走」误判成「没切」→ 仍然缩球。
-    // 只有「显式拉回前台」（快捷键 / 窗口管理激活）才经 bringTerminalToFront 重新记录。
+    // 记录只取窗口真正所在的桌面（创建时 / 记录缺失时补读）。
   });
   // 失去焦点 → 延迟后缩成圆形悬浮球（延时内焦点回来则取消；DevTools 打开 / iTerm 交接时不动）。
   win.on('blur', () => {
@@ -1449,6 +1477,9 @@ function openTerminalWindow(options) {
     terminalWindows.delete(win);
     if (lastTerminalWindow === win) lastTerminalWindow = null;
     if (ballDragTimer) stopBallDrag();
+    if (win.__focusPinTimer) clearTimeout(win.__focusPinTimer);
+    win.__focusPinTimer = null;
+    win.__skipFocusPin = false;
   });
   return win;
 }

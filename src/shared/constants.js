@@ -378,6 +378,12 @@ const CENTER_SNAP = {
 // 「刚切走」误判成「没切」；多等一会儿再读一次可避免误缩球。
 const SPACE_CONFIRM_DELAY_MS = 150;
 
+// 程序化聚焦（快捷键 / 窗口管理「激活」/ 从悬浮球展开）后，跳过「重设桌面」的时长（ms）。
+// 这类聚焦可能发生在「窗口所在桌面 ≠ 当前桌面」（在 B 桌面按快捷键去开 A 桌面的终端）：
+// 此时再 `setVisibleOnAllWorkspaces(true→false)` 会按 macOS 语义把窗口重新分配到当前活动桌面，
+// 悬浮球会跟着跑到那个桌面。聚焦事件在这个窗口内忽略一次重设即可，超时兜底清除标记。
+const FOCUS_PIN_SKIP_MS = 800;
+
 // 注入 ssh 命令时追加给本地 shell 的退出标记：ssh 进程结束后由 printf 输出，
 // 渲染层收到后清空当前 SSH 目标并断开内嵌文件面板（不依赖后台 ps 轮询）。
 const SSH_EXIT_MARKER = '\u001b]777;VesselSshExit\u0007';
@@ -493,6 +499,7 @@ module.exports = {
   TRAY_HIDDEN_TOOL_IDS,
   CENTER_SNAP,
   SPACE_CONFIRM_DELAY_MS,
+  FOCUS_PIN_SKIP_MS,
   SSH_EXIT_MARKER,
   SSH_EXIT_MARKER_COMMAND,
   LOG_RETENTION_DAYS,
