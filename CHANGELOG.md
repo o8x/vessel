@@ -2,6 +2,20 @@
 
 > 记录面向用户的功能变化，技术细节不在此展开。
 
+## v6.15.0 - 2026-11-26
+
+### 新增
+
+- Open files up to 20M in the built-in editor and skip known binary formats
+- Move duplicate session into the window submenu and rename it
+- Show a live progress bar when opening remote files in the built-in editor
+- Fuzzy search to vess json
+- Jq-style filters in vess json
+- Group the terminal window menu and add duplicate terminal
+- Change terminal transparency defaults and apply them to panels
+- Colorize vess json output like jq
+- Markdown image export dialog with options
+
 ## v6.14.0 - 2026-11-21
 
 ### 新增
