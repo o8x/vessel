@@ -53,32 +53,47 @@ window.ShipsConstants = {
   // 文件管理状态栏：所有提示的保留时长（到点惰性清除）。
   FILE_STATUS_TTL_MS: 30000,
   // 双击文件的默认打开方式：落在 [MIN, MAX] 体积区间内的文件下载后用 VS Code 打开。
-  FILE_VSCODE_MIN_BYTES: 8 * 1024 * 1024,
+  // 下限与「编辑文件」上限一致（≤ 20M 走内置编辑器），避免同一文件两种打开方式重叠。
+  FILE_VSCODE_MIN_BYTES: 20 * 1024 * 1024,
   FILE_VSCODE_MAX_BYTES: 128 * 1024 * 1024,
-  // 「编辑文件」上限：任何类型只要不超过 8M 都可用内置编辑器打开（二进制按只读处理）。
-  FILE_EDITOR_MAX_BYTES: 8 * 1024 * 1024,
+  // 「编辑文件」上限：体积不超过 20M、且**不在** NON_TEXT_EXTENSIONS 里的文件可用内置编辑器打开。
+  FILE_EDITOR_MAX_BYTES: 20 * 1024 * 1024,
   // 内置编辑器：有未保存修改时，每隔该时长在本地保存一份恢复副本（仅保留最近 5 份）。
   EDITOR_BACKUP_INTERVAL_MS: 30000,
+  // 已知非文本 / 二进制类型：无论体积多大都**不**在内置编辑器里打开（直接下载到本地、
+  // 在系统文件管理器中定位），也不允许用 VS Code 打开。
   NON_TEXT_EXTENSIONS: [
     // 图片 / 设计稿
     'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico', 'icns', 'cur', 'tif', 'tiff',
     'heic', 'avif', 'raw', 'cr2', 'nef', 'arw', 'dng', 'psd', 'psb', 'ai', 'sketch', 'fig', 'xcf',
     // 文档（Word / Excel / PPT / PDF / 电子书等）
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf',
-    'pages', 'numbers', 'key', 'epub', 'mobi', 'azw', 'azw3', 'djvu',
+    'pages', 'numbers', 'key', 'epub', 'mobi', 'azw', 'azw3', 'djvu', 'chm', 'one', 'vsd', 'vsdx',
     // 音视频
     'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'ape', 'aiff', 'wma',
     'mp4', 'mov', 'mkv', 'avi', 'webm', 'mpg', 'mpeg', 'm4v', '3gp', 'm2ts', 'vob', 'flv', 'wmv',
+    'f4v', 'rm', 'rmvb', 'asf', 'mxf', 'ogv', 'dv',
     // 压缩 / 镜像 / 虚拟磁盘
     'zip', 'gz', 'tgz', 'bz2', 'xz', 'zst', 'tar', '7z', 'rar', 'dmg', 'iso', 'img',
     'vmdk', 'vdi', 'qcow2', 'ova', 'ovf',
+    // 其它压缩格式（lz4 / lzma 等）与磁盘 / 镜像容器
+    'lz4', 'lzma', 'lz', 'lzo', 'br', 'sz', 'rz', 'zstd', 'tlz', 'tbz', 'tbz2', 'txz', 'tzst',
+    'cpio', 'arj', 'cab', 'arc', 'ace', 'zoo', 'lha', 'lzh', 'sit', 'wim', 'esd', 'swm',
+    'vhd', 'vhdx', 'qcow', 'sparseimage', 'udf', 'squashfs', 'erofs', 'romfs', 'cramfs', 'jffs2',
+    'appimage', 'snap', 'flatpak',
     // 可执行 / 二进制 / 包
     'exe', 'dll', 'so', 'dylib', 'bin', 'app', 'pkg', 'deb', 'rpm', 'msi', 'msix', 'appx',
     'apk', 'xapk', 'ipa', 'jar', 'war', 'ear', 'class', 'dex', 'pyc', 'pyo', 'o', 'a', 'lib',
     'obj', 'ko', 'wasm', 'crx', 'xpi', 'vsix',
-    // 数据 / 数据库 / 抓包 / 3D
+    'nupkg', 'whl', 'gem', 'egg', 'pyz', 'pyd', 'rlib', 'rmeta', 'pch', 'gch', 'lo', 'la',
+    'elf', 'axf', 'uf2', 'msixbundle', 'appxbundle', 'bundle', 'pak', 'pck',
+    // 数据 / 数据库 / 抓包 / 3D / 模型
     'db', 'sqlite', 'sqlite3', 'mdb', 'dat', 'pcap', 'pcapng',
-    'blend', '3ds', 'stl', 'glb', 'gltf', 'fbx',
+    'accdb', 'frm', 'dbf', 'sav', 'sas7bdat', 'rdata', 'rds', 'bson', 'msgpack', 'cbor',
+    'feather', 'parquet', 'arrow', 'orc', 'avro', 'pickle', 'pkl', 'npy', 'npz', 'pt', 'pth',
+    'pb', 'onnx', 'tflite', 'safetensors', 'gguf', 'ggml', 'ckpt', 'weights', 'caffemodel',
+    'h5', 'hdf5', 'mat', 'nii', 'dcm',
+    'blend', '3ds', 'stl', 'glb', 'gltf', 'fbx', 'usdz', 'usdc', '3mf',
     // 字体
     'ttf', 'ttc', 'otf', 'woff', 'woff2', 'eot',
   ],

@@ -1,8 +1,8 @@
 'use strict';
 
 /* Lightweight built-in editor window (CodeMirror 5). Opened from the file
-   manager for any file ≤ 8 MB; reuses the file manager's SFTP session so saving
-   writes straight back to the remote file. Binary files open read-only. */
+   manager for any text file ≤ 20 MB; reuses the file manager's SFTP session so
+   saving writes straight back to the remote file. Binary files open read-only. */
 
 (function bootstrapFileEditor() {
   const i18n = window.ShipsI18n;
@@ -57,7 +57,7 @@
         replacedAll: '已替换 {count} 处',
         openLocal: '打开本地文件',
         openLocalFailed: '打开失败：{error}',
-        openLocalTooLarge: '文件超过 8 MB，请在 VS Code 中打开',
+        openLocalTooLarge: '文件超过 20 MB，请在 VS Code 中打开',
         openLocalConfirm: '当前文件有未保存修改，确定放弃并打开其他文件？',
         preview: 'Markdown 预览',
         previewOn: '关闭预览',
@@ -161,7 +161,7 @@
         replacedAll: 'Replaced {count} occurrence(s)',
         openLocal: 'Open local file',
         openLocalFailed: 'Open failed: {error}',
-        openLocalTooLarge: 'File is larger than 8 MB; open it in VS Code',
+        openLocalTooLarge: 'File is larger than 20 MB; open it in VS Code',
         openLocalConfirm: 'This file has unsaved changes. Discard them and open another file?',
         preview: 'Markdown preview',
         previewOn: 'Hide preview',

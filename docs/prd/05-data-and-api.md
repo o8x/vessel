@@ -104,10 +104,10 @@
 | `file-window:set-top` | `{ value: boolean }` | `{ ok, alwaysOnTop }` | 独立文件窗口的置顶开关：写 `settings.fileWindowAlwaysOnTop`；**默认关**（普通窗口），持久 |
 | `file-window:snap-size` | `{ height }` | `{ ok, height? }` | 保留兼容：独立文件窗口已**不再自动对齐整行高度**，渲染层不再调用；通道仍按工作区 / 最小高度夹取后设置内容高度；只接受来自该窗口的请求 |
 | `file-editor:open` | `{ sessionId, path, name? }` | `{ ok, error? }` | 从文件管理器打开一扇内置编辑器窗口（每文件一扇、可多开）；`sessionId` 必须是**发起窗口自己**的 SFTP 会话；只接受终端窗口 / 独立文件窗口的请求 |
-| `file-editor:open-local` | — | `{ ok, path?, name?, error?, canceled? }` | 编辑器窗口内「打开文件」：拉起系统打开面板，把**当前窗口**切换到选中的本地文件（仅本地文件；超过 8MB 返回 `{ ok:false, error:'too-large' }`；取消返回 `{ ok:false, canceled:true }`） |
+| `file-editor:open-local` | — | `{ ok, path?, name?, error?, canceled? }` | 编辑器窗口内「打开文件」：拉起系统打开面板，把**当前窗口**切换到选中的本地文件（仅本地文件；超过 20MB 返回 `{ ok:false, error:'too-large' }`；取消返回 `{ ok:false, canceled:true }`） |
 | `file-editor:new-local` | — | `{ ok, path?, error? }` | 新建**本地**文件（落在设置里配置的「文件下载目录」，文件名 `scratch-<时间戳>.txt`，重名自动加序号）并用内置编辑器打开；不依赖 SSH / SFTP；只接受终端窗口 / 独立文件窗口的请求 |
 | `file-editor:info` | — | `{ ok, path, name, reference, local? }` | 编辑器启动后读取当前文件信息与引用（`用户名@地址:路径`）；本地临时文件时 `reference` 为本地路径、`local: true`；只接受来自编辑器窗口的请求 |
-| `file-editor:read` | — | `{ ok, content, size, mtime, binary, error?, code? }` | 读取当前文件文本（远端 ≤ 8MB、拒绝目录；本地临时文件直接读 fs）；含 NUL 的二进制内容不报错，按有损 UTF-8 解码返回并置 `binary: true`，渲染层据此只读；**远端文件按 64KB 分块流式读取，过程中经 `file-editor:progress` 实时回传进度**；只接受来自编辑器窗口的请求 |
+| `file-editor:read` | — | `{ ok, content, size, mtime, binary, error?, code? }` | 读取当前文件文本（远端 ≤ 20MB、拒绝目录；本地临时文件直接读 fs）；含 NUL 的二进制内容不报错，按有损 UTF-8 解码返回并置 `binary: true`，渲染层据此只读；**远端文件按 64KB 分块流式读取，过程中经 `file-editor:progress` 实时回传进度**；只接受来自编辑器窗口的请求 |
 | `file-editor:save` | `{ content }` | `{ ok, path?, bytes?, error? }` | 覆盖写回当前文件（远端走 SFTP，本地临时文件走 fs）；编辑器状态栏显示保存中 / 已保存；只接受来自编辑器窗口的请求 |
 | `file-editor:save-as` | `{ path, content }` | `{ ok, path?, bytes?, error?, canceled? }` | 另存为：远端文件要求 `path` 为 `/` 开头的绝对路径；**本地文件忽略 `path` 并拉起系统保存面板（Finder 样式）选择位置**，写入成功后该编辑器切换到新文件；只接受来自编辑器窗口的请求 |
 | `file-editor:open-vscode` | `{ content, name? }` | `{ ok, path?, name?, error? }` | 编辑器「从 VS Code 打开」：远端文件把当前内容写成本地文件（下载目录，重名自动加 ` (n)`）后用 VS Code 打开；本地临时文件先落盘当前内容再直接打开该文件；不修改远端文件；只接受来自编辑器窗口的请求 |
@@ -255,7 +255,7 @@
 | `POST /v1/ssh`（请求体两行：`<目标>` + 换行 + `<密码，可空>`） | `Connecting to <别名>` / 4xx `Target required…`、`Invalid target…` / 5xx | 命中已保存主机（别名，或同一「用户名@地址」且未给新密码）→ 直接连接；否则按「快速连接」逻辑连接（见下） |
 
 - **数据命令路由**：`GET /v1/timestamp`（当前时间）、`POST /v1/timestamp`（转换一个值）、`GET /v1/network`（本机内网 / 公网 IPv4 / IPv6 地址）、`POST /v1/network`（网段信息）、`POST /v1/codec`（编码结果）、`POST /v1/json`（请求体首行 `text` / `file`，其余为 JSON 文本或文件路径，返回 4 空格缩进结果；可选查询参数 `?indent=N` 指定缩进空格数（0–10，**0 = 紧凑单行**，等同 `jq -c`），省略时用默认 4，非法值返回 400；可选查询参数 `?filter=<jq 过滤器>` 对结果做 jq 风格过滤（见 `jq-service`，语法错误 / 运行错误返回 400，没有命中时正文为空）；可选查询参数 `?search=<关键字>` 改为**模糊搜索**模式，返回「命中节点 + jq 风格路径」的表格（见 `json-search-service`），与 `?filter=` 同时给出时以 `?search=` 为准）、`POST /v1/hash`（请求体首行 `text` / `file`，其余为内容）、`POST /v1/id`（类型 + 可选长度，固定生成 5 个；旧的 `POST /v1/uuid` 保留为兼容别名）、`POST /v1/main`（显示主界面）、`POST /v1/restart`（先返回响应再重启应用）、`POST /v1/check-update`（触发一次交互式检查更新）、`POST /v1/upgrade`（从当前运行的 Vessel 重新安装 CLI）、`POST /v1/open`（在应用里打开工具，替代原来的 `/v1/tool`；`GET /v1/tools` 已移除）。响应均为纯文本表格。
-- **`POST /v1/edit`**：请求体为文件路径（可为空）。空 → 新建本地草稿并用编辑器打开；非空 → 解析为绝对路径后打开（不存在返回 404、非文件 / 超过 8MB 返回 400）。编辑器窗口**无归属窗口**（不随任何窗口关闭）。
+- **`POST /v1/edit`**：请求体为文件路径（可为空）。空 → 新建本地草稿并用编辑器打开；非空 → 解析为绝对路径后打开（不存在返回 404、非文件 / 超过 20MB 返回 400）。编辑器窗口**无归属窗口**（不随任何窗口关闭）。
 - **`POST /v1/ssh` 的目标解析**：`用户名@地址` / `地址` / `地址:端口` / `[IPv6]:端口`。**别名精确命中**，或**同一「用户名@地址」且没有提供新密码** → 用现有主机直接连接（自动沿用已存密码 / `~/.ssh/id_ed25519`）；其余写法走**快速连接**（`ssh-quick-connect-service`，与 SSH 工具的连接表单同一套实现）：`用户名@地址` 已存在时复用（给了密码则更新凭据），否则写入 `~/.ssh/config` 的「快速连接」分组并置于最前，然后**新开一扇内置终端**执行 `ssh`。密码可含空格（作为第 2 行原样传入），不需要密码时留空（走密钥）。
 - **输出语言**：CLI 的 usage / 帮助 / 错误 / 表头 / 提示**全部为英文**；工具名固定用英文（不随界面语言变化），主机 / 账号名是数据本身、保持原样。列表按显示宽度（CJK / 全角按 2 列）对齐为固定列宽表格。
 - **输出颜色**：`vessel.sh` 在**标准输出是终端**时给结果加 ANSI 颜色（表头加粗青色、UUID 绿色、`No …` / 错误类提示暗色、`键  值` 行的键为青色）；输出到管道 / 文件或 `vess` 被脚本调用时自动关闭颜色，保持纯文本。错误信息始终以红色写入 stderr。`json` 命令另用**按 JSON 语法着色**的输出（与 jq 的配色观感一致）：**键青色、字符串绿色、数字黄色、`true` 绿色 / `false` 红色、`null` 与括号暗色**，缩进本身不着色；着色同样只在终端下默认开启，可用 `--color` / `--no-color` 强制开启或关闭。

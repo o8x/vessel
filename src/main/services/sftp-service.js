@@ -18,13 +18,14 @@ const credentials = require('./ssh-credentials-service');
 const proxyService = require('./proxy-service');
 const settings = require('./settings-service');
 const logger = require('../utils/logger');
+const { FILE_EDITOR_MAX_BYTES } = require('../../shared/constants');
 
 const READY_TIMEOUT_MS = 12000;
 const KEEPALIVE_MS = 15000;
 const DEFAULT_DOWNLOAD_DIR = '~/Downloads';
 const DEFAULT_IDENTITY = '~/.ssh/id_ed25519';
-// 内置编辑器读取上限（文件管理器对 ≤ 8M 的任意类型文件提供「编辑文件」，二进制只读）。
-const EDITOR_READ_MAX_BYTES = 8 * 1024 * 1024;
+// 内置编辑器读取上限（与 shared/constants.js 的 FILE_EDITOR_MAX_BYTES 一致，20 MB）。
+const EDITOR_READ_MAX_BYTES = FILE_EDITOR_MAX_BYTES;
 // 内置编辑器读取的分块大小（进度回调粒度）。
 const EDITOR_READ_CHUNK_SIZE = 64 * 1024;
 
@@ -585,7 +586,7 @@ function reference(id, remotePaths) {
   return { ok: true, references: list.map((item) => `${host}:${item}`) };
 }
 
-/* 内置编辑器读取：拒绝目录 / 超过 8M 的文件；二进制内容也允许打开，
+/* 内置编辑器读取：拒绝目录 / 超过 20M 的文件；二进制内容也允许打开，
    但以带 `binary` 标记的有损 UTF-8 文本返回，由渲染层按只读处理。
    `onProgress`（可选）：按已读字节数回调 `{ transferred, total }`，
    供渲染层在打开 / 重新加载远端文件时显示实时进度条。 */

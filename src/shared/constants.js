@@ -309,9 +309,9 @@ const FILE_EDITOR_WINDOW = Object.assign(
   appConfig.fileEditorWindow || {}
 );
 
-// 内置编辑器单文件上限（8 MB，与渲染层 constants.js 的 FILE_EDITOR_MAX_BYTES 保持一致）：
+// 内置编辑器单文件上限（20 MB，与渲染层 constants.js 的 FILE_EDITOR_MAX_BYTES 保持一致）：
 // 超过该体积时拒绝在编辑器里打开（提示改用 VS Code / 下载）。
-const FILE_EDITOR_MAX_BYTES = 8 * 1024 * 1024;
+const FILE_EDITOR_MAX_BYTES = 20 * 1024 * 1024;
 
 // 独立游戏窗口：panel 模式（置顶、可浮在全屏应用之上、不跨桌面），单窗口复用。
 const GAME_WINDOW = Object.assign(

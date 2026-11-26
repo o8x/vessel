@@ -15,10 +15,10 @@
   // 完成提示（已下载 / 已上传 / 已定位 / 已复制）在状态栏保留多久后惰性清除。
   const STATUS_TTL_MS = constants.FILE_STATUS_TTL_MS || 30000;
   // 双击落在该体积区间内的文件下载后用 VS Code 打开。
-  const VSCODE_MIN_BYTES = constants.FILE_VSCODE_MIN_BYTES || 8 * 1024 * 1024;
+  const VSCODE_MIN_BYTES = constants.FILE_VSCODE_MIN_BYTES || 20 * 1024 * 1024;
   const VSCODE_MAX_BYTES = constants.FILE_VSCODE_MAX_BYTES || 128 * 1024 * 1024;
-  // 「编辑文件」只对小于等于 8M 且扩展名明确为文本的文件提供。
-  const EDITOR_MAX_BYTES = constants.FILE_EDITOR_MAX_BYTES || 8 * 1024 * 1024;
+  // 「编辑文件」上限：体积 ≤ 20M 且**不是**已知二进制类型的文件。
+  const EDITOR_MAX_BYTES = constants.FILE_EDITOR_MAX_BYTES || 20 * 1024 * 1024;
   const NON_TEXT_EXTENSIONS = new Set(constants.NON_TEXT_EXTENSIONS || []);
   const WIRESHARK_EXTENSIONS = new Set(constants.WIRESHARK_EXTENSIONS || []);
   const WIRESHARK_MAX_BYTES = constants.WIRESHARK_MAX_BYTES || 4 * 1024 * 1024 * 1024;
@@ -261,17 +261,19 @@
     return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1) : '';
   }
 
-  /* 已知的无法按文本读取的二进制类型：禁用 VS Code 菜单项。 */
+  /* 已知的无法按文本读取的二进制类型：禁用 VS Code 菜单项；也不在内置编辑器里打开。 */
   function isBinaryEntry(entry) {
     return NON_TEXT_EXTENSIONS.has(entryExtension(entry));
   }
 
-  /* 可用内置编辑器打开：体积不超过 8M（不限类型；二进制文件由编辑器只读打开）。 */
+  /* 可用内置编辑器打开：体积不超过 20M，且不是已知二进制 / 非文本类型
+     （zip / gz / tar / lz4 / lzma / bin / pdf 等一律下载后在文件管理器中定位）。 */
   function isEditorEntry(entry) {
+    if (isBinaryEntry(entry)) return false;
     return (Number(entry && entry.size) || 0) <= EDITOR_MAX_BYTES;
   }
 
-  /* 双击下载后用 VS Code 打开：体积落在 8M–128M 区间。 */
+  /* 双击下载后用 VS Code 打开：体积落在 20M–128M 区间。 */
   function isVSCodeSizeEntry(entry) {
     const size = Number(entry && entry.size) || 0;
     return size >= VSCODE_MIN_BYTES && size <= VSCODE_MAX_BYTES;
@@ -933,9 +935,9 @@
           scrollTreeToSelected();
         });
 
-        // 双击：目录进入；≤ 8M 的任意文件用内置编辑器打开（二进制只读）；
-        // 已知二进制 / 非文本类型（NON_TEXT_EXTENSIONS）下载并在 Finder 中定位；
-        // 8M–128M 的文件下载后用 VS Code 打开；其余用系统默认程序（下载 + 定位）。
+        // 双击：目录进入；已知二进制 / 非文本类型（NON_TEXT_EXTENSIONS）不论大小都
+        // 下载并在 Finder 中定位；其余 ≤ 20M 的文件用内置编辑器打开；
+        // 20M–128M 的文件下载后用 VS Code 打开；其余用系统默认程序（下载 + 定位）。
         row.addEventListener('dblclick', () => {
           clearCellCopyTimer();
           if (isDir) {
@@ -945,12 +947,12 @@
             navigate(path);
             return;
           }
-          if (isEditorEntry(entry)) {
-            openInEditor(path);
-            return;
-          }
           if (isBinaryEntry(entry)) {
             openFiles([path]);
+            return;
+          }
+          if (isEditorEntry(entry)) {
+            openInEditor(path);
             return;
           }
           if (isVSCodeSizeEntry(entry)) openFilesVSCode([path]);

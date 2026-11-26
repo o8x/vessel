@@ -406,7 +406,7 @@ function jsonCommand(body, options) {
     try {
       const stat = fs.statSync(text);
       if (!stat.isFile()) return { code: 400, message: `Not a file: ${text}` };
-      if (stat.size > FILE_EDITOR_MAX_BYTES) return { code: 400, message: 'File is larger than 8 MB' };
+      if (stat.size > FILE_EDITOR_MAX_BYTES) return { code: 400, message: 'File is larger than 20 MB' };
       text = fs.readFileSync(text, 'utf8');
     } catch (err) {
       return { code: 404, message: `File not found: ${text}` };
@@ -704,7 +704,7 @@ function openEditor(body) {
     return { code: 404, message: `File not found: ${raw}` };
   }
   if (!stat.isFile()) return { code: 400, message: `Not a file: ${raw}` };
-  if (stat.size > FILE_EDITOR_MAX_BYTES) return { code: 400, message: 'File is larger than 8 MB' };
+  if (stat.size > FILE_EDITOR_MAX_BYTES) return { code: 400, message: 'File is larger than 20 MB' };
   const win = wm.openStandaloneFileEditor({
     local: true,
     path: filePath,

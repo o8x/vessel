@@ -16,7 +16,7 @@
   const DEFAULT_FILE_ICON = constants.DEFAULT_FILE_ICON || 'file';
   const NON_TEXT_EXTENSIONS = new Set(constants.NON_TEXT_EXTENSIONS || []);
   const WIRESHARK_EXTENSIONS = new Set(constants.WIRESHARK_EXTENSIONS || []);
-  const EDITOR_MAX_BYTES = constants.FILE_EDITOR_MAX_BYTES || 8 * 1024 * 1024;
+  const EDITOR_MAX_BYTES = constants.FILE_EDITOR_MAX_BYTES || 20 * 1024 * 1024;
 
   i18n.extend({
     zh: {
@@ -177,7 +177,10 @@
     return NON_TEXT_EXTENSIONS.has(entryExtension(entry));
   }
 
+  /* 可用内置编辑器打开：体积不超过 20M，且不是已知二进制 / 非文本类型
+     （zip / gz / tar / lz4 / lzma / bin / pdf 等一律下载后在文件管理器中定位）。 */
   function isEditorEntry(entry) {
+    if (isBinaryEntry(entry)) return false;
     return (Number(entry && entry.size) || 0) <= EDITOR_MAX_BYTES;
   }
 
@@ -475,7 +478,7 @@
           enter(path);
         });
         // 目录**不响应双击**（进入只由单击触发，避免双击导致展开后又折叠）；
-        // 双击只对文件生效：≤ 8M 用内置编辑器打开，其余下载到本地。
+        // 双击只对文件生效：已知二进制类型下载到本地；其余 ≤ 20M 用内置编辑器打开。
         row.addEventListener('dblclick', (event) => {
           event.preventDefault();
           if (isDir) return;
@@ -856,9 +859,14 @@
       }
     }
 
-    /* 双击文件：≤ 8M 用内置编辑器打开，否则下载到本地。 */
+    /* 双击文件：已知二进制 / 非文本类型不论大小都下载到本地；其余 ≤ 20M 用内置编辑器打开，
+       再大则下载到本地。 */
     function openEntry(pane, item) {
       if (item.type === 'dir') return;
+      if (isBinaryEntry(item)) {
+        openFiles(pane, item);
+        return;
+      }
       if (isEditorEntry(item)) {
         openInEditor(pane, item);
         return;
